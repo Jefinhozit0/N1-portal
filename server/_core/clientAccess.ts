@@ -1,0 +1,133 @@
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import type { User } from "@supabase/supabase-js";
+import { sendClientAccessEmail } from "./email";
+import { supabase } from "./supabase";
+import { isWhatsAppConfigured, normalizeBrazilPhone, sendAccessWhatsApp } from "./whatsapp";
+
+export type ChannelResult = { sent: true } | { sent: false; reason: string };
+export type ClientAccessResult = { email: ChannelResult; whatsapp: ChannelResult };
+
+const FIRST_ACCESS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Role and cliente_id live in app_metadata, which only the service key can change. */
+export function getClienteId(user: Pick<User, "app_metadata">): number | null {
+  const meta = user.app_metadata ?? {};
+  return meta.role === "client" && typeof meta.cliente_id === "number" ? meta.cliente_id : null;
+}
+
+export async function findUserByEmail(email: string): Promise<User | null> {
+  const target = email.toLowerCase();
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const match = data.users.find((user) => user.email?.toLowerCase() === target);
+    if (match) return match;
+    if (data.users.length < 1000) return null;
+  }
+}
+
+const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+
+/**
+ * Checks a first-access link. Only the hash of the token is stored (in app_metadata,
+ * which the client cannot edit), the link works once and expires after 7 days.
+ */
+export async function findFirstAccessUser(userId: string, token: string): Promise<User | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null;
+  const { data, error } = await supabase.auth.admin.getUserById(userId);
+  if (error || !data.user) return null;
+  const stored = data.user.app_metadata?.first_access as { hash?: string; expires_at?: string } | undefined;
+  if (!stored?.hash || !stored.expires_at || Date.parse(stored.expires_at) < Date.now()) return null;
+  const expected = Buffer.from(stored.hash, "hex");
+  const received = Buffer.from(hashToken(token), "hex");
+  return expected.length === received.length && timingSafeEqual(expected, received) ? data.user : null;
+}
+
+/** Sets the password the client chose on the first-access page and burns the link. */
+export async function completeFirstAccess(user: User, password: string) {
+  const { first_access: _used, ...appMetadata } = user.app_metadata ?? {};
+  const { error } = await supabase.auth.admin.updateUserById(user.id, {
+    password,
+    app_metadata: { ...appMetadata, first_access: null },
+    user_metadata: { ...user.user_metadata, must_change_password: false },
+  });
+  if (error) throw error;
+}
+
+/**
+ * Creates (or refreshes) the client's login and sends the first-access link by e-mail and by
+ * WhatsApp from the corporate number. Never throws: each channel reports its own result.
+ */
+export async function provisionClientAccess(
+  cliente: { id: number; name: string; email?: string | null; phone?: string | null },
+  portalUrl: string,
+): Promise<ClientAccessResult> {
+  const email = cliente.email?.trim().toLowerCase();
+  if (!email) {
+    const reason = "O cliente precisa de um e-mail cadastrado para ter login no portal.";
+    return { email: { sent: false, reason }, whatsapp: { sent: false, reason } };
+  }
+
+  const token = randomBytes(32).toString("base64url");
+  const firstAccess = { hash: hashToken(token), expires_at: new Date(Date.now() + FIRST_ACCESS_TTL_MS).toISOString() };
+  let userId: string;
+
+  try {
+    // The client never sees this password: they choose their own through the link.
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password: randomBytes(24).toString("base64url"),
+      email_confirm: true,
+      user_metadata: { name: cliente.name },
+      app_metadata: { role: "client", cliente_id: cliente.id, first_access: firstAccess },
+    });
+    if (error) {
+      if (error.code !== "email_exists" && error.status !== 422) throw error;
+      const existing = await findUserByEmail(email);
+      if (!existing) throw error;
+      // Never take over a team member's account just because a client was registered with the same e-mail.
+      if (existing.app_metadata?.role !== "client") {
+        const reason = "Este e-mail já é usado por uma conta da equipe.";
+        return { email: { sent: false, reason }, whatsapp: { sent: false, reason } };
+      }
+      const { error: updateError } = await supabase.auth.admin.updateUserById(existing.id, {
+        user_metadata: { ...existing.user_metadata, name: cliente.name },
+        app_metadata: { ...existing.app_metadata, role: "client", cliente_id: cliente.id, first_access: firstAccess },
+      });
+      if (updateError) throw updateError;
+      userId = existing.id;
+    } else {
+      userId = data.user.id;
+    }
+  } catch (error) {
+    console.error("[ClientAccess] Failed to create login:", error);
+    const reason = "Não foi possível criar o login do cliente.";
+    return { email: { sent: false, reason }, whatsapp: { sent: false, reason } };
+  }
+
+  const link = `${portalUrl.replace(/\/$/, "")}/primeiro-acesso?u=${userId}&t=${token}`;
+  const firstName = cliente.name.trim().split(/\s+/)[0] || "cliente";
+
+  const [emailResult, whatsappResult] = await Promise.all([
+    sendClientAccessEmail(email, { name: cliente.name, link })
+      .then((): ChannelResult => ({ sent: true }))
+      .catch((error): ChannelResult => {
+        console.error("[ClientAccess] Access e-mail failed:", error);
+        return { sent: false, reason: error instanceof Error ? error.message : "Não foi possível enviar o e-mail." };
+      }),
+    (async (): Promise<ChannelResult> => {
+      if (!isWhatsAppConfigured()) return { sent: false, reason: "WhatsApp corporativo ainda não configurado." };
+      const phone = normalizeBrazilPhone(cliente.phone);
+      if (!phone) return { sent: false, reason: cliente.phone ? `Telefone "${cliente.phone}" inválido. Use DDD + número.` : "Cliente sem telefone cadastrado." };
+      try {
+        await sendAccessWhatsApp(phone, { firstName, link });
+        return { sent: true };
+      } catch (error) {
+        console.error("[ClientAccess] Access WhatsApp failed:", error);
+        return { sent: false, reason: error instanceof Error ? error.message : "Não foi possível enviar pelo WhatsApp." };
+      }
+    })(),
+  ]);
+
+  return { email: emailResult, whatsapp: whatsappResult };
+}
