@@ -1,9 +1,15 @@
-import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { hubMoney } from "./salesHubData";
+
+// The Sales HUB is only downloaded when someone opens it, so the portal opens faster.
+const SalesHubPage = lazy(() => import("./SalesHub"));
+const AdminPage = lazy(() => import("./Admin"));
 import { useQueryClient } from "@tanstack/react-query";
 import { parseTicketMessage } from "@shared/tickets";
 import { CHARGEBACK_LIST_FILTERS, CLIENT_LIST_FILTERS, DASHBOARD_RULES, METRIC_HELP, type ChargebackListFilter, type ClientListFilter, type ListFilter } from "@shared/dashboard";
-import ClientDetail from "./ClientDetail";
-import { ChangePasswordScreen, ClientPortal } from "./ClientPortal";
+const ClientDetail = lazy(() => import("./ClientDetail"));
+const ClientPortal = lazy(() => import("./ClientPortal").then((module) => ({ default: module.ClientPortal })));
+const ChangePasswordScreen = lazy(() => import("./ClientPortal").then((module) => ({ default: module.ChangePasswordScreen })));
 import { toast } from "sonner";
 import { showAccessResult } from "@/lib/accessToast";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -45,130 +51,13 @@ import {
   X,
 } from "lucide-react";
 
-type View = "dashboard" | "clientes" | "chargebacks" | "atendimento" | "saleshub" | "client-detail";
+type View = "dashboard" | "clientes" | "chargebacks" | "atendimento" | "saleshub" | "client-detail" | "admin";
 type Client = { id?: number; name: string; cpf: string; type: string; status: string; updated: string; tone: "green" | "yellow" | "red"; email?: string; phone?: string; services?: string[]; tags?: string[] };
 
 const clientServices = ["Financiamento Imobiliário", "Financiamento Veicular", "Empréstimo Pessoal", "Empréstimo Consignado", "Cartão de Crédito", "Outros"];
 
-const clients: Client[] = [
-  { name: "Joyce Gomes da Silva Rosa", cpf: "***.482.***-09", type: "Revisão de juros", status: "Em andamento", updated: "Hoje, 09:42", tone: "green", tags: ["Urgente", "VIP"] },
-  { name: "Marcos Vinícius Almeida", cpf: "***.119.***-42", type: "Busca e apreensão", status: "Aguardando documento", updated: "Ontem, 16:18", tone: "yellow", tags: ["Documentação pendente", "Aguardando cliente"] },
-  { name: "Ana Paula Ferreira", cpf: "***.763.***-20", type: "Revisão de juros", status: "Em análise", updated: "26 set, 11:05", tone: "yellow", tags: ["Em revisão"] },
-  { name: "Rafael de Souza Lima", cpf: "***.058.***-73", type: "Portabilidade", status: "Concluído", updated: "25 set, 14:27", tone: "green", tags: [] },
-  { name: "Camila Rodrigues Santos", cpf: "***.391.***-64", type: "Revisão de contrato", status: "Atenção necessária", updated: "24 set, 10:12", tone: "red", tags: ["Urgente", "Documentação pendente"] },
-];
-
-const chargebacks = [
-  { client: "Joyce Gomes da Silva Rosa", bank: "Banco Vértice", amount: "R$ 8.420,55", deadline: "03 out 2026", status: "Documentação enviada", tone: "blue" },
-  { client: "Marcos Vinícius Almeida", bank: "CredMais", amount: "R$ 4.890,00", deadline: "07 out 2026", status: "Em conferência", tone: "yellow" },
-  { client: "Ana Paula Ferreira", bank: "Banco União", amount: "R$ 12.164,30", deadline: "12 out 2026", status: "Aguardando assinatura", tone: "purple" },
-];
-
-export type HubSale = { id: number; date: string; client: string; phone: string; consultants: string[]; product: string; status: "Pendente" | "OK"; cbk: boolean; gross: number; net: number; note: string };
-export type HubRankingItem = { name: string; count: number; gross: number; net: number };
-
-const initialHubSales: HubSale[] = [
-  { id: 1, date: "28/09/2026", client: "Silvani Pereira Nunes", phone: "+55 63 99276-2023", consultants: ["Beatriz", "Juan"], product: "Revisão de Juros", status: "Pendente", cbk: false, gross: 1600, net: 1600, note: "" },
-  { id: 2, date: "28/09/2026", client: "Carlos Henrique Ramos dos Santos", phone: "(81) 98767-0239", consultants: ["Bruno Alemão"], product: "Portabilidade", status: "OK", cbk: false, gross: 3840, net: 3840, note: "Contrato conferido" },
-  { id: 3, date: "28/09/2026", client: "Pedro Adelar Gomes", phone: "(41) 9218-0655", consultants: ["Gaby Inácio", "Fernanda"], product: "Revisão de Juros", status: "Pendente", cbk: false, gross: 900, net: 900, note: "" },
-  { id: 4, date: "25/09/2026", client: "Diego Junior Vieira Souza", phone: "31 99538-6202", consultants: ["Alexandre", "Isabella"], product: "Revisão de contrato", status: "Pendente", cbk: false, gross: 1500, net: 1500, note: "Retornar ao cliente" },
-  { id: 5, date: "25/09/2026", client: "Valmir Pereira da Silva", phone: "94981871466", consultants: ["Ana G."], product: "Revisão de Juros", status: "Pendente", cbk: false, gross: 1000, net: 1000, note: "" },
-  { id: 6, date: "24/09/2026", client: "Adimar Rosa da Silva", phone: "24 99816-0605", consultants: ["Ana G.", "Alexandre"], product: "Laudo", status: "Pendente", cbk: false, gross: 2100, net: 2100, note: "" },
-  { id: 7, date: "23/09/2026", client: "Josue Feliz Batista", phone: "(14) 99603-8753", consultants: ["Arthur Panizza", "Juan"], product: "Revisão de contrato", status: "Pendente", cbk: false, gross: 5786, net: 5241, note: "" },
-  { id: 8, date: "21/09/2026", client: "Fernanda Souza", phone: "62981313765", consultants: ["Rafaela"], product: "Portabilidade", status: "OK", cbk: false, gross: 540, net: 513, note: "" },
-];
-
-const hubConsultants = ["Alexandre", "Ana G.", "Arthur Panizza", "Beatriz", "Bruno Alemão", "Fernanda", "Gaby Inácio", "Isabella", "Jaqueline", "Jenifer", "João", "Juan", "Kariny", "Matheus", "Rafaela"];
-export const hubMoney = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export { hubMoney } from "./salesHubData";
 const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-export const buildSalesHubCsv = (sales: HubSale[], ranking: HubRankingItem[]) => [
-  "RELATÓRIO SALES HUB",
-  `Vendas filtradas: ${sales.length}`,
-  "",
-  ["Data", "Cliente", "Telefone", "Consultor(es)", "Produto", "Status", "CBK", "Bruto", "Líquido", "Observação"].map(csvCell).join(";"),
-  ...sales.map((sale) => [sale.date, sale.client, sale.phone, sale.consultants.join(", "), sale.product, sale.status, sale.cbk ? "sim" : "não", sale.gross, sale.net, sale.note].map(csvCell).join(";")),
-  "",
-  "RANKING DE CONSULTORES",
-  ["Posição", "Consultor", "Vendas", "Bruto", "Líquido"].map(csvCell).join(";"),
-  ...ranking.map((item, index) => [index + 1, item.name, item.count, item.gross, item.net].map(csvCell).join(";")),
-].join("\n");
-
-function SalesHubPage({ userName }: { userName: string }) {
-  const [section, setSection] = useState<"comercial" | "juridico" | "control">("comercial");
-  const [month, setMonth] = useState("2026-09");
-  const [consultant, setConsultant] = useState("Todos");
-  const [query, setQuery] = useState("");
-  const vendasQuery = trpc.portal.vendas.useQuery(undefined, { retry: false });
-  const createVendaMutation = trpc.portal.createVenda.useMutation({ onSuccess: () => vendasQuery.refetch() });
-  const updateVendaMutation = trpc.portal.updateVenda.useMutation({ onSuccess: () => vendasQuery.refetch() });
-  const deleteVendaMutation = trpc.portal.deleteVenda.useMutation({ onSuccess: () => vendasQuery.refetch() });
-  const remoteVendas = vendasQuery.data;
-  const [sales, setSales] = useState<HubSale[]>(initialHubSales);
-  // Keep local sales in sync with remote
-  useEffect(() => { if (remoteVendas && remoteVendas.length > 0) setSales(remoteVendas); }, [remoteVendas]);
-  const [consultants, setConsultants] = useState<string[]>(hubConsultants);
-  const [modal, setModal] = useState<"consultants" | "new-sale" | null>(null);
-  const [notice, setNoticeState] = useState("");
-  const setNotice = (message: string) => {
-    const clientName = message.match(/^Ações para (.*?):/)?.[1];
-    if (clientName) {
-      const sale = sales.find((item) => item.client === clientName);
-      setNoticeState(sale ? `${sale.client} · ${sale.product} · ${sale.status} · bruto ${hubMoney(sale.gross)} · líquido ${hubMoney(sale.net)}` : message);
-      return;
-    }
-    setNoticeState(message);
-  };
-  const [newConsultant, setNewConsultant] = useState("");
-  const [newSale, setNewSale] = useState({ client: "", phone: "", product: "Revisão de Juros", status: "Pendente" as HubSale["status"], gross: "", net: "", note: "", consultants: [] as string[] });
-  const [chartsReady, setChartsReady] = useState(false);
-  const [selectedRanking, setSelectedRanking] = useState<string | null>(null);
-
-  useEffect(() => {
-    consultants.forEach((name) => {
-      if (!hubConsultants.includes(name)) hubConsultants.push(name);
-    });
-  }, [consultants]);
-
-  useEffect(() => {
-    setChartsReady(false);
-    const timer = window.setTimeout(() => setChartsReady(true), 650);
-    return () => window.clearTimeout(timer);
-  }, [section, consultant, query, month, sales.length]);
-
-  const filteredSales = useMemo(() => sales.filter((sale) => {
-    const matchesConsultant = consultant === "Todos" || sale.consultants.includes(consultant);
-    const [day, saleMonth, year] = sale.date.split("/");
-    const matchesMonth = !month || `${year}-${saleMonth}` === month;
-    const haystack = `${sale.client} ${sale.phone} ${sale.product} ${sale.consultants.join(" ")} ${sale.note}`.toLowerCase();
-    return matchesConsultant && matchesMonth && haystack.includes(query.toLowerCase());
-  }), [consultant, month, query, sales]);
-  const gross = filteredSales.reduce((sum, sale) => sum + sale.gross, 0);
-  const net = filteredSales.reduce((sum, sale) => sum + sale.net, 0);
-  const ranking = useMemo<HubRankingItem[]>(() => consultants.map((name) => ({ name, count: filteredSales.filter((sale) => sale.consultants.includes(name)).length, gross: filteredSales.filter((sale) => sale.consultants.includes(name)).reduce((sum, sale) => sum + sale.gross, 0), net: filteredSales.filter((sale) => sale.consultants.includes(name)).reduce((sum, sale) => sum + sale.net, 0) })).filter((item) => item.count > 0).sort((a, b) => b.net - a.net), [consultants, filteredSales]);
-
-  function selectRanking(name: string) {
-    setConsultant(name);
-    setSelectedRanking(name);
-    setNotice(`${name} selecionado: a tabela foi filtrada por este consultor.`);
-  }
-
-  function shiftMonth(delta: number) { const [year, current] = (month || new Date().toISOString().slice(0, 7)).split("-").map(Number); const date = new Date(year, current - 1 + delta, 1); setMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`); }
-  function toggleConsultant(name: string) { setNewSale((current) => ({ ...current, consultants: current.consultants.includes(name) ? current.consultants.filter((item) => item !== name) : [...current.consultants, name] })); }
-  function saveSale(event: FormEvent) { event.preventDefault(); if (!newSale.client || !newSale.gross) { setNotice("Informe pelo menos cliente e valor bruto."); return; } const value = Number(newSale.gross); const saleData = { date: new Date().toLocaleDateString("pt-BR"), client: newSale.client, phone: newSale.phone || "—", consultants: newSale.consultants.length ? newSale.consultants : ["—"], product: newSale.product, status: newSale.status, cbk: false, gross: value, net: Number(newSale.net || newSale.gross), note: newSale.note }; createVendaMutation.mutateAsync(saleData).catch(() => setSales((current) => [{ id: Date.now(), ...saleData }, ...current])); setModal(null); setNewSale({ client: "", phone: "", product: "Revisão de Juros", status: "Pendente", gross: "", net: "", note: "", consultants: [] }); setNotice("Venda cadastrada com sucesso."); }
-  function addConsultant(event: FormEvent) { event.preventDefault(); const name = newConsultant.trim(); if (!name) return; if (consultants.some((item) => item.toLowerCase() === name.toLowerCase())) { setNotice("Esse consultor já está cadastrado."); return; } setConsultants((current) => [...current, name]); setNotice(`Consultor ${name} cadastrado.`); setNewConsultant(""); }
-  function downloadFile(content: BlobPart, type: string, filename: string) { const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([content], { type })); link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(link.href), 1000); }
-  function exportCsv() { downloadFile(`\ufeff${buildSalesHubCsv(filteredSales, ranking)}`, "text/csv;charset=utf-8", "sales-hub-relatorio.csv"); setNotice("CSV exportado com vendas filtradas e ranking de consultores."); }
-  function exportPdf() { const printWindow = window.open("", "_blank"); if (!printWindow) { setNotice("O navegador bloqueou a janela do PDF. Permita pop-ups para exportar."); return; } const rows = filteredSales.map((sale) => `<tr><td>${sale.date}</td><td>${sale.client}</td><td>${sale.consultants.join(", ")}</td><td>${sale.product}</td><td>${sale.status}</td><td>${hubMoney(sale.gross)}</td><td>${hubMoney(sale.net)}</td></tr>`).join(""); const rankingRows = ranking.map((item, index) => `<tr><td>${index + 1}</td><td>${item.name}</td><td>${item.count}</td><td>${hubMoney(item.gross)}</td><td>${hubMoney(item.net)}</td></tr>`).join(""); printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Sales HUB — Relatório</title><style>body{font:12px Arial;color:#202020;margin:34px}h1{color:#8a6016;margin-bottom:4px}h2{margin-top:28px;border-bottom:2px solid #d5a63d;padding-bottom:7px}p{color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#f5e7c2}tr:nth-child(even){background:#fafafa}.meta{display:flex;gap:24px;margin:18px 0;font-weight:bold}@media print{body{margin:15mm}}</style></head><body><h1>Sales HUB</h1><p>Relatório de vendas e ranking de consultores</p><div class="meta"><span>Período: ${month || "Todos"}</span><span>Vendas: ${filteredSales.length}</span><span>Bruto: ${hubMoney(gross)}</span><span>Líquido: ${hubMoney(net)}</span></div><h2>Vendas filtradas</h2><table><thead><tr><th>Data</th><th>Cliente</th><th>Consultor(es)</th><th>Produto</th><th>Status</th><th>Bruto</th><th>Líquido</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Nenhuma venda encontrada.</td></tr>'}</tbody></table><h2>Ranking de consultores</h2><table><thead><tr><th>Posição</th><th>Consultor</th><th>Vendas</th><th>Bruto</th><th>Líquido</th></tr></thead><tbody>${rankingRows}</tbody></table><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`); printWindow.document.close(); setNotice("Relatório PDF aberto para impressão ou salvamento."); }
-
-  if (section === "control") return <div className="hub-dashboard"><HubHeader section={section} setSection={setSection} userName={userName} /><section className="control-dashboard"><div className="control-title"><div><span className="eyebrow eyebrow-muted">N1 Control</span><h2>Inteligência consolidada</h2><p>Vendas, margem e exposição a chargebacks em tempo real.</p></div><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></div><div className="control-metrics"><HubMetric label="Bruto consolidado" value={hubMoney(1229657.15)} detail="290 venda(s) no mês" tone="gold" /><HubMetric label="Líquido" value={hubMoney(1126784.27)} detail="Margem líquida 91.6%" tone="green" /><HubMetric label="Chargebacks" value={hubMoney(0)} detail="0 caso(s) · taxa 0.0%" tone="red" /><HubMetric label="Resultado líquido final" value={hubMoney(1126784.27)} detail="Líquido − perda c/ CBK" tone="gold" /></div><section className="control-panel"><h3>Distribuição do faturamento</h3><p>Participação de cada setor sobre o bruto do mês</p><div className="distribution-row"><span>Comercial</span><div><i style={{ width: "35%" }} /></div><strong>R$ 435.827,29 · 35.4%</strong></div><div className="distribution-row"><span>Jurídico</span><div><i style={{ width: "65%" }} /></div><strong>R$ 793.829,86 · 64.6%</strong></div></section><div className="control-sector-grid"><ControlSector title="Comercial" count="165" ticket="R$ 2.641,38" gross="R$ 435.827,29" net="R$ 370.235,00" margin="84.9%" /><ControlSector title="Jurídico" count="125" ticket="R$ 6.350,64" gross="R$ 793.829,86" net="R$ 756.549,27" margin="95.3%" /></div><section className="control-panel"><h3>Resumo inteligente</h3><div className="smart-summary"><span>Ticket médio geral <b>R$ 4.240,20</b></span><span>Taxa de reversão CBK <b>0.0%</b></span><span>Perda líquida com CBK <b>R$ 0,00</b></span><span>Resultado líquido final <b>R$ 1.126.784,27</b></span></div></section></section></div>;
-
-  return <div className="hub-dashboard"><HubHeader section={section} setSection={setSection} userName={userName} /><section className="hub-summary"><div><h2>Dashboard executivo</h2><p>Comercial × Jurídico — setembro de 2026</p></div><div className="summary-totals">Total bruto: <b>{hubMoney(gross || 1223317.15)}</b> &nbsp; Líquido: <b>{hubMoney(net || 1120444.27)}</b> &nbsp; CBKs: <b>0</b></div><div className="sector-overview"><div><span>Comercial</span><b>162</b><strong>35.1% do bruto</strong><i style={{ width: "35%" }} /></div><div><span>Jurídico</span><b>125</b><strong>64.9% do bruto</strong><i style={{ width: "65%" }} /></div></div></section><div className="hub-tabs"><button className={section === "comercial" ? "active" : ""} onClick={() => setSection("comercial")}><Briefcase size={16} /> Comercial</button><button className={section === "juridico" ? "active" : ""} onClick={() => setSection("juridico")}><Scale size={16} /> Jurídico</button><button className="" onClick={() => setSection("control")}><LayoutDashboard size={16} /> N1 Control</button></div><div className="hub-metrics"><HubMetric label="Vendas no mês" value={String(filteredSales.length || 165)} detail="Em movimento" tone="blue" /><HubMetric label="Valor bruto" value={hubMoney(gross || 435827.29)} detail="Total faturado" tone="green" /><HubMetric label="Valor líquido" value={hubMoney(net || 370235)} detail="84.9% do bruto" tone="gold" /><HubMetric label="Chargebacks" value="0" detail="Nenhum chargeback no período" tone="red" /></div><section className="hub-filter-panel"><div className="hub-filter-row"><div><label>Período</label><div className="month-control"><button onClick={() => shiftMonth(-1)}>‹</button><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /><button onClick={() => shiftMonth(1)}>›</button><button onClick={() => setMonth("")}>×</button></div></div><div><label>Consultor</label><select value={consultant} onChange={(event) => { const value = event.target.value; setConsultant(value); setSelectedRanking(value === "Todos" ? null : value); }}><option>Todos</option>{hubConsultants.map((name) => <option key={name}>{name}</option>)}</select></div><div className="hub-search"><label>Buscar</label><div><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cliente, telefone, consultor, produto..." /></div></div><div className="hub-actions"><button onClick={exportCsv}><FileText size={14} /> CSV</button><button onClick={exportPdf}><FileText size={14} /> PDF</button><button onClick={() => setModal("consultants")}><Users size={14} /> Consultores</button><button className="hub-primary" onClick={() => setModal("new-sale")}><Plus size={15} /> Nova venda</button></div></div></section><section className="hub-panel ranking-panel"><div className="hub-panel-heading"><div><h3><Trophy size={17} /> Ranking de consultores</h3><p>{selectedRanking ? `${selectedRanking} selecionado · tabela filtrada` : "Clique em um consultor para filtrar a tabela"}</p>{selectedRanking && <button className="ranking-clear" onClick={() => { setSelectedRanking(null); setConsultant("Todos"); }}>Limpar seleção <X size={13} /></button>}</div></div><div className="ranking-grid">{ranking.slice(0, 9).map((item, index) => <button className={`ranking-card ${selectedRanking === item.name ? "selected" : ""}`} aria-pressed={selectedRanking === item.name} key={item.name} onClick={() => selectRanking(item.name)}><div><b>#{index + 1}</b><strong>{item.name}</strong><small>{item.count} venda(s)</small></div><span>Bruto <b>{hubMoney(item.gross)}</b></span><span>Líquido <b>{hubMoney(item.net)}</b></span><i style={{ width: `${Math.min(100, item.net / Math.max(1, ranking[0]?.net || 1) * 100)}%` }} /></button>)}</div></section><section className="hub-analytics"><div className="hub-panel"><div className="hub-panel-heading"><div><h3>Evolução — últimos 12 meses</h3><p>Bruto, líquido e chargebacks · todos os consultores</p></div><span className="chart-legend"><i /> Bruto <i /> Líquido</span></div>{chartsReady ? <div className="bar-chart">{[22, 30, 27, 38, 32, 45, 42, 55, 48, 62, 70, 86].map((height, index) => <div key={index}><span style={{ height: `${height}%` }} /><small>{["out", "nov", "dez", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set"][index]}</small></div>)}</div> : <ChartSkeleton label="Carregando evolução mensal" />}</div><div className="hub-panel heatmap-panel"><div className="hub-panel-heading"><div><h3>Heatmap de vendas</h3><p>Dia da semana × período do dia</p></div></div>{chartsReady ? <><div className="heatmap">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day, row) => <div key={day}><small>{day}</small>{[0, 1, 2, 3].map((cell) => <i key={cell} className={`heat-${(row * 3 + cell) % 5}`} />)}</div>)}</div><p className="heatmap-caption">Pico: <b>27 venda(s)</b> em uma faixa</p></> : <ChartSkeleton label="Calculando horários de pico" compact />}</div></section><section className="hub-panel sales-table-panel"><div className="hub-panel-heading"><div><h3>Vendas registradas</h3><p>{filteredSales.length} registro(s) no filtro atual</p></div><button className="text-button" onClick={() => setQuery("")}>Limpar filtros <X size={14} /></button></div><div className="table-wrap"><table><thead><tr><th>Data</th><th>Cliente</th><th>Telefone</th><th>Consultor</th><th>Produto</th><th>Status</th><th>CBK</th><th>Bruto</th><th>Líquido</th><th>Ações</th></tr></thead><tbody>{filteredSales.map((sale) => <tr key={sale.id}><td>{sale.date}</td><td><strong>{sale.client}</strong></td><td>{sale.phone}</td><td>{sale.consultants.join(", ")}</td><td>{sale.product}</td><td><StatusPill tone={sale.status === "OK" ? "green" : "yellow"}>{sale.status}</StatusPill></td><td>{sale.cbk ? "sim" : "não"}</td><td>{hubMoney(sale.gross)}</td><td>{hubMoney(sale.net)}</td><td><button className="row-more icon-button" onClick={() => setNotice(`Ações para ${sale.client}: edição e histórico estarão disponíveis na próxima etapa.`)}><ChevronRight size={17} /></button></td></tr>)}</tbody></table></div></section>{notice && <button className="hub-toast" onClick={() => setNotice("")}>{notice}<X size={14} /></button>}{modal === "consultants" && <div className="hub-modal-backdrop"><div className="hub-modal"><button className="drawer-close icon-button" onClick={() => setModal(null)}><X size={18} /></button><span className="eyebrow eyebrow-muted">Gestão de equipe</span><h2>Consultores — {section === "juridico" ? "Jurídico" : "Comercial"}</h2><form className="add-consultant" onSubmit={addConsultant}><input placeholder="Nome do novo consultor" value={newConsultant} onChange={(event) => setNewConsultant(event.target.value)} /><button className="hub-primary" type="submit"><Plus size={16} /></button></form><div className="consultant-list">{hubConsultants.map((name) => <div key={name}><span>{name}</span><button className="icon-button" onClick={() => setNotice(`Remoção de ${name} disponível após confirmação.`)} aria-label={`Remover ${name}`}>×</button></div>)}</div><small>Vendas já registradas continuam preservadas no histórico.</small></div></div>}{modal === "new-sale" && <div className="hub-modal-backdrop"><form className="hub-modal new-sale-modal" onSubmit={saveSale}><button type="button" className="drawer-close icon-button" onClick={() => setModal(null)}><X size={18} /></button><span className="eyebrow eyebrow-muted">Cadastro operacional</span><h2>Nova venda</h2><div className="new-sale-grid"><label>Cliente<input value={newSale.client} onChange={(event) => setNewSale({ ...newSale, client: event.target.value })} placeholder="Nome do cliente" /></label><label>Telefone<input value={newSale.phone} onChange={(event) => setNewSale({ ...newSale, phone: event.target.value })} placeholder="(00) 00000-0000" /></label><label>Data da venda<input type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label><label>Produto<input value={newSale.product} onChange={(event) => setNewSale({ ...newSale, product: event.target.value })} /></label><label className="consultant-picker">Consultor(es)<div>{hubConsultants.slice(0, 8).map((name) => <button type="button" className={newSale.consultants.includes(name) ? "selected" : ""} key={name} onClick={() => toggleConsultant(name)}>{name}</button>)}</div></label><label>Status<select value={newSale.status} onChange={(event) => setNewSale({ ...newSale, status: event.target.value as HubSale["status"] })}><option>Pendente</option><option>OK</option></select></label><label>Valor bruto (R$)<input type="number" min="0" value={newSale.gross} onChange={(event) => setNewSale({ ...newSale, gross: event.target.value })} placeholder="0,00" /></label><label>Valor líquido (R$)<input type="number" min="0" value={newSale.net} onChange={(event) => setNewSale({ ...newSale, net: event.target.value })} placeholder="0,00" /></label><label className="checkbox-label"><input type="checkbox" /> Houve chargeback (CBK)</label><label className="full-field">Observação<textarea value={newSale.note} onChange={(event) => setNewSale({ ...newSale, note: event.target.value })} /></label></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Cancelar</button><button type="submit" className="hub-primary">Salvar venda</button></div></form></div>}</div>;
-}
-
-function ChartSkeleton({ label, compact = false }: { label: string; compact?: boolean }) { return <div className={`chart-skeleton ${compact ? "compact" : ""}`} role="status" aria-label={label}><span className="skeleton-spinner" /><strong>{label}</strong><div className="skeleton-bars">{[1,2,3,4,5,6,7].map((item) => <i key={item} />)}</div></div>; }
-function HubHeader({ section, setSection, userName }: { section: "comercial" | "juridico" | "control"; setSection: (section: "comercial" | "juridico" | "control") => void; userName: string }) { return <section className="hub-hero-banner"><span className="eyebrow">Centro consolidado de vendas</span><h2>Sales HUB</h2><p>Vendas consolidadas — comercial & jurídico em um só lugar.</p><div className="hub-user-badge"><Users size={20} /><strong>{userName.split(" ")[0]}</strong><small>Master · Comercial & Jurídico</small></div></section>; }
-function HubMetric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: string }) { return <div className={`hub-metric hub-metric-${tone}`}><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>; }
-function ControlSector({ title, count, ticket, gross: grossValue, net: netValue, margin }: { title: string; count: string; ticket: string; gross: string; net: string; margin: string }) { return <section className="control-sector"><h3>{title}</h3><p>{count} venda(s) · ticket médio {ticket}</p><div><span>Bruto <b>{grossValue}</b></span><span>Líquido <b>{netValue}</b></span><span>Margem líquida <b>{margin}</b></span></div><hr /><p>Exposição a chargebacks</p><div><span>QTD CBK <b>0</b></span><span>VALOR CBK <b>R$ 0,00</b></span></div></section>; }
 
 function Logo({ compact = false, size = "md" }: { compact?: boolean; size?: "sm" | "md" | "lg" | "xl" }) {
   return <N1Logo compact={compact} size={size} />;
@@ -307,16 +196,16 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       <section className="login-hero">
         <div className="login-hero-top"><Logo size="lg" /></div>
         <div className="hero-copy">
-          <span className="eyebrow"><ShieldCheck size={15} /> Histórias verificadas</span>
+          <span className="eyebrow"><ShieldCheck size={15} /> Portal do cliente N1</span>
           <h1>Seu processo,<br /><em>transparente</em> de ponta a ponta.</h1>
           <p>Acompanhe cada etapa com clareza, segurança e o cuidado de uma equipe que está do seu lado.</p>
-          <div className="testimonial">
-            <div className="quote-mark">“</div>
-            <p>Sempre desconfiei dos valores que pagava no meu financiamento. A equipe da N1 explicou cada etapa, sem enrolação.</p>
-            <div className="testimonial-author"><span className="avatar avatar-coral">JS</span><div><strong>Cliente verificado</strong><small>São Paulo / SP</small></div><CheckCircle2 size={17} /></div>
-          </div>
+          <ul className="login-features">
+            <li><CheckCircle2 size={17} /> Status e progresso do seu processo, atualizados pela equipe</li>
+            <li><CheckCircle2 size={17} /> Documentos do seu caso para baixar quando precisar</li>
+            <li><CheckCircle2 size={17} /> Conversa direta com a equipe da N1, com aviso no WhatsApp</li>
+          </ul>
         </div>
-        <div className="login-hero-footer"><span>Revisão de juros</span><strong>Recuperou R$ 8.420,55</strong><small>em 42 dias</small></div>
+        <div className="login-hero-footer"><span>N1 Soluções</span><strong>Acompanhamento do início ao fim</strong><small>pelo celular ou computador</small></div>
       </section>
       <section className="login-panel">
         <ThemeToggle className="login-theme-toggle" />
@@ -334,7 +223,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               <button className="primary-button login-button" type="submit">Entrar <ChevronRight size={18} /></button>
             </form>
             <button className="link-button" type="button" onClick={() => { setResetEmail(loginEmail); setMode("forgot"); setMessage(""); setNotice(""); }}>Esqueci minha senha</button>
-            <div className="first-access"><strong>Primeiro acesso?</strong><span>Use a senha inicial fornecida pela N1 Soluções. Será solicitada a troca.</span></div>
+            <div className="first-access"><strong>Primeiro acesso?</strong><span>Toque no link que a N1 Soluções enviou por e-mail ou WhatsApp para criar sua senha. Se ele venceu, peça um novo à equipe.</span></div>
             <button className="link-button" type="button" onClick={() => { setMode("register"); setMessage(""); }}>Criar login</button>
           </> : mode === "register" ? <>
             <form onSubmit={requestLogin} className="login-form">
@@ -373,7 +262,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           </> : <>
             <button className="primary-button login-button" onClick={backToLogin}>Voltar para entrar <ChevronRight size={18} /></button>
           </>}
-          <div className="login-trust"><span><ShieldCheck size={14} /> Certificado</span><span><LockKeyhole size={14} /> Selo LGPD</span><small>Nº LGPD-BR-2024/0917-VTR</small></div>
+          <div className="login-trust"><span><LockKeyhole size={14} /> Conexão criptografada (HTTPS)</span><span><ShieldCheck size={14} /> Acesso só com sua senha</span></div>
         </div>
       </section>
     </main>
@@ -386,7 +275,7 @@ function useAwaitingConversations() {
   return (conversasQuery.data ?? []).filter((conversation) => conversation.awaitingReply);
 }
 
-function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName }: { view: View; setView: (view: View) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; onLogout: () => void; userName: string }) {
+function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName, isAdmin }: { view: View; setView: (view: View) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; onLogout: () => void; userName: string; isAdmin: boolean }) {
   const initials = userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
   const awaitingCount = useAwaitingConversations().length;
   const items: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
@@ -395,6 +284,7 @@ function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName }:
     { id: "chargebacks", label: "Chargebacks", icon: CreditCard },
     { id: "atendimento", label: "Atendimento", icon: MessageCircle },
     { id: "saleshub", label: "Sales HUB", icon: FileText },
+    ...(isAdmin ? [{ id: "admin" as View, label: "Administração", icon: ShieldCheck }] : []),
   ];
   return <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
     <div className="sidebar-head"><Logo compact={collapsed} size={collapsed ? "sm" : "md"} /><button className="icon-button collapse-button" onClick={() => setCollapsed(!collapsed)} aria-label="Recolher menu">{collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button></div>
@@ -441,11 +331,21 @@ function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName }:
   </aside>;
 }
 
-function Topbar({ view, onMenu, onSearch, onNotifications, userName }: { view: View; onMenu: () => void; onSearch: () => void; onNotifications: () => void; userName: string }) {
+/** Green when the corporate WhatsApp is connected; administrators open the page with the QR code. */
+function WhatsAppIndicator({ onClick }: { onClick: () => void }) {
+  const statusQuery = trpc.admin.whatsappStatus.useQuery(undefined, { retry: false, refetchInterval: 30_000 });
+  const data = statusQuery.data;
+  if (!data || data.provider !== "web") return null;
+  const connected = data.status === "connected";
+  const label = connected ? "WhatsApp conectado" : data.status === "waiting_qr" ? "WhatsApp aguardando QR code" : "WhatsApp desconectado";
+  return <button type="button" className={`whatsapp-indicator ${connected ? "is-on" : "is-off"}`} onClick={onClick} title={connected && data.number ? `${label} (${data.number})` : label} aria-label={label}><span /> WhatsApp</button>;
+}
+
+function Topbar({ view, onMenu, onSearch, onNotifications, onWhatsApp, userName }: { view: View; onMenu: () => void; onSearch: () => void; onNotifications: () => void; onWhatsApp: () => void; userName: string }) {
   const hasAwaiting = useAwaitingConversations().length > 0;
-  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", "Visão geral do seu portal"], clientes: ["Clientes", "Acompanhe pessoas e processos"], "client-detail": ["Detalhes do Cliente", "Informações completas do cliente"], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", "Converse com seus clientes"], saleshub: ["Sales HUB", "Centro de inteligência comercial e jurídico"] };
+  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", "Visão geral do seu portal"], clientes: ["Clientes", "Acompanhe pessoas e processos"], "client-detail": ["Detalhes do Cliente", "Informações completas do cliente"], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", "Converse com seus clientes"], saleshub: ["Sales HUB", "Centro de inteligência comercial e jurídico"], admin: ["Administração", "WhatsApp, backup e registro de ações"] };
   const initials = userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-  return <header className="topbar"><button className="mobile-menu-button icon-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button><div><p className="breadcrumb">N1 Soluções <ChevronRight size={14} /> {titles[view][0]}</p><h1>{titles[view][0]}</h1><span>{titles[view][1]}</span></div><div className="topbar-actions"><button className="icon-button" aria-label="Buscar clientes" title="Buscar clientes" onClick={onSearch}><Search size={19} /></button><button className="icon-button notification-button" aria-label="Abrir atendimentos" title="Abrir atendimentos" onClick={onNotifications}><Bell size={19} />{hasAwaiting && <span />}</button><ThemeToggle /><span className="topbar-separator" /><div className="topbar-user"><span className="avatar avatar-gold">{initials}</span><div><strong>{userName}</strong><small>Online agora</small></div></div></div></header>;
+  return <header className="topbar"><button className="mobile-menu-button icon-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button><div><p className="breadcrumb">N1 Soluções <ChevronRight size={14} /> {titles[view][0]}</p><h1>{titles[view][0]}</h1><span>{titles[view][1]}</span></div><div className="topbar-actions"><button className="icon-button" aria-label="Buscar clientes" title="Buscar clientes" onClick={onSearch}><Search size={19} /></button><button className="icon-button notification-button" aria-label="Abrir atendimentos" title="Abrir atendimentos" onClick={onNotifications}><Bell size={19} />{hasAwaiting && <span />}</button><WhatsAppIndicator onClick={onWhatsApp} /><ThemeToggle /><span className="topbar-separator" /><div className="topbar-user"><span className="avatar avatar-gold">{initials}</span><div><strong>{userName}</strong><small>Online agora</small></div></div></div></header>;
 }
 
 const formatInt = (value: number) => value.toLocaleString("pt-BR");
@@ -635,7 +535,7 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
         tags: Array.isArray(row.tags) ? (row.tags as string[]) : undefined,
       } as Client));
     }
-    return clients;
+    return [];
   }, [remoteClientes]);
 
   const filtered = useMemo(() => clientList.filter((client) => {
@@ -733,7 +633,7 @@ function ChargebacksPage({ listFilter, onClearFilter }: { listFilter: Chargeback
         tone: String(row.tone ?? "blue"),
       }));
     }
-    return chargebacks;
+    return [];
   }, [remoteChargebacks]);
   const [selected, setSelected] = useState<(typeof chargebackList)[number] | null>(null);
   const filterIds = listFilter ? dashboardQuery.data?.listas.chargebacks[listFilter] : undefined;
@@ -790,7 +690,7 @@ function dayLabel(iso: string | null) {
   return date.toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
 }
 
-function AtendimentoPage() {
+function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
   const utils = trpc.useUtils();
   const conversasQuery = trpc.portal.conversas.useQuery(undefined, { retry: false, refetchInterval: 15_000 });
   const conversations = conversasQuery.data ?? [];
@@ -865,7 +765,7 @@ function AtendimentoPage() {
     </section>
     <section className="panel chat-panel">
       {selected ? <>
-        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><div className="chat-head-actions"><button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button><button className="icon-button chat-clear-button" aria-label="Apagar conversa" title="Apagar conversa" onClick={() => setConfirmClear(true)}><Trash2 size={17} /></button></div></div>
+        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><div className="chat-head-actions"><button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button>{isAdmin && <button className="icon-button chat-clear-button" aria-label="Apagar conversa" title="Apagar conversa" onClick={() => setConfirmClear(true)}><Trash2 size={17} /></button>}</div></div>
         <AlertDialog open={confirmClear} onOpenChange={(open) => !apagarConversa.isPending && setConfirmClear(open)}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -959,6 +859,7 @@ export default function Home() {
 
   // Logging in is not enough for the team area: the server says whether this account was released for it.
   const acessoQuery = trpc.account.meuAcesso.useQuery(undefined, { enabled: loggedIn && !isClientUser, retry: false, staleTime: Infinity });
+  const isAdmin = acessoQuery.data?.kind === "staff" && acessoQuery.data.isAdmin === true;
   const queryClient = useQueryClient();
 
   async function handleLogout() {
@@ -1005,19 +906,20 @@ export default function Home() {
                 <X size={20} />
               </button>
             </div>
-            <Sidebar view={view} setView={(next) => { navigate(next); setMobileMenu(false); }} collapsed={false} setCollapsed={() => undefined} onLogout={handleLogout} userName={userName} />
+            <Sidebar view={view} setView={(next) => { navigate(next); setMobileMenu(false); }} collapsed={false} setCollapsed={() => undefined} onLogout={handleLogout} userName={userName} isAdmin={isAdmin} />
           </div>
         </>
       )}
-      <Sidebar view={view} setView={(next) => navigate(next)} collapsed={collapsed} setCollapsed={setCollapsed} onLogout={handleLogout} userName={userName} />
+      <Sidebar view={view} setView={(next) => navigate(next)} collapsed={collapsed} setCollapsed={setCollapsed} onLogout={handleLogout} userName={userName} isAdmin={isAdmin} />
       <main className={`main-area ${collapsed ? "main-area-wide" : ""}`}>
-        <Topbar view={view} onMenu={() => setMobileMenu(true)} onSearch={() => navigate("clientes")} onNotifications={() => navigate("atendimento")} userName={userName} />
+        <Topbar view={view} onMenu={() => setMobileMenu(true)} onSearch={() => navigate("clientes")} onNotifications={() => navigate("atendimento")} onWhatsApp={() => navigate(isAdmin ? "admin" : "atendimento")} userName={userName} />
         {view === "dashboard" && <Dashboard navigate={navigate} userName={userName} />}
         {view === "clientes" && <ClientsPage setView={setView} selectedClient={selectedClient} setSelectedClient={setSelectedClient} listFilter={clientFilter} onClearFilter={() => setListFilter(null)} />}
-        {view === "client-detail" && selectedClient && <ClientDetail client={selectedClient} onBack={() => setView("clientes")} />}
+        {view === "client-detail" && selectedClient && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><ClientDetail client={selectedClient} onBack={() => setView("clientes")} isAdmin={isAdmin} /></Suspense>}
         {view === "chargebacks" && <ChargebacksPage listFilter={chargebackFilter} onClearFilter={() => setListFilter(null)} />}
-        {view === "atendimento" && <AtendimentoPage />}
-        {view === "saleshub" && <SalesHubPage userName={userName} />}
+        {view === "atendimento" && <AtendimentoPage isAdmin={isAdmin} />}
+        {view === "admin" && isAdmin && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><AdminPage /></Suspense>}
+        {view === "saleshub" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><SalesHubPage userName={userName} isAdmin={isAdmin} /></Suspense>}
         <footer className="app-footer">© 2026 N1 Soluções <span>·</span> Todos os direitos reservados.</footer>
       </main>
     </div>

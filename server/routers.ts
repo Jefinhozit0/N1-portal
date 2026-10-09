@@ -1,3 +1,4 @@
+import path from "node:path";
 import { COOKIE_NAME } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -11,6 +12,12 @@ import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId
 import { TERMS_VERSION } from "@shared/termos";
 import { computeDashboard } from "./_core/dashboard";
 import { ENV } from "./_core/env";
+import { getPublicUrl } from "./_core/publicUrl";
+import { listarAcoes, registrarAcao } from "./_core/auditoria";
+import { notifyClient, notifyTeamNewMessage } from "./_core/notificacoes";
+import { getWhatsAppWebInfo, logoutWhatsAppWeb } from "./_core/whatsappWeb";
+import { backupJob, jobState } from "./_core/tarefas";
+import QRCode from "qrcode";
 import type { TrpcContext } from "./_core/context";
 import { TICKET_TOPICS, formatTicketMessage, parseTicketMessage } from "@shared/tickets";
 import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, toneForStatus } from "@shared/processo";
@@ -36,11 +43,7 @@ function enforceEmailCooldown(req: TrpcContext["req"], email: string) {
 /** Reset codes live apart from sign-up codes, so one can never be used as the other. */
 const resetCodeKey = (email: string) => `reset:${email}`;
 
-function getPortalUrl(req: TrpcContext["req"]) {
-  if (ENV.appUrl) return ENV.appUrl;
-  const proto = String(req.headers["x-forwarded-proto"] ?? req.protocol).split(",")[0].trim();
-  return `${proto}://${req.get("host")}`;
-}
+const getPortalUrl = (req: TrpcContext["req"]) => getPublicUrl(req);
 
 /** The Supabase user behind the request's session token, or null when there is no valid session. */
 async function getSessionUser(ctx: TrpcContext) {
@@ -57,8 +60,18 @@ async function getSessionUser(ctx: TrpcContext) {
  */
 function isStaffUser(user: { email?: string; app_metadata?: Record<string, unknown> }) {
   if (user.app_metadata?.role === "client") return false;
-  if (user.app_metadata?.role === "staff") return true;
+  if (user.app_metadata?.role === "staff" || user.app_metadata?.role === "admin") return true;
   return Boolean(user.email && ENV.staffEmails.includes(user.email.toLowerCase()));
+}
+
+/**
+ * Administrators are the team members who may delete things and read the action log:
+ * ADMIN_EMAILS in .env, or role "admin" in app_metadata.
+ */
+function isAdminUser(user: { email?: string; app_metadata?: Record<string, unknown> }) {
+  if (!isStaffUser(user)) return false;
+  if (user.app_metadata?.role === "admin") return true;
+  return Boolean(user.email && ENV.adminEmails.includes(user.email.toLowerCase()));
 }
 
 /** Procedures for the N1 team: every route with data from all clients goes through here. */
@@ -69,6 +82,14 @@ const staffProcedure = publicProcedure.use(async ({ ctx, next }) => {
     throw new TRPCError({ code: "FORBIDDEN", message: "Sua conta ainda não foi liberada para a área da equipe." });
   }
   return next({ ctx: { ...ctx, staffUser: user } });
+});
+
+/** Only administrators: deleting clients, conversations, documents and sales, and the action log. */
+const adminOnlyProcedure = staffProcedure.use(({ ctx, next }) => {
+  if (!isAdminUser(ctx.staffUser)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Só um administrador pode fazer isso. Peça a um administrador da N1." });
+  }
+  return next();
 });
 
 /** Procedures for a logged-in client: resolves which cliente row the Supabase session belongs to. */
@@ -132,7 +153,43 @@ const clientMessageFrom: Record<string, "client" | "team" | "bot" | "choice"> = 
 
 const nowHHmm = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 
-const firstAccessInput =z.object({ u: z.string().max(64), t: z.string().max(128) });
+const MIGRATION_MELHORIAS = "Rode o arquivo supabase/migrations/20261010_melhorias.sql no SQL Editor do Supabase.";
+
+/** A clearer message when a table or column from a migration that was not run is missing. */
+function missingTableMessage(message: string, what: string) {
+  return /does not exist|schema cache|column/i.test(message) ? `O banco ainda não tem ${what}. ${MIGRATION_MELHORIAS}` : message;
+}
+
+const saleInput = z.object({
+  date: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/, "Informe a data da venda."),
+  client: z.string().trim().min(1, "Informe o cliente.").max(200),
+  phone: z.string().trim().max(40).default(""),
+  consultants: z.array(z.string().trim().min(1).max(60)).max(10).default([]),
+  product: z.string().trim().max(120).default(""),
+  status: z.enum(["Pendente", "OK"]).default("Pendente"),
+  cbk: z.boolean().default(false),
+  gross: z.number().min(0, "O valor bruto não pode ser negativo.").max(100_000_000),
+  net: z.number().min(0, "O valor líquido não pode ser negativo.").max(100_000_000),
+  note: z.string().max(1000).default(""),
+  setor: z.enum(["comercial", "juridico"]).default("comercial"),
+});
+
+/** Saves a sale; before the migration that adds "setor", saves it without that field. */
+async function insertOrUpdateSale(input: z.infer<typeof saleInput> & { id?: number }, id?: number) {
+  const { id: _id, ...row } = input;
+  const write = (values: Record<string, unknown>) =>
+    id ? supabase.from("vendas").update(values).eq("id", id).select().maybeSingle() : supabase.from("vendas").insert(values).select().single();
+  let result = await write(row);
+  if (result.error && /setor/.test(result.error.message)) {
+    const { setor: _setor, ...withoutSector } = row;
+    result = await write(withoutSector);
+  }
+  return result;
+}
+
+const saleErrorMessage = (message: string) => missingTableMessage(message, "o campo de setor das vendas");
+
+const firstAccessInput = z.object({ u: z.string().max(64), t: z.string().max(128) });
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -181,7 +238,8 @@ export const appRouter = router({
       const user = await getSessionUser(ctx);
       if (!user) return { kind: "none" } as const;
       if (getClienteId(user) !== null) return { kind: "client" } as const;
-      return { kind: isStaffUser(user) ? "staff" : "pending" } as const;
+      if (!isStaffUser(user)) return { kind: "pending" } as const;
+      return { kind: "staff", isAdmin: isAdminUser(user), email: user.email ?? "" } as const;
     }),
 
     /**
@@ -346,8 +404,9 @@ export const appRouter = router({
           descricao: input.type ? `Início do processo: ${input.type}` : "Início do processo",
           autor: ctx.staffUser.email,
         });
+        await registrarAcao(ctx.staffUser.email, "Cadastrou cliente", data.name, data.id);
         // Login link goes out right away, by e-mail and from the corporate WhatsApp.
-        const access = await provisionClientAccess({ id: data.id, name: data.name, email: input.email, phone: input.phone }, getPortalUrl(ctx.req));
+        const access = await provisionClientAccess({ id: data.id, name: data.name, email: input.email, phone: input.phone }, await getPortalUrl(ctx.req));
         return { ...data, access };
       }),
 
@@ -359,7 +418,8 @@ export const appRouter = router({
         if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
         if (!data.email) throw new TRPCError({ code: "BAD_REQUEST", message: "Cadastre um e-mail para este cliente primeiro." });
         // A new link replaces the previous one, which stops working.
-        return provisionClientAccess({ id: data.id, name: data.name, email: data.email, phone: data.phone }, getPortalUrl(ctx.req));
+        await registrarAcao(ctx.staffUser.email, "Reenviou acesso ao portal", data.name, data.id);
+        return provisionClientAccess({ id: data.id, name: data.name, email: data.email, phone: data.phone }, await getPortalUrl(ctx.req));
       }),
 
     /** Update a client */
@@ -376,12 +436,25 @@ export const appRouter = router({
         phone: z.string().optional(),
         services: z.array(z.string()).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { id, ...patch } = input;
         const changes = (await hasUpdatedAtColumn()) ? { ...patch, atualizado_em: new Date().toISOString() } : patch;
         const { data, error } = await supabase.from("clientes").update(changes).eq("id", id).select().single();
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        await registrarAcao(ctx.staffUser.email, "Editou cadastro do cliente", `${data.name}: ${Object.keys(patch).join(", ")}`, id);
         return data;
+      }),
+
+    /** Tags shown on the client's page and in the list. */
+    salvarTags: staffProcedure
+      .input(z.object({ id: z.number().int().positive(), tags: z.array(z.string().trim().min(1).max(40)).max(20) }))
+      .mutation(async ({ ctx, input }) => {
+        const tags = Array.from(new Set(input.tags));
+        const { data, error } = await supabase.from("clientes").update({ tags }).eq("id", input.id).select("name").maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: missingTableMessage(error.message, "o campo de tags") });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+        await registrarAcao(ctx.staffUser.email, "Alterou tags", `${data.name}: ${tags.join(", ") || "sem tags"}`, input.id);
+        return { tags };
       }),
 
     /** List chargebacks */
@@ -409,59 +482,76 @@ export const appRouter = router({
       }
       return (data ?? []).map((row: Record<string, unknown>) => ({
         id: row.id as number,
-        date: row.date as string,
-        client: row.client as string,
-        phone: row.phone as string,
-        consultants: (row.consultants as string[]) ?? [],
-        product: row.product as string,
+        date: (row.date as string) ?? "",
+        client: (row.client as string) ?? "",
+        phone: (row.phone as string) ?? "",
+        consultants: ((row.consultants as string[]) ?? []).filter((name) => name && name !== "—"),
+        product: (row.product as string) ?? "",
         status: (row.status as "Pendente" | "OK") ?? "Pendente",
         cbk: (row.cbk as boolean) ?? false,
         gross: Number(row.gross ?? 0),
         net: Number(row.net ?? 0),
         note: (row.note as string) ?? "",
+        /** Before the migration that adds it, every sale counts as Comercial. */
+        setor: (row.setor === "juridico" ? "juridico" : "comercial") as "comercial" | "juridico",
+        createdAt: (row.created_at as string) ?? null,
       }));
     }),
 
     /** Create a sale */
     createVenda: staffProcedure
-      .input(z.object({
-        date: z.string(),
-        client: z.string(),
-        phone: z.string().optional(),
-        consultants: z.array(z.string()).optional(),
-        product: z.string().optional(),
-        status: z.enum(["Pendente", "OK"]).optional(),
-        cbk: z.boolean().optional(),
-        gross: z.number().optional(),
-        net: z.number().optional(),
-        note: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
-        const { data, error } = await supabase.from("vendas").insert(input).select().single();
-        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      .input(saleInput)
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await insertOrUpdateSale(input);
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: saleErrorMessage(error.message) });
+        await registrarAcao(ctx.staffUser.email, "Cadastrou venda", `${input.client} · ${input.product || "sem produto"} · bruto R$ ${input.gross.toFixed(2)}`);
         return data;
       }),
 
     /** Update a sale */
     updateVenda: staffProcedure
-      .input(z.object({
-        id: z.number(),
-        date: z.string().optional(),
-        client: z.string().optional(),
-        phone: z.string().optional(),
-        consultants: z.array(z.string()).optional(),
-        product: z.string().optional(),
-        status: z.enum(["Pendente", "OK"]).optional(),
-        cbk: z.boolean().optional(),
-        gross: z.number().optional(),
-        net: z.number().optional(),
-        note: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
-        const { id, ...patch } = input;
-        const { data, error } = await supabase.from("vendas").update(patch).eq("id", id).select().single();
-        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      .input(saleInput.extend({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await insertOrUpdateSale(input, input.id);
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: saleErrorMessage(error.message) });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Venda não encontrada." });
+        await registrarAcao(ctx.staffUser.email, "Editou venda", `#${input.id} · ${input.client} · ${input.status} · bruto R$ ${input.gross.toFixed(2)}`);
         return data;
+      }),
+
+    /** Consultants for the Sales HUB: active ones, plus inactive ones that still appear on old sales. */
+    consultores: staffProcedure.query(async () => {
+      const { data, error } = await supabase.from("consultores").select("id, nome, ativo").order("nome", { ascending: true });
+      if (error) {
+        console.warn("[portal.consultores] Supabase error:", error.message);
+        return { ready: false as const, consultores: [] as { id: number; nome: string; ativo: boolean }[] };
+      }
+      return { ready: true as const, consultores: (data ?? []) as { id: number; nome: string; ativo: boolean }[] };
+    }),
+
+    adicionarConsultor: staffProcedure
+      .input(z.object({ nome: z.string().trim().min(2, "Informe o nome do consultor.").max(60) }))
+      .mutation(async ({ ctx, input }) => {
+        // Bringing back someone who was removed reactivates the same entry.
+        const { data: existing } = await supabase.from("consultores").select("id, ativo").ilike("nome", input.nome).maybeSingle();
+        if (existing?.ativo) throw new TRPCError({ code: "CONFLICT", message: "Esse consultor já está cadastrado." });
+        const { error } = existing
+          ? await supabase.from("consultores").update({ ativo: true, nome: input.nome }).eq("id", existing.id)
+          : await supabase.from("consultores").insert({ nome: input.nome });
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: missingTableMessage(error.message, "consultores") });
+        await registrarAcao(ctx.staffUser.email, "Cadastrou consultor", input.nome);
+        return { success: true } as const;
+      }),
+
+    /** Removing keeps the name on past sales and in the reports; the consultant just leaves the lists. */
+    removerConsultor: adminOnlyProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await supabase.from("consultores").update({ ativo: false }).eq("id", input.id).select("nome").maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Consultor não encontrado." });
+        await registrarAcao(ctx.staffUser.email, "Removeu consultor", data.nome as string);
+        return { success: true } as const;
       }),
 
     /**
@@ -469,7 +559,7 @@ export const appRouter = router({
      * together with the row) and the portal login, so the old first-access link stops working too.
      * Sales and chargebacks are kept, since they are the company's records.
      */
-    deleteCliente: staffProcedure
+    deleteCliente: adminOnlyProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const { data: cliente, error: findError } = await supabase.from("clientes").select("id, name").eq("id", input.id).maybeSingle();
@@ -489,8 +579,7 @@ export const appRouter = router({
         const { error } = await supabase.from("clientes").delete().eq("id", input.id);
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
 
-        // Leaves a trail in the server log of who deleted whom.
-        console.log(`[portal.deleteCliente] ${ctx.staffUser.email} apagou o cliente #${cliente.id} (${cliente.name}).`);
+        await registrarAcao(ctx.staffUser.email, "Apagou cliente", `#${cliente.id} · ${cliente.name}`, cliente.id);
         return { success: true } as const;
       }),
 
@@ -540,9 +629,12 @@ export const appRouter = router({
 
         if (patch.status) {
           await addEvent(input.id, { tipo: "status", titulo: "Status atualizado", descricao: `${current.status || "Sem status"} → ${input.status}`, autor: ctx.staffUser.email });
+          await registrarAcao(ctx.staffUser.email, "Mudou status", `${current.name}: ${current.status || "sem status"} → ${input.status}`, input.id);
+          notifyClient(input.id, "status", input.status);
         }
         if (patch.progresso !== undefined) {
           await addEvent(input.id, { tipo: "progresso", titulo: "Progresso atualizado", descricao: `Progresso do caso atualizado para ${input.progresso}%`, autor: ctx.staffUser.email });
+          await registrarAcao(ctx.staffUser.email, "Mudou progresso", `${current.name}: ${current.progresso ?? 0}% → ${input.progresso}%`, input.id);
         }
         return { changed: true } as const;
       }),
@@ -560,9 +652,12 @@ export const appRouter = router({
         const bytes = Buffer.from(input.conteudo, "base64");
         if (bytes.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo está vazio." });
         if (bytes.length > MAX_DOCUMENT_BYTES) throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo passa de 10 MB." });
-        const { data: cliente } = await supabase.from("clientes").select("id").eq("id", input.clientId).maybeSingle();
+        const { data: cliente } = await supabase.from("clientes").select("id, name").eq("id", input.clientId).maybeSingle();
         if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
-        return uploadDocument(input.clientId, { nome: input.nome, tipo: input.tipo, descricao: input.descricao, bytes }, ctx.staffUser.email ?? "equipe");
+        const document = await uploadDocument(input.clientId, { nome: input.nome, tipo: input.tipo, descricao: input.descricao, bytes }, ctx.staffUser.email ?? "equipe");
+        await registrarAcao(ctx.staffUser.email, "Anexou documento", `${cliente.name}: ${input.nome}`, input.clientId);
+        notifyClient(input.clientId, "documento", input.nome);
+        return document;
       }),
 
     baixarDocumento: staffProcedure
@@ -573,29 +668,33 @@ export const appRouter = router({
         return { url };
       }),
 
-    apagarDocumento: staffProcedure
+    apagarDocumento: adminOnlyProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        await deleteDocument(input.id, ctx.staffUser.email ?? "equipe");
+        const removed = await deleteDocument(input.id, ctx.staffUser.email ?? "equipe");
+        await registrarAcao(ctx.staffUser.email, "Apagou documento", removed.nome, removed.clientId);
         return { success: true } as const;
       }),
 
     /** Clears a client's whole conversation (messages, tickets and the assistant's lines). The client stays registered. */
-    apagarConversa: staffProcedure
+    apagarConversa: adminOnlyProcedure
       .input(z.object({ clientId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const { error, count } = await supabase.from("mensagens").delete({ count: "exact" }).eq("client_id", input.clientId);
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
-        console.log(`[portal.apagarConversa] ${ctx.staffUser.email} apagou ${count ?? 0} mensagem(ns) do cliente #${input.clientId}.`);
+        const { data: cliente } = await supabase.from("clientes").select("name").eq("id", input.clientId).maybeSingle();
+        await registrarAcao(ctx.staffUser.email, "Apagou conversa", `${cliente?.name ?? `cliente #${input.clientId}`}: ${count ?? 0} mensagem(ns)`, input.clientId);
         return { apagadas: count ?? 0 };
       }),
 
     /** Delete a sale */
-    deleteVenda: staffProcedure
-      .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        const { error } = await supabase.from("vendas").delete().eq("id", input.id);
+    deleteVenda: adminOnlyProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await supabase.from("vendas").delete().eq("id", input.id).select("client, product, gross").maybeSingle();
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Esta venda já foi apagada." });
+        await registrarAcao(ctx.staffUser.email, "Apagou venda", `#${input.id} · ${data.client} · ${data.product || "sem produto"} · bruto R$ ${Number(data.gross ?? 0).toFixed(2)}`);
         return { success: true };
       }),
 
@@ -679,12 +778,13 @@ export const appRouter = router({
         clientId: z.number(),
         clientName: z.string().optional(),
         sender: z.enum(["client", "team"]),
-        text: z.string().min(1),
+        text: z.string().trim().min(1).max(2000),
         time: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const now = new Date();
-        const time = input.time ?? `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+        // Brazil's time, so it is right even on a server in another time zone.
+        const time = input.time ?? nowHHmm();
+        if (input.sender === "team") notifyClient(input.clientId, "resposta");
         const { data, error } = await supabase.from("mensagens").insert({
           client_id: input.clientId,
           client_name: input.clientName,
@@ -695,6 +795,55 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
         return { ...data, from: data.sender as "client" | "team", time: data.time };
       }),
+  }),
+
+  // ── Administration: WhatsApp connection, backup, reminders and the action log ──
+  admin: router({
+    /** Whether the corporate WhatsApp is connected; any team member can see it. */
+    whatsappStatus: staffProcedure.query(() => {
+      if (ENV.whatsappProvider !== "web") return { provider: ENV.whatsappProvider, status: "off" as const };
+      const info = getWhatsAppWebInfo();
+      return { provider: "web", status: info.status, number: info.number };
+    }),
+
+    sistema: adminOnlyProcedure.query(async () => {
+      const info = ENV.whatsappProvider === "web" ? getWhatsAppWebInfo() : null;
+      return {
+        whatsapp: {
+          provider: ENV.whatsappProvider,
+          status: info?.status ?? "off",
+          number: info?.number ?? null,
+          since: info?.since ?? null,
+          // The QR only goes to administrators: scanning it links a phone to the company's sender.
+          qr: info?.qr ? await QRCode.toDataURL(info.qr, { margin: 1, width: 300 }) : null,
+        },
+        backup: { ...jobState.backup, pasta: path.resolve(ENV.backupDir) },
+        lembretes: jobState.lembretes,
+        enderecoPublico: await getPublicUrl(),
+        avisosParaClientes: ENV.notifyClients,
+      };
+    }),
+
+    desconectarWhatsApp: adminOnlyProcedure.mutation(async ({ ctx }) => {
+      try {
+        await logoutWhatsAppWeb();
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível desconectar." });
+      }
+      await registrarAcao(ctx.staffUser.email, "Desconectou o WhatsApp do portal");
+      return { success: true } as const;
+    }),
+
+    fazerBackup: adminOnlyProcedure.mutation(async ({ ctx }) => {
+      await backupJob();
+      if (jobState.backup.lastError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `O backup falhou: ${jobState.backup.lastError}` });
+      await registrarAcao(ctx.staffUser.email, "Fez backup manual", jobState.backup.lastResult ?? undefined);
+      return jobState.backup;
+    }),
+
+    auditoria: adminOnlyProcedure
+      .input(z.object({ busca: z.string().max(100).optional(), limite: z.number().int().min(10).max(1000).default(200) }))
+      .query(({ input }) => listarAcoes({ limit: input.limite, busca: input.busca })),
   }),
 
   // ── Area for the client themselves (only ever sees their own process) ──
@@ -809,17 +958,18 @@ export const appRouter = router({
         assunto: z.enum(TICKET_TOPICS).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const now = new Date();
-        const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+        const time = nowHHmm();
         const { data: cliente } = await supabase.from("clientes").select("name").eq("id", ctx.clienteId).single();
+        const text = input.assunto ? formatTicketMessage(input.assunto, input.text) : input.text;
         const { error } = await supabase.from("mensagens").insert({
           client_id: ctx.clienteId,
           client_name: cliente?.name,
           sender: "client",
-          text: input.assunto ? formatTicketMessage(input.assunto, input.text) : input.text,
+          text,
           time,
         });
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        notifyTeamNewMessage(ctx.clienteId, cliente?.name ?? "Cliente", text);
         return { success: true } as const;
       }),
   }),

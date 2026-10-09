@@ -28,6 +28,8 @@ type Client = {
 type ClientDetailProps = {
   client: Client;
   onBack: () => void;
+  /** Only administrators may delete the client and its documents. */
+  isAdmin: boolean;
 };
 
 /** "09/10/2026" */
@@ -35,7 +37,7 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { 
 /** "09/10/2026 às 14:32" */
 const formatDateTime = (iso: string) => `${formatDate(iso)} às ${new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}`;
 
-export default function ClientDetail({ client, onBack }: ClientDetailProps) {
+export default function ClientDetail({ client, onBack, isAdmin }: ClientDetailProps) {
   const utils = trpc.useUtils();
   const detalhe = trpc.portal.detalheCliente.useQuery({ id: client.id ?? 0 }, { enabled: client.id !== undefined });
   const cliente = detalhe.data?.cliente;
@@ -80,6 +82,18 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
   const [summary, setSummary] = useState("");
   const [riskAnalysis, setRiskAnalysis] = useState("");
   const [tags, setTags] = useState<string[]>(client.tags ?? []);
+  const [customTag, setCustomTag] = useState("");
+  const savedTags: string[] = Array.isArray(cliente?.tags) ? (cliente.tags as string[]) : client.tags ?? [];
+  const salvarTags = trpc.portal.salvarTags.useMutation({
+    onSuccess: (result) => {
+      toast.success("Tags salvas.");
+      setTags(result.tags);
+      setIsEditingTags(false);
+      detalhe.refetch();
+      utils.portal.clientes.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const [isEditingTags, setIsEditingTags] = useState(false);
 
   const availableTags = ["Urgente", "Documentação pendente", "Aguardando cliente", "VIP", "Em revisão", "Financiamento Veicular"];
@@ -194,7 +208,7 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
           <ArrowLeft size={18} />
           Voltar
         </Button>
-        {client.id !== undefined && (
+        {client.id !== undefined && isAdmin && (
           <Button variant="outline" size="sm" className="client-delete-button" onClick={() => setConfirmDelete(true)}>
             <Trash2 size={16} />
             Apagar cliente
@@ -258,16 +272,37 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
                       {tag}
                     </button>
                   ))}
-                  <Button size="sm" onClick={() => setIsEditingTags(false)} className="tags-save-btn">
-                    Salvar
+                  {tags.filter((tag) => !availableTags.includes(tag)).map((tag) => (
+                    <button key={tag} type="button" className="tag-edit-btn active" onClick={() => toggleTag(tag)}>{tag}</button>
+                  ))}
+                  <input
+                    className="tag-custom-input"
+                    aria-label="Nova tag"
+                    placeholder="Nova tag"
+                    maxLength={40}
+                    value={customTag}
+                    onChange={(event) => setCustomTag(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      const tag = customTag.trim();
+                      if (tag && !tags.includes(tag)) setTags([...tags, tag]);
+                      setCustomTag("");
+                    }}
+                  />
+                  <Button size="sm" disabled={salvarTags.isPending || client.id === undefined} onClick={() => client.id !== undefined && salvarTags.mutate({ id: client.id, tags })} className="tags-save-btn">
+                    {salvarTags.isPending ? "Salvando..." : "Salvar"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setTags(savedTags); setIsEditingTags(false); }}>
+                    Cancelar
                   </Button>
                 </div>
               ) : (
                 <div className="tags-display">
-                  {tags.map((tag) => (
+                  {savedTags.map((tag) => (
                     <span key={tag} className="tag detail-tag">{tag}</span>
                   ))}
-                  <Button size="sm" variant="ghost" onClick={() => setIsEditingTags(true)} className="tags-edit-trigger">
+                  <Button size="sm" variant="ghost" onClick={() => { setTags(savedTags); setIsEditingTags(true); }} className="tags-edit-trigger">
                     Editar tags
                   </Button>
                 </div>
@@ -415,7 +450,7 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
                 >
                   <Download size={16} />
                 </Button>
-                <Button
+                {isAdmin && <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setDocumentToDelete({ id: doc.id, nome: doc.nome })}
@@ -424,7 +459,7 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
                   title="Apagar documento"
                 >
                   <Trash2 size={16} />
-                </Button>
+                </Button>}
               </div>
             ))}
           </div>

@@ -2901,3 +2901,82 @@ tbody tr.empty-row:hover { background: transparent; }
 /* Atendimento: ações no topo da conversa */
 .chat-head-actions { display: flex; align-items: center; gap: 6px; }
 .chat-clear-button:hover { color: var(--red); background: var(--red-soft); }
+
+/* ── Sales HUB: chart colors checked with the palette validator (light and dark both pass) ── */
+:root { --hub-gross: #c98500; --hub-net: #2a78d6; }
+:root.dark { --hub-gross: #c98500; --hub-net: #3987e5; }
+.hub-chart-tools { display: flex; align-items: center; gap: 10px; }
+.hub-legend { display: inline-flex; align-items: center; gap: 6px; color: var(--text-soft); font-size: 13px; }
+.hub-legend i, .hub-tooltip i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.hub-legend i + i { margin-left: 8px; }
+.hub-swatch-gross { background: var(--hub-gross); }
+.hub-swatch-net { background: var(--hub-net); }
+.hub-evolution { position: relative; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; height: 210px; padding-top: 18px; border-bottom: 1px solid var(--border); }
+.hub-evolution-month { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; min-width: 0; padding: 0 2px; border-radius: 6px; cursor: pointer; outline-offset: 2px; }
+.hub-evolution-month.is-hovered, .hub-evolution-month.is-selected { background: var(--surface-muted); }
+.hub-evolution-bars { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.hub-evolution-bars span { width: min(14px, 42%); min-height: 0; border-radius: 4px 4px 0 0; }
+.hub-bar-gross { background: var(--hub-gross); }
+.hub-bar-net { background: var(--hub-net); }
+.hub-evolution-month small { overflow: hidden; color: var(--muted); font-size: 11.5px; text-align: center; white-space: nowrap; }
+.hub-evolution-month.is-selected small { color: var(--text); font-weight: 600; }
+.hub-tooltip { position: absolute; bottom: calc(100% - 8px); left: 50%; z-index: 5; display: flex; flex-direction: column; gap: 4px; min-width: 190px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-md); color: var(--text-soft); font-size: 12.5px; transform: translateX(-50%); pointer-events: none; }
+.hub-tooltip-left { left: auto; right: 0; transform: none; }
+.hub-tooltip strong { color: var(--text); font-size: 13px; }
+.hub-tooltip span { display: flex; align-items: center; gap: 6px; }
+.hub-tooltip b { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.hub-chart-empty { margin: 0; padding: 28px 12px; color: var(--muted); font-size: 14px; text-align: center; }
+.hub-mini-table td, .hub-mini-table th { padding: 8px 10px; font-size: 13px; }
+.heatmap-head small { text-align: center; font-size: 11px; }
+.hub-empty-row { padding: 28px 12px !important; color: var(--muted); text-align: center; }
+.hub-note { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.hub-row-actions { white-space: nowrap; }
+.hub-row-actions .icon-button { width: 30px; height: 30px; }
+.hub-delete:hover { color: var(--red); background: var(--red-soft); }
+.hub-dialog { max-width: 640px; max-height: 90vh; overflow-y: auto; }
+.hub-dialog form > .new-sale-grid { margin: 18px 0; }
+.hub-dialog .consultant-picker > span { color: var(--text-soft); font-size: 13.5px; font-weight: 500; }
+.hub-dialog .add-consultant { display: flex; gap: 8px; margin: 8px 0 12px; }
+.hub-dialog .add-consultant input { flex: 1; }
+@media (max-width: 640px) {
+  .hub-evolution { gap: 2px; }
+  .hub-evolution-month small { font-size: 10px; }
+  .hub-dialog .new-sale-grid { grid-template-columns: 1fr; }
+}
+
+/* ── WhatsApp indicator in the top bar ── */
+.whatsapp-indicator { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-soft); background: var(--surface); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.whatsapp-indicator span { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.whatsapp-indicator.is-on span { background: var(--green); }
+.whatsapp-indicator.is-off { color: var(--red); border-color: var(--red); }
+.whatsapp-indicator.is-off span { background: var(--red); }
+@media (max-width: 640px) { .whatsapp-indicator { padding: 0 8px; font-size: 0; gap: 0; } .whatsapp-indicator span { width: 10px; height: 10px; } }
+
+/* ── Administração ── */
+.admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 18px; }
+.admin-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 22px; }
+.admin-card-head { display: flex; align-items: center; gap: 8px; color: var(--text); }
+.admin-card-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.admin-muted { margin: 0; color: var(--text-soft); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-muted code { font-size: 12.5px; }
+.admin-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text); font-size: 15px; font-weight: 600; }
+.admin-status span { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.admin-status-connected span { background: var(--green); }
+.admin-status-waiting_qr span, .admin-status-connecting span { background: var(--amber); }
+.admin-qr { display: flex; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #ffffff; }
+.admin-qr img { flex: none; image-rendering: pixelated; }
+.admin-qr p { margin: 0; color: #2b2a27; font-size: 13.5px; line-height: 1.5; }
+.admin-address { margin: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+.admin-log { padding: 22px; }
+.admin-log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.admin-search { display: flex; align-items: center; gap: 8px; min-width: min(320px, 100%); padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); }
+.admin-search input { flex: 1; height: 38px; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 14px; }
+@media (max-width: 900px) { .admin-grid { grid-template-columns: 1fr; } .admin-qr { flex-direction: column; align-items: flex-start; } }
+
+/* Client detail: custom tag field */
+.tag-custom-input { height: 30px; width: 130px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
+
+/* Login: what the portal offers (replaces the made-up testimonial) */
+.login-features { display: flex; flex-direction: column; gap: 12px; margin: 28px 0 0; padding: 0; list-style: none; }
+.login-features li { display: flex; align-items: flex-start; gap: 10px; color: rgba(255, 255, 255, 0.86); font-size: 15px; line-height: 1.45; }
+.login-features svg { flex: none; margin-top: 2px; color: var(--gold, #c9ad66); }

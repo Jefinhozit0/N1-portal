@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
 import { startWhatsAppWeb } from "./whatsappWeb";
 import { registerShortLinks } from "./shortLinks";
+import { startBackgroundJobs } from "./tarefas";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -71,6 +72,9 @@ async function startServer() {
   if (ENV.whatsappProvider === "web") {
     startWhatsAppWeb().catch((error) => console.error("[WhatsApp] Não foi possível iniciar a conexão:", error));
   }
+
+  // Daily backup and access reminders. BACKGROUND_JOBS=off turns them off (e.g. on a test copy).
+  if ((process.env.BACKGROUND_JOBS ?? "on").toLowerCase() !== "off") startBackgroundJobs();
 }
 
 startServer().catch(console.error);

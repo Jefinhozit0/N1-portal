@@ -89,7 +89,34 @@ export function isWhatsAppEnabled(env: Pick<typeof ENV, "whatsappProvider"> & Wh
 }
 
 /** Sends the first-access link through whichever WhatsApp provider is configured. */
-export async function sendAccessMessage(phone: string, params: { firstName: string; link: string }) {
-  if (ENV.whatsappProvider === "web") return sendWhatsAppWebText(phone, accessMessageText(params));
+export async function sendAccessMessage(phone: string, params: { firstName: string; link: string; reminder?: boolean }) {
+  if (ENV.whatsappProvider === "web") return sendWhatsAppWebText(phone, params.reminder ? accessReminderText(params) : accessMessageText(params));
   return sendAccessWhatsApp(phone, params);
+}
+
+/** Reminder for a client who has not created the password yet; the link is a new one. */
+export function accessReminderText(params: { firstName: string; link: string }) {
+  return [
+    `Oi, ${params.firstName}! 😊 Aqui é da *N1 Soluções*.`,
+    "",
+    "Vimos que você ainda não entrou no portal para acompanhar o seu processo. É rapidinho: toque no link, crie sua senha e pronto.",
+    "",
+    params.link,
+    "",
+    "⏳ Este link substitui o anterior e vale por 7 dias.",
+    "Qualquer dúvida, é só responder esta mensagem.",
+  ].join("\n");
+}
+
+/**
+ * Free text (notices about replies, status, documents). Only the unofficial connection can send
+ * it: the official API only starts conversations with templates approved by Meta.
+ */
+export function canSendFreeText() {
+  return ENV.whatsappProvider === "web";
+}
+
+export async function sendFreeText(phone: string, text: string) {
+  if (!canSendFreeText()) throw new Error("Avisos em texto livre só funcionam com WHATSAPP_PROVIDER=web.");
+  return sendWhatsAppWebText(phone, text);
 }

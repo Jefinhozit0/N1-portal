@@ -34,10 +34,11 @@ export async function sendPasswordResetCodeEmail(
 
 export async function sendClientAccessEmail(
   to: string,
-  access: { name: string; link: string },
+  access: { name: string; link: string; reminder?: boolean },
   config: EmailProviderConfig = ENV,
 ): Promise<void> {
   const firstName = access.name.trim().split(/\s+/)[0] || "cliente";
+  if (access.reminder) return sendAccessReminderEmail(to, firstName, access.link, config);
   const subject = "Seu acesso ao portal | N1 Soluções";
   const text = [
     `Olá, ${firstName}!`,
@@ -52,6 +53,39 @@ export async function sendClientAccessEmail(
   ].join("\n");
   const html = `<div style="font-family:Arial,sans-serif;color:#171614;max-width:520px"><h1 style="font-size:20px">Olá, ${escapeHtml(firstName)}!</h1><p>Seu cadastro na N1 Soluções foi concluído. Pelo botão abaixo você cria sua senha, aceita os termos de uso e passa a acompanhar o seu processo.</p><p style="margin:24px 0"><a href="${escapeHtml(access.link)}" style="display:inline-block;background:#131312;color:#ffffff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Criar minha senha</a></p><p>Seu login é este e-mail: <strong>${escapeHtml(to)}</strong></p><p style="color:#6e685d;font-size:13px">O link vale por 7 dias e só pode ser usado uma vez. Se você não reconhece este cadastro, ignore esta mensagem.</p></div>`;
   await sendEmail({ to, subject, text, html }, config);
+}
+
+/** Reminder for a client who has not opened the first-access link yet (a new link replaces the old one). */
+async function sendAccessReminderEmail(to: string, firstName: string, link: string, config: EmailProviderConfig) {
+  const subject = "Seu acesso ao portal ainda está esperando por você | N1 Soluções";
+  const text = [
+    `Olá, ${firstName}!`,
+    "",
+    "Notamos que você ainda não criou sua senha no portal da N1 Soluções. Por lá você acompanha cada etapa do seu processo e fala com a nossa equipe.",
+    "",
+    "Use este novo link (o anterior deixou de valer):",
+    link,
+    "",
+    `Seu login é este e-mail: ${to}`,
+    "O link vale por 7 dias e só pode ser usado uma vez.",
+  ].join("\n");
+  const html = `<div style="font-family:Arial,sans-serif;color:#171614;max-width:520px"><h1 style="font-size:20px">Olá, ${escapeHtml(firstName)}!</h1><p>Notamos que você ainda não criou sua senha no portal da N1 Soluções. Por lá você acompanha cada etapa do seu processo e fala com a nossa equipe.</p><p style="margin:24px 0"><a href="${escapeHtml(link)}" style="display:inline-block;background:#131312;color:#ffffff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Criar minha senha</a></p><p>Seu login é este e-mail: <strong>${escapeHtml(to)}</strong></p><p style="color:#6e685d;font-size:13px">Este link substitui o anterior. Ele vale por 7 dias e só pode ser usado uma vez.</p></div>`;
+  await sendEmail({ to, subject, text, html }, config);
+}
+
+/** A short notice with an optional button, for alerts to clients and to the team. */
+export async function sendNoticeEmail(
+  to: string,
+  notice: { subject: string; title: string; paragraphs: string[]; button?: { label: string; url: string } },
+  config: EmailProviderConfig = ENV,
+): Promise<void> {
+  const text = [notice.title, "", ...notice.paragraphs, ...(notice.button ? ["", `${notice.button.label}: ${notice.button.url}`] : [])].join("\n");
+  const paragraphs = notice.paragraphs.map((paragraph) => `<p style="white-space:pre-wrap">${escapeHtml(paragraph)}</p>`).join("");
+  const button = notice.button
+    ? `<p style="margin:24px 0"><a href="${escapeHtml(notice.button.url)}" style="display:inline-block;background:#131312;color:#ffffff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">${escapeHtml(notice.button.label)}</a></p>`
+    : "";
+  const html = `<div style="font-family:Arial,sans-serif;color:#171614;max-width:520px"><h1 style="font-size:20px">${escapeHtml(notice.title)}</h1>${paragraphs}${button}</div>`;
+  await sendEmail({ to, subject: notice.subject, text, html }, config);
 }
 
 async function sendEmail({ to, subject, text, html }: EmailMessage, config: EmailProviderConfig): Promise<void> {

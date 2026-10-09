@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSalesHubCsv, hubMoney, type HubRankingItem, type HubSale } from "./Home";
+import { buildSalesHubCsv, hubMoney, type HubRankingItem, type HubSale } from "./salesHubData";
 
 describe("Sales HUB helpers", () => {
   it("formats Brazilian currency for dashboard metrics", () => {

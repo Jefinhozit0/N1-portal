@@ -1,3 +1,8 @@
+/** "a@x.com, b@y.com" -> ["a@x.com", "b@y.com"], lowercase. */
+function emailList(value: string | undefined) {
+  return (value ?? "").split(/[,;\s]+/).map((email) => email.trim().toLowerCase()).filter(Boolean);
+}
+
 export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
@@ -9,7 +14,19 @@ export const ENV = {
   gmailUser: process.env.GMAIL_USER ?? "",
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD ?? "",
   /** E-mails of the N1 team, comma separated. Only these accounts open the team area. */
-  staffEmails: (process.env.STAFF_EMAILS ?? "").split(/[,;\s]+/).map((email) => email.trim().toLowerCase()).filter(Boolean),
+  staffEmails: emailList(process.env.STAFF_EMAILS),
+  /** Team members who may also delete (clients, conversations, documents, sales) and see the action log. */
+  adminEmails: emailList(process.env.ADMIN_EMAILS),
+  /** Who gets an e-mail when a client writes in the portal. Empty: everyone in STAFF_EMAILS. */
+  teamNotifyEmails: emailList(process.env.TEAM_NOTIFY_EMAILS),
+  /** Team WhatsApp numbers (with area code) that also get those alerts. Optional. */
+  teamNotifyWhatsApp: (process.env.TEAM_NOTIFY_WHATSAPP ?? "").split(/[,;]+/).map((phone) => phone.trim()).filter(Boolean),
+  /** "off" stops the WhatsApp messages to clients about replies, status changes and documents. */
+  notifyClients: (process.env.NOTIFY_CLIENTS ?? "on").toLowerCase() !== "off",
+  /** Where the daily backup goes. A Google Drive / OneDrive synced folder keeps a copy off the notebook. */
+  backupDir: process.env.BACKUP_DIR || "backups",
+  /** cloudflared metrics address, used to find the tunnel's current address when APP_URL=auto. */
+  cloudflaredMetrics: process.env.CLOUDFLARED_METRICS || "127.0.0.1:20241",
   /** Public URL of the portal, used in the access e-mail sent to new clients. */
   appUrl: process.env.APP_URL ?? "",
   /**

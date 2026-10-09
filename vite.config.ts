@@ -167,6 +167,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Libraries change rarely: in their own files the browser keeps them cached between updates of the portal.
+        manualChunks: {
+          react: ["react", "react-dom"],
+          supabase: ["@supabase/supabase-js"],
+          dados: ["@trpc/client", "@trpc/react-query", "@tanstack/react-query", "superjson"],
+        },
+      },
+    },
   },
   server: {
     host: true,

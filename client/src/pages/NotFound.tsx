@@ -18,17 +18,17 @@ export default function NotFound() {
 
         <span className="not-found-code" aria-hidden="true">404</span>
 
-        <h2>Page Not Found</h2>
+        <h2>Página não encontrada</h2>
 
         <p className="login-subtitle">
-          Sorry, the page you are looking for doesn't exist.
+          Não encontramos a página que você procurou.
           <br />
-          It may have been moved or deleted.
+          Confira o endereço ou volte para o início.
         </p>
 
         <div id="not-found-button-group" className="not-found-actions">
           <button type="button" onClick={handleGoHome} className="primary-button login-button">
-            Go Home
+            Voltar ao início
             <Home size={18} />
           </button>
         </div>

@@ -25,6 +25,21 @@ let lastSentAt = 0;
 
 export const getWhatsAppWebStatus = () => status;
 
+/** Latest QR code (while waiting to be scanned) and the connected number, for the admin screen. */
+let lastQr: string | null = null;
+let connectedNumber: string | null = null;
+let lastChange = new Date().toISOString();
+
+export function getWhatsAppWebInfo() {
+  return { status, qr: status === "waiting_qr" ? lastQr : null, number: status === "connected" ? connectedNumber : null, since: lastChange };
+}
+
+/** Unlinks the device (to connect another number). A new QR code shows up a few seconds later. */
+export async function logoutWhatsAppWeb() {
+  if (!sock) throw new Error("O WhatsApp não está conectado.");
+  await sock.logout();
+}
+
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function startWhatsAppWeb(): Promise<void> {
@@ -49,6 +64,8 @@ export async function startWhatsAppWeb(): Promise<void> {
   socket.ev.on("connection.update", ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       status = "waiting_qr";
+      lastQr = qr;
+      lastChange = new Date().toISOString();
       console.log("\n[WhatsApp] Escaneie o QR code abaixo no celular do número da empresa:");
       console.log("[WhatsApp] WhatsApp > Configurações > Dispositivos conectados > Conectar um dispositivo\n");
       qrcode.generate(qr, { small: true });
@@ -56,6 +73,9 @@ export async function startWhatsAppWeb(): Promise<void> {
 
     if (connection === "open") {
       status = "connected";
+      lastQr = null;
+      connectedNumber = socket.user?.id?.split(":")[0] ?? null;
+      lastChange = new Date().toISOString();
       retries = 0;
       console.log(`[WhatsApp] Conectado como ${socket.user?.id?.split(":")[0] ?? "número desconhecido"}.`);
     }

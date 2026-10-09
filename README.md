@@ -19,18 +19,21 @@ Portal da **N1 Soluções** com duas áreas:
 ## O que já está pronto
 
 ### Área interna (`/`)
-- **Login, cadastro e recuperação de senha** com código de verificação por e-mail.
+- **Login, cadastro e recuperação de senha** com código de verificação por e-mail. Só os e-mails de `STAFF_EMAILS` abrem a área da equipe.
 - **Dashboard** com indicadores (clientes ativos, solicitações pendentes, processos, taxa de reversão de chargebacks), gráfico de processos e listas filtráveis que abrem exatamente os registros de cada número. Atualiza a cada 60 s.
-- **Clientes:** busca, filtros por status, cadastro com serviços contratados, edição, tags e página de detalhe. No cadastro, o cliente recebe o link de primeiro acesso por e-mail e/ou WhatsApp, com opção de reenviar.
+- **Clientes:** busca, filtros por status, cadastro com serviços contratados, edição, tags salvas e página de detalhe com status, progresso, documentos e linha do tempo. No cadastro, o cliente recebe o link curto de primeiro acesso por e-mail e WhatsApp, com opção de reenviar.
 - **Chargebacks:** lista com detalhe de cada caso.
-- **Atendimento:** conversas com os clientes em tempo real (mensagens e chamados).
-- **Sales HUB:** vendas por mês, ranking de consultores, cadastro/edição/exclusão de vendas e exportação em CSV, com seções Comercial, Jurídico e Controle.
+- **Atendimento:** conversas com os clientes (mensagens e chamados). A equipe recebe e-mail quando um cliente escreve.
+- **Sales HUB:** vendas por setor (Comercial e Jurídico) e por mês, ranking de consultores, evolução de 12 meses, horários das vendas, N1 Control consolidado, cadastro e edição de vendas, consultores salvos e exportação em CSV e PDF. Todos os números vêm das vendas registradas.
+- **Administração** (só administradores): WhatsApp da empresa com QR code na tela, backup diário, avisos automáticos, endereço público e registro de ações da equipe.
+- **Administradores e funcionários:** só quem está em `ADMIN_EMAILS` apaga clientes, conversas, documentos, vendas e consultores.
 - **Tema claro e escuro.**
 
 ### Área do cliente
-- **Primeiro acesso (`/primeiro-acesso`):** link válido por 7 dias e de uso único para criar a senha.
+- **Primeiro acesso:** link curto (`/a/<código>`) válido por 7 dias e de uso único para criar a senha. Quem não cria a senha em 2 dias recebe um lembrete automático, uma vez.
 - **Termos de uso** versionados. O processo e o chat só abrem depois do aceite, e o servidor também verifica isso.
-- **Meu processo** e **chat** com a equipe, incluindo um assistente para dúvidas frequentes.
+- **Meu processo** com status, progresso, documentos para baixar e histórico, e **chat** com a equipe, incluindo um assistente para dúvidas frequentes. A conversa fica salva.
+- **Avisos automáticos** por WhatsApp e e-mail quando a equipe responde, muda o status ou anexa um documento.
 
 ### Design (revisão de 08/10/2026)
 - Ponte entre os tokens da marca e os componentes shadcn/ui, que antes apareciam com fundo transparente.
@@ -76,10 +79,15 @@ Preencha o `.env`:
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Acesso do navegador ao Supabase (login) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Envio de e-mails pelo Gmail (senha de app) |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Alternativa ao Gmail para e-mails |
-| `APP_URL` | URL pública usada nos links de primeiro acesso |
+| `APP_URL` | Endereço público usado nos links. `auto` acompanha o túnel do Cloudflare quando ele muda |
 | `WHATSAPP_PROVIDER` | `web` (não oficial, gratuito), `cloud` (API oficial da Meta) ou `off` |
 | `WHATSAPP_*` | Configuração da API oficial, usada só quando `WHATSAPP_PROVIDER=cloud` |
 | `STAFF_EMAILS` | E-mails da equipe, separados por vírgula. Só essas contas abrem a área interna |
+| `ADMIN_EMAILS` | Administradores: podem apagar e veem a página Administração |
+| `TEAM_NOTIFY_EMAILS`, `TEAM_NOTIFY_WHATSAPP` | Quem recebe o aviso quando um cliente escreve (padrão: todos de `STAFF_EMAILS`, por e-mail) |
+| `NOTIFY_CLIENTS` | `off` desliga os avisos aos clientes |
+| `BACKUP_DIR` | Pasta do backup diário (padrão `backups`). Uma pasta do Google Drive guarda cópia fora do notebook |
+| `BACKGROUND_JOBS` | `off` desliga backup e lembretes automáticos |
 | `PORT` | Porta do servidor (padrão 3000) |
 
 ### 3. Criar as tabelas no Supabase
@@ -87,7 +95,7 @@ No Supabase, abra **SQL Editor** e rode o conteúdo de `supabase-schema.sql`. De
 
 As tabelas ficam com RLS ligado e sem políticas. Só o servidor, com a service role key, lê e grava os dados. Nunca crie políticas que liberem as tabelas para `anon`, porque essa chave vai junto no site.
 
-Para popular dados de exemplo (opcional):
+Para testar com dados fictícios (opcional, não use no banco do cliente):
 ```bash
 npx tsx seed-supabase.ts
 ```
@@ -111,9 +119,25 @@ pnpm start
 Com `WHATSAPP_PROVIDER=web`, o servidor mostra um QR code no terminal ao iniciar. No celular da empresa, abra **WhatsApp > Configurações > Dispositivos conectados > Conectar um dispositivo** e escaneie. A sessão fica salva na pasta `.whatsapp-auth/`, então o QR só volta a aparecer se o aparelho for desconectado no celular.
 
 - Essa conexão não é oficial. O WhatsApp pode bloquear o número se as mensagens parecerem spam.
-- Para reduzir o risco, o portal envia uma mensagem por vez, com 8 a 15 segundos de intervalo, e só no cadastro ou no reenvio de acesso.
+- Para reduzir o risco, o portal envia uma mensagem por vez, com 8 a 15 segundos de intervalo. Os avisos têm intervalo mínimo por cliente (15 min para respostas, 10 min para documentos).
+- O QR code também aparece na página Administração, para quando o portal roda escondido.
 - Rode apenas um servidor por vez com a mesma pasta `.whatsapp-auth/`. Dois servidores com a mesma sessão derrubam um ao outro.
 - Trate a pasta `.whatsapp-auth/` como uma senha: quem a tiver consegue enviar mensagens pelo número.
+
+### Rodar no notebook sem precisar abrir nada
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\instalar-inicio-automatico.ps1
+```
+Cria a tarefa "N1 Portal" no Windows: a cada logon, o portal e o túnel do Cloudflare ligam escondidos e voltam sozinhos se caírem. Também tira a suspensão na tomada. Os registros ficam em `logs\`. Para desfazer, rode `scripts\remover-inicio-automatico.ps1`. Com `APP_URL=auto`, os links novos seguem o endereço atual do túnel.
+
+### Backup e restauração
+O servidor faz um backup por dia na pasta `backups\` (últimos 30 dias, mais uma cópia de cada documento). A página Administração mostra o último backup e tem o botão "Fazer backup agora". Para trazer registros de volta:
+```bash
+npx tsx scripts/restaurar-backup.ts backups/2026-10-09 clientes 7,8,9
+```
+
+### Dados de exemplo
+O esquema inicial criava clientes, vendas e chargebacks fictícios. O arquivo `supabase/limpar-dados-de-exemplo.sql` mostra e apaga esses registros. Para clientes, prefira o botão "Apagar cliente", que também remove o login.
 
 ### Outros comandos
 ```bash
@@ -123,7 +147,5 @@ pnpm format   # formatação (Prettier)
 ```
 
 ## Pendências conhecidas
-- Página 404 ainda em inglês.
-- Janelas do Sales HUB não fecham com Esc nem prendem o foco do teclado.
-- `DashboardLayout.tsx` e `ComponentShowcase.tsx` não são usados e podem ser removidos.
-- O pacote JavaScript passa de 800 kB; carregar o Sales HUB sob demanda reduziria isso.
+- No Supabase, desligue **Authentication > Sign In / Providers > Allow new users to sign up**. O portal cria as contas pelo servidor e não depende disso.
+- Os avisos em texto livre pelo WhatsApp só funcionam com a conexão não oficial (`WHATSAPP_PROVIDER=web`).

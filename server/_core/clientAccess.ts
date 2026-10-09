@@ -87,6 +87,7 @@ export async function completeFirstAccess(user: User, password: string) {
 export async function provisionClientAccess(
   cliente: { id: number; name: string; email?: string | null; phone?: string | null },
   portalUrl: string,
+  options: { reminder?: boolean } = {},
 ): Promise<ClientAccessResult> {
   const email = cliente.email?.trim().toLowerCase();
   if (!email) {
@@ -95,7 +96,8 @@ export async function provisionClientAccess(
   }
 
   const token = newShortToken();
-  const firstAccess = { hash: hashToken(token), expires_at: new Date(Date.now() + FIRST_ACCESS_TTL_MS).toISOString() };
+  // sent_at drives the automatic reminder; reminded keeps it to a single reminder per link.
+  const firstAccess = { hash: hashToken(token), expires_at: new Date(Date.now() + FIRST_ACCESS_TTL_MS).toISOString(), sent_at: new Date().toISOString(), reminded: Boolean(options.reminder) };
   let userId: string;
 
   try {
@@ -136,7 +138,7 @@ export async function provisionClientAccess(
   const firstName = cliente.name.trim().split(/\s+/)[0] || "cliente";
 
   const [emailResult, whatsappResult] = await Promise.all([
-    sendClientAccessEmail(email, { name: cliente.name, link })
+    sendClientAccessEmail(email, { name: cliente.name, link, reminder: options.reminder })
       .then((): ChannelResult => ({ sent: true }))
       .catch((error): ChannelResult => {
         console.error("[ClientAccess] Access e-mail failed:", error);
@@ -147,7 +149,7 @@ export async function provisionClientAccess(
       const phone = normalizeBrazilPhone(cliente.phone);
       if (!phone) return { sent: false, reason: cliente.phone ? `Telefone "${cliente.phone}" inválido. Use DDD + número.` : "Cliente sem telefone cadastrado." };
       try {
-        await sendAccessMessage(phone, { firstName, link });
+        await sendAccessMessage(phone, { firstName, link, reminder: options.reminder });
         return { sent: true };
       } catch (error) {
         console.error("[ClientAccess] Access WhatsApp failed:", error);

@@ -118,3 +118,8 @@ client/public/__manus__/version.json
 
 # Sessão do WhatsApp (vale como estar logado no número da empresa)
 .whatsapp-auth/
+
+# Backups diários (podem ter dados de clientes), registros do servidor e estado de energia salvo pelos scripts
+backups/
+logs/
+scripts/energia-anterior.json

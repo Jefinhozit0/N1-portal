@@ -109,6 +109,7 @@ export async function deleteDocument(documentId: number, author: string) {
   const { error } = await supabase.from("documentos").delete().eq("id", documentId);
   if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
   await addEvent(data.client_id as number, { tipo: "documento", titulo: "Documento removido", descricao: data.nome as string, autor: author });
+  return { nome: data.nome as string, clientId: data.client_id as number };
 }
 
 /** Removes every file of a client from Storage (the records go with the client row). */
