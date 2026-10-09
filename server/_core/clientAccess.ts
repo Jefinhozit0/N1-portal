@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import type { User } from "@supabase/supabase-js";
 import { sendClientAccessEmail } from "./email";
 import { supabase } from "./supabase";
@@ -28,12 +28,38 @@ export async function findUserByEmail(email: string): Promise<User | null> {
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
+const SHORT_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+/**
+ * The token of the short link (/a/K7p2XqM4bN9w). Letters and digits only, so WhatsApp never cuts
+ * the link, and without look-alikes (0/O, 1/l/I). 12 characters give about 70 bits: guessing one
+ * is out of reach, even more so with the rate limit on /a/.
+ */
+function newShortToken() {
+  return Array.from({ length: 12 }, () => SHORT_ALPHABET[randomInt(SHORT_ALPHABET.length)]).join("");
+}
+
+/** Finds whose first-access link a short token belongs to (only the hash of it is stored). */
+export async function findFirstAccessUserByToken(token: string): Promise<User | null> {
+  if (!/^[A-Za-z0-9]{12}$/.test(token)) return null;
+  const target = hashToken(token);
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const match = data.users.find((user) => {
+      const stored = user.app_metadata?.first_access as { hash?: string; expires_at?: string } | undefined;
+      return stored?.hash === target && Boolean(stored.expires_at) && Date.parse(stored.expires_at!) >= Date.now();
+    });
+    if (match) return match;
+    if (data.users.length < 1000) return null;
+  }
+}
+
 /**
  * Checks a first-access link. Only the hash of the token is stored (in app_metadata,
  * which the client cannot edit), the link works once and expires after 7 days.
  */
 export async function findFirstAccessUser(userId: string, token: string): Promise<User | null> {
-  if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^[A-Za-z0-9_-]{12,100}$/.test(token)) return null;
   const { data, error } = await supabase.auth.admin.getUserById(userId);
   if (error || !data.user) return null;
   const stored = data.user.app_metadata?.first_access as { hash?: string; expires_at?: string } | undefined;
@@ -68,7 +94,7 @@ export async function provisionClientAccess(
     return { email: { sent: false, reason }, whatsapp: { sent: false, reason } };
   }
 
-  const token = randomBytes(32).toString("base64url");
+  const token = newShortToken();
   const firstAccess = { hash: hashToken(token), expires_at: new Date(Date.now() + FIRST_ACCESS_TTL_MS).toISOString() };
   let userId: string;
 
@@ -105,7 +131,8 @@ export async function provisionClientAccess(
     return { email: { sent: false, reason }, whatsapp: { sent: false, reason } };
   }
 
-  const link = `${portalUrl.replace(/\/$/, "")}/primeiro-acesso?u=${userId}&t=${token}`;
+  // Short link: /a/<token> leads to the first-access page (see registerShortLinks).
+  const link = `${portalUrl.replace(/\/$/, "")}/a/${token}`;
   const firstName = cliente.name.trim().split(/\s+/)[0] || "cliente";
 
   const [emailResult, whatsappResult] = await Promise.all([

@@ -5,7 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { sendPasswordResetCodeEmail, sendVerificationCodeEmail } from "./_core/email";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
-import { createVerificationCode, discardVerificationCode, verifyCode } from "./_core/verificationCodes";
+import { checkCode, codeErrorMessage, createVerificationCode, discardVerificationCode } from "./_core/verificationCodes";
 import { supabase } from "./_core/supabase";
 import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId, provisionClientAccess, removeClientLogins } from "./_core/clientAccess";
 import { TERMS_VERSION } from "@shared/termos";
@@ -164,7 +164,7 @@ export const appRouter = router({
         try {
           await sendVerificationCodeEmail(input.email, code);
         } catch (error) {
-          discardVerificationCode(input.email);
+          discardVerificationCode(input.email, code);
           console.error("[Email] Verification code delivery failed:", error);
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -184,13 +184,46 @@ export const appRouter = router({
       return { kind: isStaffUser(user) ? "staff" : "pending" } as const;
     }),
 
-    verifyEmailCode: publicProcedure
-      .input(verificationCodeInput.extend({ code: z.string().regex(/^\d{6}$/, "Informe o código de 6 dígitos.") }))
-      .mutation(({ input }) => {
-        if (!verifyCode(input.email, input.code)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Código inválido ou expirado. Solicite um novo código." });
+    /**
+     * "Criar login": checks the e-mailed code and creates the account here, already confirmed.
+     * The code proves the person owns the e-mail, so an account that already exists for it
+     * (one that was never confirmed, or whose password was forgotten) just gets the new password,
+     * the same thing "Esqueci minha senha" would do. Client logins are left alone.
+     */
+    criarConta: publicProcedure
+      .input(verificationCodeInput.extend({
+        code: z.string().regex(/^\d{6}$/, "Informe o código de 6 dígitos."),
+        password: z.string().min(8, "A senha precisa ter pelo menos 8 caracteres.").max(72),
+      }))
+      .mutation(async ({ input }) => {
+        const email = input.email.toLowerCase();
+        // The code comes first, so nobody can find out who has an account without owning the e-mail.
+        const result = checkCode(email, input.code);
+        if (result !== "ok") throw new TRPCError({ code: "BAD_REQUEST", message: codeErrorMessage(result) });
+
+        const existing = await findUserByEmail(email).catch((error) => {
+          console.error("[criarConta] Lookup failed:", error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível criar a conta agora. Tente novamente." });
+        });
+        if (existing && getClienteId(existing) !== null) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Este e-mail é de um cliente da N1. Entre com a senha criada no primeiro acesso ou use \"Esqueci minha senha\"." });
         }
-        return { verified: true } as const;
+
+        if (!existing) {
+          const { error } = await supabase.auth.admin.createUser({ email, password: input.password, email_confirm: true });
+          if (error) {
+            console.error("[criarConta] Create failed:", error);
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível criar a conta agora. Tente novamente." });
+          }
+          return { status: "created" } as const;
+        }
+
+        const { error } = await supabase.auth.admin.updateUserById(existing.id, { password: input.password, email_confirm: true });
+        if (error) {
+          console.error("[criarConta] Update failed:", error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível salvar a senha agora. Tente novamente." });
+        }
+        return { status: "updated" } as const;
       }),
 
     /** Opening the link from the e-mail / WhatsApp: is it still valid, and for whom? */
@@ -235,7 +268,7 @@ export const appRouter = router({
         try {
           await sendPasswordResetCodeEmail(input.email, code);
         } catch (error) {
-          discardVerificationCode(resetCodeKey(input.email));
+          discardVerificationCode(resetCodeKey(input.email), code);
           console.error("[PasswordReset] E-mail delivery failed:", error);
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Não foi possível enviar o e-mail agora. Tente novamente em alguns minutos." });
         }
@@ -249,13 +282,14 @@ export const appRouter = router({
         password: z.string().min(8, "A senha precisa ter pelo menos 8 caracteres.").max(72),
       }))
       .mutation(async ({ input }) => {
-        if (!verifyCode(resetCodeKey(input.email), input.code)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Código inválido ou expirado. Solicite um novo código." });
-        }
+        const result = checkCode(resetCodeKey(input.email), input.code);
+        if (result !== "ok") throw new TRPCError({ code: "BAD_REQUEST", message: codeErrorMessage(result) });
         const user = await findUserByEmail(input.email);
         if (!user) throw new TRPCError({ code: "BAD_REQUEST", message: "Código inválido ou expirado. Solicite um novo código." });
         const { error } = await supabase.auth.admin.updateUserById(user.id, {
           password: input.password,
+          // The e-mailed code proves the address, so an account never confirmed starts working too.
+          email_confirm: true,
           // The person just chose this password, so a client is not asked to change it again.
           user_metadata: { ...user.user_metadata, must_change_password: false },
         });

@@ -180,7 +180,7 @@ export function StatusPill({ children, tone }: { children: string; tone: string 
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const requestVerificationCode = trpc.account.requestVerificationCode.useMutation();
-  const verifyEmailCode = trpc.account.verifyEmailCode.useMutation();
+  const criarConta = trpc.account.criarConta.useMutation();
   const requestPasswordReset = trpc.account.solicitarRedefinicaoSenha.useMutation();
   const resetPassword = trpc.account.redefinirSenha.useMutation();
   const [mode, setMode] = useState<"login" | "register" | "verify" | "verified" | "forgot" | "reset">("login");
@@ -246,27 +246,19 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     event.preventDefault();
     setMessage("");
     try {
-      // Step 2: verify the code via our server
-      await verifyEmailCode.mutateAsync({ email: verifiedEmail, code: verificationCode });
-      // Step 3: code OK — create the account on Supabase
-      const { data, error } = await supabase.auth.signUp({
-        email: verifiedEmail,
-        password: password,
-      });
-      if (error) {
-        setMessage("Falha ao criar conta: " + error.message);
+      // The server checks the code and creates the account already confirmed (or sets the new
+      // password on an account that already existed for this e-mail).
+      const created = await criarConta.mutateAsync({ email: verifiedEmail, code: verificationCode, password });
+      const { error } = await supabase.auth.signInWithPassword({ email: verifiedEmail, password });
+      if (!error) {
+        onLogin();
         return;
       }
-      if (data.session) {
-        onLogin();
-      } else {
-        setMessage("");
-        setNotice("Conta criada! Faça login para continuar.");
-        setMode("login");
-        setLoginEmail(verifiedEmail);
-        setPassword("");
-        setConfirmPassword("");
-      }
+      setNotice(created.status === "updated" ? "Este e-mail já tinha conta. A senha foi atualizada, entre com ela." : "Conta criada! Entre para continuar.");
+      setMode("login");
+      setLoginEmail(verifiedEmail);
+      setPassword("");
+      setConfirmPassword("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível validar o código.");
     }
@@ -355,9 +347,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <button className="link-button" type="button" onClick={() => { setMode("login"); setMessage(""); }}>Voltar para entrar</button>
           </> : mode === "verify" ? <>
             <form onSubmit={verifyRegistrationCode} className="login-form">
-              <label>Código de verificação<input required autoFocus inputMode="numeric" pattern="[0-9]{6}" maxLength={6} aria-label="Código de verificação" placeholder="000000" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
+              <label>Código de verificação<input required autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" aria-label="Código de verificação" placeholder="000000" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
               {message && <p className="form-message">{message}</p>}
-              <button className="primary-button login-button" type="submit" disabled={verifyEmailCode.isPending || verificationCode.length !== 6}>{verifyEmailCode.isPending ? "Verificando..." : "Verificar código"} <ChevronRight size={18} /></button>
+              <button className="primary-button login-button" type="submit" disabled={criarConta.isPending || verificationCode.length !== 6}>{criarConta.isPending ? "Criando conta..." : "Verificar e criar conta"} <ChevronRight size={18} /></button>
             </form>
             <button className="link-button" type="button" disabled={requestVerificationCode.isPending} onClick={() => sendVerificationCode(verifiedEmail)}>{requestVerificationCode.isPending ? "Reenviando..." : "Reenviar código"}</button>
             <button className="link-button" onClick={() => { setMode("register"); setMessage(""); }}>Alterar e-mail</button>
@@ -370,7 +362,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <button className="link-button" type="button" onClick={backToLogin}>Voltar para entrar</button>
           </> : mode === "reset" ? <>
             <form onSubmit={confirmPasswordReset} className="login-form">
-              <label>Código recebido por e-mail<input required autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} aria-label="Código recebido por e-mail" placeholder="000000" value={resetCode} onChange={(event) => setResetCode(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
+              <label>Código recebido por e-mail<input required autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" aria-label="Código recebido por e-mail" placeholder="000000" value={resetCode} onChange={(event) => setResetCode(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
               <label>Nova senha<div className="password-wrap"><input required minLength={8} autoComplete="new-password" aria-label="Nova senha" type={showPassword ? "text" : "password"} placeholder="Mínimo de 8 caracteres" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="icon-button password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
               <label>Confirmar nova senha<input required minLength={8} autoComplete="new-password" aria-label="Confirmar nova senha" type={showPassword ? "text" : "password"} placeholder="Digite a senha novamente" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>
               {message && <p className="form-message">{message}</p>}

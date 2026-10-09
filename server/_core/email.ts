@@ -15,7 +15,7 @@ export async function sendVerificationCodeEmail(
   code: string,
   config: EmailProviderConfig = ENV,
 ): Promise<void> {
-  const subject = "Seu código de verificação | N1 Soluções";
+  const subject = `${code} é seu código de verificação | N1 Soluções`;
   const text = `Seu código de verificação da N1 Soluções é: ${code}. Se você não solicitou este código, ignore esta mensagem.`;
   const html = `<div style="font-family:Arial,sans-serif;color:#202124"><h1 style="font-size:20px">Verificação de e-mail</h1><p>Use este código para continuar:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px">${code}</p><p>Se você não solicitou este código, ignore esta mensagem.</p></div>`;
   await sendEmail({ to, subject, text, html }, config);
@@ -26,7 +26,7 @@ export async function sendPasswordResetCodeEmail(
   code: string,
   config: EmailProviderConfig = ENV,
 ): Promise<void> {
-  const subject = "Redefinição de senha | N1 Soluções";
+  const subject = `${code} é seu código para redefinir a senha | N1 Soluções`;
   const text = `Seu código para criar uma nova senha no portal da N1 Soluções é: ${code}. Ele vale por 10 minutos. Se você não pediu para redefinir a senha, ignore esta mensagem; sua senha atual continua valendo.`;
   const html = `<div style="font-family:Arial,sans-serif;color:#202124"><h1 style="font-size:20px">Redefinição de senha</h1><p>Use este código para criar uma nova senha no portal da N1 Soluções:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px">${code}</p><p>O código vale por 10 minutos.</p><p style="color:#5f6368;font-size:13px">Se você não pediu para redefinir a senha, ignore esta mensagem. Sua senha atual continua valendo.</p></div>`;
   await sendEmail({ to, subject, text, html }, config);

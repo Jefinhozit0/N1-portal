@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
 import { startWhatsAppWeb } from "./whatsappWeb";
+import { registerShortLinks } from "./shortLinks";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -34,10 +35,13 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
+  // The Cloudflare tunnel connects from this machine; trust it so req.ip is the visitor, not 127.0.0.1.
+  app.set("trust proxy", "loopback");
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerShortLinks(app);
   // tRPC API
   app.use(
     "/api/trpc",
