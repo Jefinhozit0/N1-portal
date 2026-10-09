@@ -8,8 +8,15 @@ export const ENV = {
   emailFrom: process.env.EMAIL_FROM ?? "",
   gmailUser: process.env.GMAIL_USER ?? "",
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD ?? "",
+  /** E-mails of the N1 team, comma separated. Only these accounts open the team area. */
+  staffEmails: (process.env.STAFF_EMAILS ?? "").split(/[,;\s]+/).map((email) => email.trim().toLowerCase()).filter(Boolean),
   /** Public URL of the portal, used in the access e-mail sent to new clients. */
   appUrl: process.env.APP_URL ?? "",
+  /**
+   * How the first-access link goes out by WhatsApp: "web" (unofficial, number paired by QR code),
+   * "cloud" (official Meta API) or "off". Unset: "cloud" when a Meta token exists, else "web".
+   */
+  whatsappProvider: (process.env.WHATSAPP_PROVIDER || (process.env.WHATSAPP_TOKEN ? "cloud" : "web")).toLowerCase(),
   /** WhatsApp Business Platform (Meta Cloud API) for messages from the corporate number. */
   whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
   whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",

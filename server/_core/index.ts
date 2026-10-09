@@ -8,6 +8,8 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { ENV } from "./env";
+import { startWhatsAppWeb } from "./whatsappWeb";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -61,6 +63,10 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  if (ENV.whatsappProvider === "web") {
+    startWhatsAppWeb().catch((error) => console.error("[WhatsApp] Não foi possível iniciar a conexão:", error));
+  }
 }
 
 startServer().catch(console.error);

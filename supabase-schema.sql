@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS public.mensagens (
   id          BIGSERIAL PRIMARY KEY,
   client_id   BIGINT REFERENCES public.clientes(id) ON DELETE CASCADE,
   client_name TEXT,                          -- Denormalized for convenience
-  sender      TEXT CHECK (sender IN ('client', 'team')) NOT NULL,
+  sender      TEXT CHECK (sender IN ('client', 'team', 'assistant', 'assistant_choice')) NOT NULL, -- assistant* = assistente virtual, visível só para o cliente
   text        TEXT NOT NULL,
   time        TEXT,                          -- Horário formatado (HH:mm)
   created_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL
@@ -109,16 +109,10 @@ INSERT INTO public.mensagens (client_id, client_name, sender, text, time) VALUES
 ON CONFLICT DO NOTHING;
 
 -- ----------------------------------------
--- Enable RLS (Row Level Security) - permissive for now
--- You can tighten these policies later
+-- Enable RLS (Row Level Security) with no policies: only the server (service role key) reads and writes.
 -- ----------------------------------------
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chargebacks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mensagens ENABLE ROW LEVEL SECURITY;
 
--- Allow all operations for authenticated and anon (service key bypasses RLS anyway)
-CREATE POLICY "Allow all clientes" ON public.clientes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all chargebacks" ON public.chargebacks FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all vendas" ON public.vendas FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all mensagens" ON public.mensagens FOR ALL USING (true) WITH CHECK (true);

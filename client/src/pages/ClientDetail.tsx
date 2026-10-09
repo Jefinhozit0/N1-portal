@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ArrowLeft, FileText, Phone, Mail, Upload, Trash2, Sparkles, AlertTriangle, ChevronDown, Clock, Plus } from "lucide-react";
+import { ArrowLeft, FileText, Phone, Mail, Upload, Trash2, Sparkles, AlertTriangle, ChevronDown, Clock, Plus, Download, RefreshCw } from "lucide-react";
+import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, formatFileSize } from "@shared/processo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,6 +9,7 @@ import { StatusPill } from "./Home";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { showAccessResult } from "@/lib/accessToast";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type Client = {
   id?: number;
@@ -28,145 +30,128 @@ type ClientDetailProps = {
   onBack: () => void;
 };
 
-type Document = {
-  id: number;
-  name: string;
-  date: string;
-  size: string;
-  description: string;
-};
-
-type TimelineEvent = {
-  id: number;
-  type: "document" | "progress" | "registration";
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-};
+/** "09/10/2026" */
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+/** "09/10/2026 às 14:32" */
+const formatDateTime = (iso: string) => `${formatDate(iso)} às ${new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}`;
 
 export default function ClientDetail({ client, onBack }: ClientDetailProps) {
-  const [progress, setProgress] = useState(25);
+  const utils = trpc.useUtils();
+  const detalhe = trpc.portal.detalheCliente.useQuery({ id: client.id ?? 0 }, { enabled: client.id !== undefined });
+  const cliente = detalhe.data?.cliente;
+  const documents = detalhe.data?.documentos ?? [];
+  const timeline = detalhe.data?.eventos ?? [];
+  const progress = cliente?.progresso ?? 0;
+  const status: string = cliente?.status ?? client.status ?? "";
+  const tone = (cliente?.tone ?? client.tone ?? "yellow") as "green" | "yellow" | "red";
+  const [timelineFilter, setTimelineFilter] = useState<"all" | "documento" | "status" | "progresso">("all");
+  const visibleTimeline = timelineFilter === "all" ? timeline : timeline.filter((event) => event.tipo === timelineFilter);
   const [isEditingProgress, setIsEditingProgress] = useState(false);
-  const [progressInput, setProgressInput] = useState("25");
-  const [status, setStatus] = useState("Em análise");
-  const [appInstalled, setAppInstalled] = useState(false);
+  const [progressInput, setProgressInput] = useState("0");
+  const [uploading, setUploading] = useState(0);
+
+  const refreshAll = () => Promise.all([detalhe.refetch(), utils.portal.clientes.invalidate(), utils.portal.dashboard.invalidate()]);
+  const atualizarProcesso = trpc.portal.atualizarProcesso.useMutation({
+    onSuccess: () => refreshAll(),
+    onError: (error) => toast.error(error.message),
+  });
+  const enviarDocumento = trpc.portal.enviarDocumento.useMutation();
+  const baixarDocumento = trpc.portal.baixarDocumento.useMutation({ onError: (error) => toast.error(error.message) });
+  const apagarDocumento = trpc.portal.apagarDocumento.useMutation({
+    onSuccess: () => { toast.success("Documento apagado."); detalhe.refetch(); },
+    onError: (error) => toast.error(error.message),
+  });
+  const [documentToDelete, setDocumentToDelete] = useState<{ id: number; nome: string } | null>(null);
+
   const reenviarAcesso = trpc.portal.reenviarAcesso.useMutation({
     onSuccess: (result) => showAccessResult(result, "Novo link gerado (o anterior deixou de valer)."),
     onError: (error) => toast.error(error.message),
   });
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [isAnalyzingRisk, setIsAnalyzingRisk] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteCliente = trpc.portal.deleteCliente.useMutation({
+    onSuccess: async () => {
+      toast.success(`${client.name} foi apagado.`);
+      setConfirmDelete(false);
+      await Promise.all([utils.portal.clientes.invalidate(), utils.portal.dashboard.invalidate(), utils.portal.conversas.invalidate()]);
+      onBack();
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const [summary, setSummary] = useState("");
   const [riskAnalysis, setRiskAnalysis] = useState("");
-  const [tags, setTags] = useState<string[]>(client.tags || ["Urgente", "Documentação pendente"]);
+  const [tags, setTags] = useState<string[]>(client.tags ?? []);
   const [isEditingTags, setIsEditingTags] = useState(false);
 
   const availableTags = ["Urgente", "Documentação pendente", "Aguardando cliente", "VIP", "Em revisão", "Financiamento Veicular"];
-  const [documents, setDocuments] = useState<Document[]>([
-    {
-      id: 1,
-      name: "Contrato-2026-001551-LOIR-SANTOS - Clicksign.pdf",
-      date: "28/09/2026",
-      size: "2.4 MB",
-      description: "Contrato de financiamento veicular assinado digitalmente",
-    },
-    {
-      id: 2,
-      name: "DECLARACAO-DE-TRANSACAO - Clicksign (3).pdf",
-      date: "28/09/2026",
-      size: "1.8 MB",
-      description: "Declaração de transação financeira",
-    },
-  ]);
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([
-    {
-      id: 1,
-      type: "document",
-      title: "Novo documento recebido",
-      description: "DECLARACAO-DE-TRANSACAO - Clicksign (3).pdf",
-      date: "28/09/2026",
-      time: "14:32",
-    },
-    {
-      id: 2,
-      type: "document",
-      title: "Novo documento recebido",
-      description: "Contrato-2026-001551-LOIR-SANTOS - Clicksign.pdf",
-      date: "28/09/2026",
-      time: "14:30",
-    },
-    {
-      id: 3,
-      type: "progress",
-      title: "Progresso atualizado",
-      description: "Progresso do caso atualizado para 25%",
-      date: "28/09/2026",
-      time: "14:25",
-    },
-    {
-      id: 4,
-      type: "registration",
-      title: "Cadastro realizado",
-      description: "Início do processo: Financiamento Veicular",
-      date: "28/09/2026",
-      time: "10:15",
-    },
-  ]);
+  const statusOptions: string[] = PROCESS_STATUSES.map((option) => option.label);
+  // A status typed before this list existed still shows up, so the select never looks empty.
+  if (status && !statusOptions.includes(status)) statusOptions.unshift(status);
 
+  /** Summary built only from what is registered for this client. */
   function handleGenerateSummary() {
-    setIsGeneratingSummary(true);
-    setTimeout(() => {
-      setSummary("Cliente LOIR SANTOS possui um processo de Financiamento Veicular em andamento. O progresso atual é de 25%, indicando que o processo está em fase inicial de análise. Foram recebidos 2 documentos importantes: o contrato de financiamento e a declaração de transação. O cliente ainda não instalou o aplicativo para acompanhamento.");
-      setIsGeneratingSummary(false);
-    }, 2000);
+    const firstName = client.name.split(" ")[0];
+    const lastEvent = timeline[0];
+    setSummary([
+      `${firstName} tem um processo de ${cliente?.type || client.type || "tipo ainda não definido"}, com status "${status || "sem status"}" e ${progress}% de progresso.`,
+      documents.length === 0 ? "Nenhum documento anexado até agora." : `${documents.length} ${documents.length === 1 ? "documento anexado" : "documentos anexados"}, o mais recente em ${formatDate(documents[0].created_at)}.`,
+      lastEvent ? `Última movimentação: ${lastEvent.titulo.toLowerCase()} em ${formatDate(lastEvent.created_at)}.` : "",
+    ].filter(Boolean).join(" "));
   }
 
+  /** Simple warning signs from the real data: time without updates, pending status and no documents. */
   function handleAnalyzeRisk() {
-    setIsAnalyzingRisk(true);
-    setTimeout(() => {
-      setRiskAnalysis("Probabilidade de churn: BAIXA (15%). O cliente demonstrou engamento inicial com envio rápido de documentos. Recomenda-se manter contato regular para acompanhar o progresso.");
-      setIsAnalyzingRisk(false);
-    }, 2000);
+    const lastUpdate = cliente?.atualizado_em ?? cliente?.created_at;
+    const days = lastUpdate ? Math.floor((Date.now() - Date.parse(lastUpdate)) / 86_400_000) : 0;
+    const signs = [
+      days >= 15 ? `está há ${days} dias sem atualização` : "",
+      /pendente|atenção/i.test(status) ? `está com status "${status}"` : "",
+      documents.length === 0 ? "ainda não tem documentos" : "",
+    ].filter(Boolean);
+    setRiskAnalysis(signs.length === 0
+      ? "Nenhum sinal de risco: o processo foi atualizado recentemente e tem documentos."
+      : `Atenção: o processo ${signs.join(", ")}. Vale entrar em contato com o cliente.`);
+  }
+
+  function readAsBase64(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   }
 
   function handleUploadDocument() {
+    if (client.id === undefined) return;
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "*/*";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const newDoc: Document = {
-          id: Date.now(),
-          name: file.name,
-          date: new Date().toLocaleDateString("pt-BR"),
-          size: (file.size / (1024 * 1024)).toFixed(1) + " MB",
-          description: "Documento recém-anexado",
-        };
-        setDocuments([...documents, newDoc]);
-        setTimeline([
-          {
-            id: Date.now(),
-            type: "document",
-            title: "Novo documento recebido",
-            description: file.name,
-            date: new Date().toLocaleDateString("pt-BR"),
-            time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-          },
-          ...timeline,
-        ]);
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = Array.from(input.files ?? []);
+      for (const file of files) {
+        if (file.size > MAX_DOCUMENT_BYTES) {
+          toast.error(`${file.name} passa de 10 MB e não foi enviado.`);
+          continue;
+        }
+        setUploading((count) => count + 1);
+        try {
+          await enviarDocumento.mutateAsync({ clientId: client.id!, nome: file.name, tipo: file.type || undefined, conteudo: await readAsBase64(file) });
+          toast.success(`${file.name} anexado.`);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : `Não foi possível enviar ${file.name}.`);
+        } finally {
+          setUploading((count) => count - 1);
+        }
       }
+      detalhe.refetch();
     };
     input.click();
   }
 
-  function handleDeleteDocument(id: number) {
-    setDocuments(documents.filter((doc) => doc.id !== id));
-  }
-
-  function handleDeleteTimelineEvent(id: number) {
-    setTimeline(timeline.filter((event) => event.id !== id));
+  async function handleDownload(id: number) {
+    const { url } = await baixarDocumento.mutateAsync({ id });
+    // The link is signed to download the file, so the page stays where it is.
+    window.location.href = url;
   }
 
   function handleEditProgress() {
@@ -175,23 +160,13 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
   }
 
   function handleSaveProgress() {
-    const newProgress = parseInt(progressInput);
-    if (newProgress >= 0 && newProgress <= 100) {
-      setProgress(newProgress);
-      setIsEditingProgress(false);
-      // Add to timeline
-      setTimeline([
-        {
-          id: Date.now(),
-          type: "progress",
-          title: "Progresso atualizado",
-          description: `Progresso do caso atualizado para ${newProgress}%`,
-          date: new Date().toLocaleDateString("pt-BR"),
-          time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-        },
-        ...timeline,
-      ]);
+    const newProgress = Number(progressInput);
+    if (!Number.isInteger(newProgress) || newProgress < 0 || newProgress > 100) {
+      toast.error("Informe um número de 0 a 100.");
+      return;
     }
+    if (client.id === undefined) return;
+    atualizarProcesso.mutate({ id: client.id, progresso: newProgress }, { onSuccess: () => setIsEditingProgress(false) });
   }
 
   function handleCancelProgress() {
@@ -219,7 +194,31 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
           <ArrowLeft size={18} />
           Voltar
         </Button>
+        {client.id !== undefined && (
+          <Button variant="outline" size="sm" className="client-delete-button" onClick={() => setConfirmDelete(true)}>
+            <Trash2 size={16} />
+            Apagar cliente
+          </Button>
+        )}
       </div>
+
+      <AlertDialog open={confirmDelete} onOpenChange={(open) => !deleteCliente.isPending && setConfirmDelete(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar {client.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O cadastro, a conversa e o acesso do cliente ao portal serão apagados para sempre. O link de primeiro acesso deixa de funcionar. As vendas e os chargebacks continuam registrados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCliente.isPending}>Cancelar</AlertDialogCancel>
+            <Button variant="destructive" disabled={deleteCliente.isPending} onClick={() => deleteCliente.mutate({ id: client.id! })}>
+              <Trash2 size={16} />
+              {deleteCliente.isPending ? "Apagando..." : "Apagar para sempre"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="client-detail-content">
         {/* Client Header */}
@@ -232,11 +231,11 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
             <div className="client-contact">
               <span className="contact-item">
                 <Phone size={14} />
-                {client.phone || "(11) 98400-1682"}
+                {cliente?.phone || client.phone || "Sem telefone"}
               </span>
               <span className="contact-item">
                 <Mail size={14} />
-                {client.email || "loir02@hotmail.com"}
+                {cliente?.email || client.email || "Sem e-mail"}
               </span>
               {client.id !== undefined && client.email && (
                 <button type="button" className="secondary-button" disabled={reenviarAcesso.isPending} onClick={() => reenviarAcesso.mutate({ id: client.id! })}>
@@ -245,9 +244,8 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
               )}
             </div>
             <div className="client-tags">
-              <StatusPill tone={client.tone}>{status}</StatusPill>
+              {status && <StatusPill tone={tone}>{status}</StatusPill>}
               <span className="tag service-tag">{client.type}</span>
-              <span className="tag app-tag">{appInstalled ? "App instalado" : "App não instalado"}</span>
               {isEditingTags ? (
                 <div className="tags-edit-container">
                   {availableTags.map((tag) => (
@@ -325,15 +323,15 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
             {summary ? (
               <p className="panel-content">{summary}</p>
             ) : (
-              <p className="panel-content placeholder">Clique em gerar para criar um resumo do caso usando IA.</p>
+              <p className="panel-content placeholder">Clique em gerar para montar um resumo com os dados do caso.</p>
             )}
             <Button
               size="sm"
               onClick={handleGenerateSummary}
-              disabled={isGeneratingSummary}
+              disabled={detalhe.isLoading}
               className="panel-button"
             >
-              {isGeneratingSummary ? "Gerando..." : "Gerar"}
+              Gerar
             </Button>
           </section>
 
@@ -346,15 +344,15 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
             {riskAnalysis ? (
               <p className="panel-content">{riskAnalysis}</p>
             ) : (
-              <p className="panel-content placeholder">Analise a probabilidade de churn do cliente.</p>
+              <p className="panel-content placeholder">Veja se o processo tem sinais de risco, como muito tempo sem atualização.</p>
             )}
             <Button
               size="sm"
               onClick={handleAnalyzeRisk}
-              disabled={isAnalyzingRisk}
+              disabled={detalhe.isLoading}
               className="panel-button"
             >
-              {isAnalyzingRisk ? "Analisando..." : "Analisar"}
+              Analisar
             </Button>
           </section>
 
@@ -366,18 +364,12 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
             </div>
             <div className="status-select">
               <label>Status</label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status || undefined} disabled={atualizarProcesso.isPending || client.id === undefined} onValueChange={(next) => client.id !== undefined && atualizarProcesso.mutate({ id: client.id, status: next }, { onSuccess: () => toast.success(`Status alterado para ${next}.`) })}>
                 <SelectTrigger className="w-full" aria-label="Status">
-                  <SelectValue />
+                  <SelectValue placeholder="Escolha um status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Em análise">Em análise</SelectItem>
-                  <SelectItem value="Pendente documentação">Pendente documentação</SelectItem>
-                  <SelectItem value="Pendente contato">Pendente contato</SelectItem>
-                  <SelectItem value="Em negociação">Em negociação</SelectItem>
-                  <SelectItem value="Em andamento judicial">Em andamento judicial</SelectItem>
-                  <SelectItem value="Concluído">Concluído</SelectItem>
-                  <SelectItem value="Tratativa suspensa">Tratativa suspensa</SelectItem>
+                  {statusOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -388,33 +380,48 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
         <section className="documents-section">
           <div className="section-header">
             <h2>Documentos</h2>
-            <Button size="sm" onClick={handleUploadDocument} className="upload-button">
+            <Button size="sm" onClick={handleUploadDocument} disabled={uploading > 0 || client.id === undefined} className="upload-button">
               <Upload size={16} />
-              Anexar documentos
+              {uploading > 0 ? "Enviando..." : "Anexar documentos"}
             </Button>
           </div>
           <div className="documents-list">
+            {detalhe.isLoading && <p className="detail-empty">Carregando documentos...</p>}
+            {!detalhe.isLoading && documents.length === 0 && (
+              <p className="detail-empty">Nenhum documento anexado. Os arquivos que você anexar aqui aparecem também no portal do cliente, até 10 MB cada.</p>
+            )}
             {documents.map((doc) => (
               <div key={doc.id} className="document-item">
                 <div className="document-icon">
                   <FileText size={20} />
                 </div>
                 <div className="document-info">
-                  <strong>{doc.name}</strong>
+                  <strong>{doc.nome}</strong>
                   <div className="document-meta">
-                    <span>{doc.date}</span>
+                    <span>{formatDate(doc.created_at)}</span>
                     <span>•</span>
-                    <span>{doc.size}</span>
+                    <span>{formatFileSize(doc.tamanho)}</span>
                   </div>
-                  <p className="document-description">{doc.description}</p>
+                  {doc.descricao && <p className="document-description">{doc.descricao}</p>}
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleDeleteDocument(doc.id)}
+                  onClick={() => handleDownload(doc.id).catch(() => undefined)}
+                  disabled={baixarDocumento.isPending}
                   className="delete-button"
-                  aria-label={`Excluir ${doc.name}`}
-                  title="Excluir documento"
+                  aria-label={`Baixar ${doc.nome}`}
+                  title="Baixar documento"
+                >
+                  <Download size={16} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDocumentToDelete({ id: doc.id, nome: doc.nome })}
+                  className="delete-button"
+                  aria-label={`Apagar ${doc.nome}`}
+                  title="Apagar documento"
                 >
                   <Trash2 size={16} />
                 </Button>
@@ -423,46 +430,61 @@ export default function ClientDetail({ client, onBack }: ClientDetailProps) {
           </div>
         </section>
 
+        <AlertDialog open={documentToDelete !== null} onOpenChange={(open) => !open && !apagarDocumento.isPending && setDocumentToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Apagar este documento?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {documentToDelete?.nome} será apagado para sempre e deixa de aparecer para o cliente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={apagarDocumento.isPending}>Cancelar</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                disabled={apagarDocumento.isPending}
+                onClick={() => documentToDelete && apagarDocumento.mutate({ id: documentToDelete.id }, { onSettled: () => setDocumentToDelete(null) })}
+              >
+                <Trash2 size={16} />
+                {apagarDocumento.isPending ? "Apagando..." : "Apagar documento"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Timeline Section */}
         <section className="timeline-section">
           <div className="section-header">
             <h2>Linha do tempo</h2>
-            <Select defaultValue="all">
-              <SelectTrigger className="timeline-filter">
+            <Select value={timelineFilter} onValueChange={(value) => setTimelineFilter(value as typeof timelineFilter)}>
+              <SelectTrigger className="timeline-filter" aria-label="Filtrar linha do tempo">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os serviços</SelectItem>
-                <SelectItem value="documents">Documentos</SelectItem>
-                <SelectItem value="progress">Progresso</SelectItem>
+                <SelectItem value="all">Tudo</SelectItem>
+                <SelectItem value="documento">Documentos</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+                <SelectItem value="progresso">Progresso</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="timeline-list">
-            {timeline.map((event) => (
+            {!detalhe.isLoading && visibleTimeline.length === 0 && <p className="detail-empty">Nada registrado ainda.</p>}
+            {visibleTimeline.map((event) => (
               <div key={event.id} className="timeline-item">
                 <div className="timeline-icon">
-                  {event.type === "document" && <FileText size={16} />}
-                  {event.type === "progress" && <Clock size={16} />}
-                  {event.type === "registration" && <Plus size={16} />}
+                  {event.tipo === "documento" && <FileText size={16} />}
+                  {event.tipo === "progresso" && <Clock size={16} />}
+                  {event.tipo === "status" && <RefreshCw size={16} />}
+                  {event.tipo === "cadastro" && <Plus size={16} />}
                 </div>
                 <div className="timeline-content">
-                  <strong>{event.title}</strong>
-                  <p>{event.description}</p>
+                  <strong>{event.titulo}</strong>
+                  {event.descricao && <p>{event.descricao}</p>}
                   <span className="timeline-date">
-                    {event.date} às {event.time}
+                    {formatDateTime(event.created_at)}{event.autor ? ` · ${event.autor}` : ""}
                   </span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteTimelineEvent(event.id)}
-                  className="delete-button"
-                  aria-label={`Excluir evento: ${event.title}`}
-                  title="Excluir evento"
-                >
-                  <Trash2 size={16} />
-                </Button>
               </div>
             ))}
           </div>

@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { sendWhatsAppWebText } from "./whatsappWeb";
 
 /**
  * WhatsApp Business Platform (official Meta Cloud API). Messages leave from the corporate
@@ -58,4 +59,37 @@ export async function sendAccessWhatsApp(
     if (code === 131026) throw new Error("Este número não pode receber mensagens pelo WhatsApp.");
     throw new Error(`O WhatsApp recusou o envio${body?.error?.message ? `: ${body.error.message}` : ` (HTTP ${response.status})`}.`);
   }
+}
+
+/** Same words as the Meta template, sent as plain text through the unofficial connection. */
+export function accessMessageText(params: { firstName: string; link: string }) {
+  return [
+    `Olá, ${params.firstName}! 👋 Que bom ter você com a gente na *N1 Soluções*! 🎉`,
+    "",
+    "Seu cadastro está pronto e agora você acompanha o seu processo de pertinho, direto do celular:",
+    "",
+    "✅ Veja cada atualização do seu caso",
+    "💬 Fale com a nossa equipe pelo chat",
+    "📲 Tudo em um só lugar, sem precisar ligar",
+    "",
+    "É só tocar no link, criar sua senha e pronto. Leva menos de 1 minuto! 🚀",
+    "",
+    params.link,
+    "",
+    "⏳ O link vale por 7 dias e só pode ser usado uma vez.",
+    "Ficou com alguma dúvida? É só responder esta mensagem. 😉",
+  ].join("\n");
+}
+
+/** Whether a first-access link should go out by WhatsApp at all, given WHATSAPP_PROVIDER. */
+export function isWhatsAppEnabled(env: Pick<typeof ENV, "whatsappProvider"> & WhatsAppConfig = ENV) {
+  if (env.whatsappProvider === "web") return true;
+  if (env.whatsappProvider === "cloud") return isWhatsAppConfigured(env);
+  return false;
+}
+
+/** Sends the first-access link through whichever WhatsApp provider is configured. */
+export async function sendAccessMessage(phone: string, params: { firstName: string; link: string }) {
+  if (ENV.whatsappProvider === "web") return sendWhatsAppWebText(phone, accessMessageText(params));
+  return sendAccessWhatsApp(phone, params);
 }

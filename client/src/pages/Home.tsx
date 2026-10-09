@@ -1,10 +1,13 @@
 import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { parseTicketMessage } from "@shared/tickets";
 import { CHARGEBACK_LIST_FILTERS, CLIENT_LIST_FILTERS, DASHBOARD_RULES, METRIC_HELP, type ChargebackListFilter, type ClientListFilter, type ListFilter } from "@shared/dashboard";
 import ClientDetail from "./ClientDetail";
 import { ChangePasswordScreen, ClientPortal } from "./ClientPortal";
 import { toast } from "sonner";
 import { showAccessResult } from "@/lib/accessToast";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import type { Session } from "@supabase/supabase-js";
 import { trpc } from "@/lib/trpc";
 import { N1Logo } from "@/components/N1Logo";
@@ -38,6 +41,7 @@ import {
   ShieldCheck,
   Trophy,
   Users,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -340,7 +344,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <button className="link-button" type="button" onClick={() => { setResetEmail(loginEmail); setMode("forgot"); setMessage(""); setNotice(""); }}>Esqueci minha senha</button>
             <div className="first-access"><strong>Primeiro acesso?</strong><span>Use a senha inicial fornecida pela N1 Soluções. Será solicitada a troca.</span></div>
             <button className="link-button" type="button" onClick={() => { setMode("register"); setMessage(""); }}>Criar login</button>
-            <button className="demo-button" type="button" onClick={onLogin}>Acessar demonstração do portal <ArrowUpRight size={15} /></button>
           </> : mode === "register" ? <>
             <form onSubmit={requestLogin} className="login-form">
               <label>E-mail para verificação<input required type="email" aria-label="E-mail para verificação" placeholder="voce@email.com" value={registerEmail} onChange={(event) => setRegisterEmail(event.target.value)} /></label>
@@ -815,6 +818,16 @@ function AtendimentoPage() {
     onError: (_error, variables) => setDraft((current) => current || variables.text),
   });
   const pendingText = sendMensagemMutation.isPending ? sendMensagemMutation.variables?.text : undefined;
+  const [confirmClear, setConfirmClear] = useState(false);
+  const apagarConversa = trpc.portal.apagarConversa.useMutation({
+    onSuccess: async () => {
+      toast.success("Conversa apagada.");
+      setConfirmClear(false);
+      setSelectedId(null);
+      await Promise.all([utils.portal.conversas.invalidate(), utils.portal.mensagens.invalidate(), utils.portal.dashboard.invalidate()]);
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   const visibleConversations = conversations.filter((conversation) => conversation.name.toLowerCase().includes(searchQuery.toLowerCase()));
   const awaitingCount = conversations.filter((conversation) => conversation.awaitingReply).length;
@@ -860,7 +873,24 @@ function AtendimentoPage() {
     </section>
     <section className="panel chat-panel">
       {selected ? <>
-        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button></div>
+        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><div className="chat-head-actions"><button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button><button className="icon-button chat-clear-button" aria-label="Apagar conversa" title="Apagar conversa" onClick={() => setConfirmClear(true)}><Trash2 size={17} /></button></div></div>
+        <AlertDialog open={confirmClear} onOpenChange={(open) => !apagarConversa.isPending && setConfirmClear(open)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Apagar a conversa com {selected.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Todas as mensagens, chamados e respostas do assistente serão apagados para sempre, aqui e no portal do cliente. O cadastro do cliente continua. Se precisar guardar uma cópia, baixe a conversa antes.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={apagarConversa.isPending}>Cancelar</AlertDialogCancel>
+              <Button variant="destructive" disabled={apagarConversa.isPending} onClick={() => apagarConversa.mutate({ clientId: selected.clientId })}>
+                <Trash2 size={16} />
+                {apagarConversa.isPending ? "Apagando..." : "Apagar conversa"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <div className="chat-body" ref={chatBody}>
           {mensagensQuery.isLoading && <div className="chat-date">Carregando mensagens...</div>}
           {messages.map((message, index) => {
@@ -935,8 +965,14 @@ export default function Home() {
     });
   }
 
+  // Logging in is not enough for the team area: the server says whether this account was released for it.
+  const acessoQuery = trpc.account.meuAcesso.useQuery(undefined, { enabled: loggedIn && !isClientUser, retry: false, staleTime: Infinity });
+  const queryClient = useQueryClient();
+
   async function handleLogout() {
     await supabase.auth.signOut();
+    // Nothing loaded for one account may show up for the next one on this browser.
+    queryClient.clear();
     setLoggedIn(false);
     setUserName("Usuário");
     setIsClientUser(false);
@@ -946,6 +982,25 @@ export default function Home() {
   if (!loggedIn) return <LoginScreen onLogin={handleLogin} />;
   if (mustChangePassword) return <ChangePasswordScreen onDone={() => setMustChangePassword(false)} onLogout={handleLogout} />;
   if (isClientUser) return <ClientPortal onLogout={handleLogout} />;
+  if (acessoQuery.isPending) {
+    return (
+      <main className="client-portal-center" aria-busy="true">
+        <div className="login-panel-inner"><N1Logo size="md" /><p className="login-subtitle">Carregando...</p></div>
+      </main>
+    );
+  }
+  if (acessoQuery.data?.kind === "pending") {
+    return (
+      <main className="client-portal-center">
+        <div className="login-panel-inner">
+          <N1Logo size="md" />
+          <h2>Acesso em análise</h2>
+          <p className="login-subtitle">Sua conta foi criada, mas ainda precisa ser liberada pela administração da N1 Soluções para abrir a área da equipe. Assim que for liberada, é só entrar de novo.</p>
+          <button className="link-button" type="button" onClick={handleLogout}>Sair</button>
+        </div>
+      </main>
+    );
+  }
   return (
     <div className="app-shell">
       {mobileMenu && (

@@ -115,3 +115,6 @@ client/public/__manus__/version.json
 
 # Logs locais de depuração do navegador
 .manus-logs/
+
+# Sessão do WhatsApp (vale como estar logado no número da empresa)
+.whatsapp-auth/

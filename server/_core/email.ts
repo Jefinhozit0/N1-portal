@@ -72,7 +72,7 @@ async function sendEmail({ to, subject, text, html }: EmailMessage, config: Emai
     });
 
     try {
-      await transporter.sendMail({ from: config.gmailUser, to, subject, text, html });
+      await transporter.sendMail({ from: { name: "N1 Soluções", address: config.gmailUser }, to, subject, text, html });
       return;
     } catch (error) {
       const code = (error as { code?: string }).code;

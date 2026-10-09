@@ -7,12 +7,14 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { createVerificationCode, discardVerificationCode, verifyCode } from "./_core/verificationCodes";
 import { supabase } from "./_core/supabase";
-import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId, provisionClientAccess } from "./_core/clientAccess";
+import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId, provisionClientAccess, removeClientLogins } from "./_core/clientAccess";
 import { TERMS_VERSION } from "@shared/termos";
 import { computeDashboard } from "./_core/dashboard";
 import { ENV } from "./_core/env";
 import type { TrpcContext } from "./_core/context";
 import { TICKET_TOPICS, formatTicketMessage, parseTicketMessage } from "@shared/tickets";
+import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, toneForStatus } from "@shared/processo";
+import { addEvent, deleteDocument, documentDownloadUrl, listDocuments, listEvents, removeClientFiles, uploadDocument } from "./_core/processo";
 
 const verificationRequestTimes = new Map<string, number>();
 const verificationRequestCooldownMs = 60_000;
@@ -40,18 +42,46 @@ function getPortalUrl(req: TrpcContext["req"]) {
   return `${proto}://${req.get("host")}`;
 }
 
+/** The Supabase user behind the request's session token, or null when there is no valid session. */
+async function getSessionUser(ctx: TrpcContext) {
+  const token = ctx.req.headers["x-supabase-token"];
+  if (typeof token !== "string" || !token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  return error ? null : data.user;
+}
+
+/**
+ * Anyone can create an account on the login screen, so a login alone does not make someone
+ * part of the team: the e-mail must be in STAFF_EMAILS, or the account must carry role "staff"
+ * in app_metadata (which only the service key can set).
+ */
+function isStaffUser(user: { email?: string; app_metadata?: Record<string, unknown> }) {
+  if (user.app_metadata?.role === "client") return false;
+  if (user.app_metadata?.role === "staff") return true;
+  return Boolean(user.email && ENV.staffEmails.includes(user.email.toLowerCase()));
+}
+
+/** Procedures for the N1 team: every route with data from all clients goes through here. */
+const staffProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  const user = await getSessionUser(ctx);
+  if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Faça login para continuar." });
+  if (!isStaffUser(user)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sua conta ainda não foi liberada para a área da equipe." });
+  }
+  return next({ ctx: { ...ctx, staffUser: user } });
+});
+
 /** Procedures for a logged-in client: resolves which cliente row the Supabase session belongs to. */
 const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  const token = ctx.req.headers["x-supabase-token"];
-  if (typeof token !== "string" || !token) {
+  const user = await getSessionUser(ctx);
+  if (!user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Faça login para continuar." });
   }
-  const { data, error } = await supabase.auth.getUser(token);
-  const clienteId = data.user ? getClienteId(data.user) : null;
-  if (error || clienteId === null) {
+  const clienteId = getClienteId(user);
+  if (clienteId === null) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Esta conta não está vinculada a um cliente." });
   }
-  return next({ ctx: { ...ctx, clienteId, clienteUser: data.user! } });
+  return next({ ctx: { ...ctx, clienteId, clienteUser: user } });
 });
 
 const hasAcceptedTerms = (user: { app_metadata?: Record<string, unknown> }) =>
@@ -86,7 +116,23 @@ async function hasUpdatedAtColumn() {
   return clientesHasUpdatedAt;
 }
 
-const firstAccessInput = z.object({ u: z.string().max(64), t: z.string().max(128) });
+/**
+ * The client's chat with the virtual assistant is saved in the same table as the real messages,
+ * so it survives logging out and opening the portal on another device. Those rows use their own
+ * senders and never reach the team's inbox, the dashboard or the ticket counts.
+ */
+const TEAM_VISIBLE_SENDERS = ["client", "team"];
+const ASSISTANT_SENDERS = { bot: "assistant", choice: "assistant_choice" } as const;
+const clientMessageFrom: Record<string, "client" | "team" | "bot" | "choice"> = {
+  client: "client",
+  team: "team",
+  [ASSISTANT_SENDERS.bot]: "bot",
+  [ASSISTANT_SENDERS.choice]: "choice",
+};
+
+const nowHHmm = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+const firstAccessInput =z.object({ u: z.string().max(64), t: z.string().max(128) });
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -130,6 +176,14 @@ export const appRouter = router({
         verificationRequestTimes.set(emailKey, now);
         return { success: true } as const;
       }),
+    /** Which area the logged-in account may open: the team's, the client's, or neither yet. */
+    meuAcesso: publicProcedure.query(async ({ ctx }) => {
+      const user = await getSessionUser(ctx);
+      if (!user) return { kind: "none" } as const;
+      if (getClienteId(user) !== null) return { kind: "client" } as const;
+      return { kind: isStaffUser(user) ? "staff" : "pending" } as const;
+    }),
+
     verifyEmailCode: publicProcedure
       .input(verificationCodeInput.extend({ code: z.string().regex(/^\d{6}$/, "Informe o código de 6 dígitos.") }))
       .mutation(({ input }) => {
@@ -216,7 +270,7 @@ export const appRouter = router({
   // ── Portal data routers backed by Supabase ──────────────────────────────
   portal: router({
     /** List all clients */
-    clientes: publicProcedure.query(async () => {
+    clientes: staffProcedure.query(async () => {
       const { data, error } = await supabase
         .from("clientes")
         .select("*")
@@ -225,15 +279,19 @@ export const appRouter = router({
         console.warn("[portal.clientes] Supabase error:", error.message);
         return [];
       }
-      // With a real update date, the "Atualização" column is computed instead of typed by hand.
-      return (data ?? []).map((row) => (row.atualizado_em ? { ...row, updated: formatUpdatedLabel(row.atualizado_em) } : row));
+      // The "Atualização" column is computed from real dates instead of text typed by hand.
+      // Until the atualizado_em migration is run, the registration date stands in for it.
+      return (data ?? []).map((row) => {
+        const at = row.atualizado_em ?? row.created_at;
+        return at ? { ...row, updated: formatUpdatedLabel(at) } : row;
+      });
     }),
 
     /** Every number on the dashboard, computed from the real data */
-    dashboard: publicProcedure.query(() => computeDashboard()),
+    dashboard: staffProcedure.query(() => computeDashboard()),
 
     /** Create a client */
-    createCliente: publicProcedure
+    createCliente: staffProcedure
       .input(z.object({
         name: z.string().min(1),
         cpf: z.string().optional(),
@@ -248,13 +306,19 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { data, error } = await supabase.from("clientes").insert(input).select().single();
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        await addEvent(data.id, {
+          tipo: "cadastro",
+          titulo: "Cadastro realizado",
+          descricao: input.type ? `Início do processo: ${input.type}` : "Início do processo",
+          autor: ctx.staffUser.email,
+        });
         // Login link goes out right away, by e-mail and from the corporate WhatsApp.
         const access = await provisionClientAccess({ id: data.id, name: data.name, email: input.email, phone: input.phone }, getPortalUrl(ctx.req));
         return { ...data, access };
       }),
 
     /** Generate a new temporary password for a client and e-mail it again */
-    reenviarAcesso: publicProcedure
+    reenviarAcesso: staffProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const { data, error } = await supabase.from("clientes").select("id, name, email, phone").eq("id", input.id).single();
@@ -265,7 +329,7 @@ export const appRouter = router({
       }),
 
     /** Update a client */
-    updateCliente: publicProcedure
+    updateCliente: staffProcedure
       .input(z.object({
         id: z.number(),
         name: z.string().optional(),
@@ -287,7 +351,7 @@ export const appRouter = router({
       }),
 
     /** List chargebacks */
-    chargebacks: publicProcedure.query(async () => {
+    chargebacks: staffProcedure.query(async () => {
       const { data, error } = await supabase
         .from("chargebacks")
         .select("*")
@@ -300,7 +364,7 @@ export const appRouter = router({
     }),
 
     /** List sales (vendas) */
-    vendas: publicProcedure.query(async () => {
+    vendas: staffProcedure.query(async () => {
       const { data, error } = await supabase
         .from("vendas")
         .select("*")
@@ -325,7 +389,7 @@ export const appRouter = router({
     }),
 
     /** Create a sale */
-    createVenda: publicProcedure
+    createVenda: staffProcedure
       .input(z.object({
         date: z.string(),
         client: z.string(),
@@ -345,7 +409,7 @@ export const appRouter = router({
       }),
 
     /** Update a sale */
-    updateVenda: publicProcedure
+    updateVenda: staffProcedure
       .input(z.object({
         id: z.number(),
         date: z.string().optional(),
@@ -366,8 +430,134 @@ export const appRouter = router({
         return data;
       }),
 
+    /**
+     * Deletes a client for good: the registration, the conversation (removed by the database
+     * together with the row) and the portal login, so the old first-access link stops working too.
+     * Sales and chargebacks are kept, since they are the company's records.
+     */
+    deleteCliente: staffProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: cliente, error: findError } = await supabase.from("clientes").select("id, name").eq("id", input.id).maybeSingle();
+        if (findError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: findError.message });
+        if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Este cliente já foi apagado." });
+
+        // The login goes first: if anything fails after that, the client still can't get in.
+        try {
+          await removeClientLogins(input.id);
+          await removeClientFiles(input.id);
+        } catch (error) {
+          console.error("[portal.deleteCliente] Could not remove the portal login:", error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível remover o acesso do cliente ao portal. Nada foi apagado." });
+        }
+        const { error: messagesError } = await supabase.from("mensagens").delete().eq("client_id", input.id);
+        if (messagesError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: messagesError.message });
+        const { error } = await supabase.from("clientes").delete().eq("id", input.id);
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+
+        // Leaves a trail in the server log of who deleted whom.
+        console.log(`[portal.deleteCliente] ${ctx.staffUser.email} apagou o cliente #${cliente.id} (${cliente.name}).`);
+        return { success: true } as const;
+      }),
+
+    /** Everything on the client's detail page: the registration, the documents and the timeline. */
+    detalheCliente: staffProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const { data, error } = await supabase.from("clientes").select("*").eq("id", input.id).maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+        const [documentos, eventos] = await Promise.all([listDocuments(input.id), listEvents(input.id)]);
+        return {
+          cliente: { ...data, progresso: typeof data.progresso === "number" ? data.progresso : 0 },
+          documentos,
+          eventos,
+        };
+      }),
+
+    /** Changes the status and/or the progress; the client sees it on the next refresh. */
+    atualizarProcesso: staffProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        status: z.enum(PROCESS_STATUSES.map((option) => option.label) as [string, ...string[]]).optional(),
+        progresso: z.number().int().min(0).max(100).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: current, error: findError } = await supabase.from("clientes").select("*").eq("id", input.id).maybeSingle();
+        if (findError || !current) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+
+        const patch: Record<string, unknown> = {};
+        if (input.status !== undefined && input.status !== current.status) {
+          patch.status = input.status;
+          patch.tone = toneForStatus(input.status);
+        }
+        if (input.progresso !== undefined && input.progresso !== current.progresso) patch.progresso = input.progresso;
+        if (Object.keys(patch).length === 0) return { changed: false } as const;
+        if (await hasUpdatedAtColumn()) patch.atualizado_em = new Date().toISOString();
+
+        const { error } = await supabase.from("clientes").update(patch).eq("id", input.id);
+        if (error) {
+          const missingProgress = /progresso/.test(error.message);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: missingProgress ? "O banco ainda não tem o campo de progresso. Rode o arquivo supabase/migrations/20261009_documentos_e_historico.sql no SQL Editor do Supabase." : error.message,
+          });
+        }
+
+        if (patch.status) {
+          await addEvent(input.id, { tipo: "status", titulo: "Status atualizado", descricao: `${current.status || "Sem status"} → ${input.status}`, autor: ctx.staffUser.email });
+        }
+        if (patch.progresso !== undefined) {
+          await addEvent(input.id, { tipo: "progresso", titulo: "Progresso atualizado", descricao: `Progresso do caso atualizado para ${input.progresso}%`, autor: ctx.staffUser.email });
+        }
+        return { changed: true } as const;
+      }),
+
+    enviarDocumento: staffProcedure
+      .input(z.object({
+        clientId: z.number().int().positive(),
+        nome: z.string().trim().min(1).max(200),
+        tipo: z.string().max(150).optional(),
+        descricao: z.string().trim().max(300).optional(),
+        /** File content in base64. */
+        conteudo: z.string().min(1).max(Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 4),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const bytes = Buffer.from(input.conteudo, "base64");
+        if (bytes.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo está vazio." });
+        if (bytes.length > MAX_DOCUMENT_BYTES) throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo passa de 10 MB." });
+        const { data: cliente } = await supabase.from("clientes").select("id").eq("id", input.clientId).maybeSingle();
+        if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+        return uploadDocument(input.clientId, { nome: input.nome, tipo: input.tipo, descricao: input.descricao, bytes }, ctx.staffUser.email ?? "equipe");
+      }),
+
+    baixarDocumento: staffProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        const url = await documentDownloadUrl(input.id);
+        if (!url) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+        return { url };
+      }),
+
+    apagarDocumento: staffProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await deleteDocument(input.id, ctx.staffUser.email ?? "equipe");
+        return { success: true } as const;
+      }),
+
+    /** Clears a client's whole conversation (messages, tickets and the assistant's lines). The client stays registered. */
+    apagarConversa: staffProcedure
+      .input(z.object({ clientId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { error, count } = await supabase.from("mensagens").delete({ count: "exact" }).eq("client_id", input.clientId);
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        console.log(`[portal.apagarConversa] ${ctx.staffUser.email} apagou ${count ?? 0} mensagem(ns) do cliente #${input.clientId}.`);
+        return { apagadas: count ?? 0 };
+      }),
+
     /** Delete a sale */
-    deleteVenda: publicProcedure
+    deleteVenda: staffProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const { error } = await supabase.from("vendas").delete().eq("id", input.id);
@@ -376,12 +566,13 @@ export const appRouter = router({
       }),
 
     /** Get messages for a client */
-    mensagens: publicProcedure
+    mensagens: staffProcedure
       .input(z.object({ clientId: z.number() }))
       .query(async ({ input }) => {
         const { data, error } = await supabase
           .from("mensagens")
           .select("*")
+          .in("sender", TEAM_VISIBLE_SENDERS)
           .eq("client_id", input.clientId)
           .order("created_at", { ascending: true });
         if (error) {
@@ -398,10 +589,11 @@ export const appRouter = router({
       }),
 
     /** One entry per client who has written or been written to, newest activity first */
-    conversas: publicProcedure.query(async () => {
+    conversas: staffProcedure.query(async () => {
       const { data: rows, error } = await supabase
         .from("mensagens")
         .select("client_id, client_name, sender, text, created_at")
+        .in("sender", TEAM_VISIBLE_SENDERS)
         .order("created_at", { ascending: false })
         .limit(5000);
       if (error) {
@@ -448,7 +640,7 @@ export const appRouter = router({
     }),
 
     /** Send a message */
-    sendMensagem: publicProcedure
+    sendMensagem: staffProcedure
       .input(z.object({
         clientId: z.number(),
         clientName: z.string().optional(),
@@ -498,27 +690,83 @@ export const appRouter = router({
       }),
 
     meuProcesso: clientWithTermsProcedure.query(async ({ ctx }) => {
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("id, name, type, status, updated, tone, services")
-        .eq("id", ctx.clienteId)
-        .single();
+      // "*" keeps working before and after the migration that adds progresso and atualizado_em.
+      const { data, error } = await supabase.from("clientes").select("*").eq("id", ctx.clienteId).single();
       if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Processo não encontrado." });
-      return data as { id: number; name: string; type: string | null; status: string | null; updated: string | null; tone: "green" | "yellow" | "red" | null; services: string[] | null };
+      const updatedAt = (data.atualizado_em ?? data.created_at) as string | null;
+      return {
+        id: data.id as number,
+        name: data.name as string,
+        type: (data.type as string | null) ?? null,
+        status: (data.status as string | null) ?? null,
+        updated: updatedAt ? formatUpdatedLabel(updatedAt) : ((data.updated as string | null) ?? null),
+        tone: (data.tone as "green" | "yellow" | "red" | null) ?? null,
+        services: (data.services as string[] | null) ?? null,
+        progresso: typeof data.progresso === "number" ? data.progresso : 0,
+      };
     }),
+
+    /** The client's own documents. */
+    documentos: clientWithTermsProcedure.query(async ({ ctx }) => {
+      const rows = await listDocuments(ctx.clienteId);
+      return rows.map(({ enviado_por: _author, ...row }) => row);
+    }),
+
+    /** The client's own timeline, without the names of who made each change. */
+    historico: clientWithTermsProcedure.query(async ({ ctx }) => {
+      const rows = await listEvents(ctx.clienteId);
+      return rows.map(({ autor: _author, ...row }) => row);
+    }),
+
+    baixarDocumento: clientWithTermsProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        // Passing the client id makes a document of someone else look like it doesn't exist.
+        const url = await documentDownloadUrl(input.id, ctx.clienteId);
+        if (!url) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+        return { url };
+      }),
 
     mensagens: clientWithTermsProcedure.query(async ({ ctx }) => {
       const { data, error } = await supabase
         .from("mensagens")
         .select("id, sender, text, time")
         .eq("client_id", ctx.clienteId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
       if (error) {
         console.warn("[cliente.mensagens] Supabase error:", error.message);
         return [];
       }
-      return (data ?? []).map((row) => ({ id: row.id as number, from: row.sender as "client" | "team", text: row.text as string, time: (row.time as string) ?? "" }));
+      return (data ?? []).flatMap((row) => {
+        const from = clientMessageFrom[row.sender as string];
+        return from ? [{ id: row.id as number, from, text: row.text as string, time: (row.time as string) ?? "" }] : [];
+      });
     }),
+
+    /** Saves what the assistant said and which options the client picked, in order. */
+    registrarAssistente: clientWithTermsProcedure
+      .input(z.object({
+        entries: z.array(z.object({ from: z.enum(["bot", "choice"]), text: z.string().trim().min(1).max(4000) })).min(1).max(4),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const time = nowHHmm();
+        // Inserted one by one so created_at keeps the order of the conversation.
+        for (const entry of input.entries) {
+          const { error } = await supabase.from("mensagens").insert({
+            client_id: ctx.clienteId,
+            sender: ASSISTANT_SENDERS[entry.from],
+            text: entry.text,
+            time,
+          });
+          if (error) {
+            // Until the migration that allows these senders runs, the assistant still works, it just isn't saved.
+            console.warn("[cliente.registrarAssistente] Not saved:", error.message);
+            return { saved: false } as const;
+          }
+        }
+        return { saved: true } as const;
+      }),
 
     enviarMensagem: clientWithTermsProcedure
       .input(z.object({

@@ -25,17 +25,17 @@ describe("sendVerificationCodeEmail", () => {
       resendApiKey: "",
       emailFrom: "",
       gmailUser: "owner@gmail.com",
-      gmailAppPassword: "abcd efgh ijkl mnop",
+      gmailAppPassword: "FAKE TEST ONLY XXXX",
     });
 
     expect(nodemailer.createTransport).toHaveBeenCalledWith({
       host: "smtp.gmail.com",
       port: 465,
       secure: true,
-      auth: { user: "owner@gmail.com", pass: "abcdefghijklmnop" },
+      auth: { user: "owner@gmail.com", pass: "FAKETESTONLYXXXX" },
     });
     expect(sendMailMock).toHaveBeenCalledWith(expect.objectContaining({
-      from: "owner@gmail.com",
+      from: { name: "N1 Soluções", address: "owner@gmail.com" },
       to: "customer@example.com",
       text: expect.stringContaining("123456"),
     }));
@@ -99,7 +99,7 @@ describe("sendClientAccessEmail", () => {
       resendApiKey: "",
       emailFrom: "",
       gmailUser: "owner@gmail.com",
-      gmailAppPassword: "abcdefghijklmnop",
+      gmailAppPassword: "FAKETESTONLYXXXX",
     });
 
     const message = sendMailMock.mock.calls[0][0];

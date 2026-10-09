@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normalizeBrazilPhone, sendAccessWhatsApp } from "./whatsapp";
+import { accessMessageText, isWhatsAppEnabled, normalizeBrazilPhone, sendAccessWhatsApp } from "./whatsapp";
 
 const config = {
   whatsappToken: "token",
@@ -45,5 +45,20 @@ describe("sendAccessWhatsApp", () => {
   it("explains an unapproved template", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: { code: 132001, message: "Template name does not exist" } }) }));
     await expect(sendAccessWhatsApp("5531995386202", { firstName: "Joana", link: "x" }, config)).rejects.toThrow("não foi aprovado");
+  });
+});
+
+describe("WhatsApp provider", () => {
+  it("the unofficial connection needs no Meta token, the official API does", () => {
+    expect(isWhatsAppEnabled({ ...config, whatsappToken: "", whatsappProvider: "web" })).toBe(true);
+    expect(isWhatsAppEnabled({ ...config, whatsappToken: "", whatsappProvider: "cloud" })).toBe(false);
+    expect(isWhatsAppEnabled({ ...config, whatsappProvider: "cloud" })).toBe(true);
+    expect(isWhatsAppEnabled({ ...config, whatsappProvider: "off" })).toBe(false);
+  });
+
+  it("the plain-text message carries the first name and the link", () => {
+    const text = accessMessageText({ firstName: "Joana", link: "https://portal/primeiro-acesso?u=a&t=b" });
+    expect(text).toContain("Olá, Joana!");
+    expect(text).toContain("https://portal/primeiro-acesso?u=a&t=b");
   });
 });

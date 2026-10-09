@@ -36,7 +36,7 @@ vi.mock("./supabase", () => {
   const query = (table: string) => {
     const result = { data: tables[table], error: null };
     const chain: Record<string, unknown> = {};
-    for (const method of ["select", "order", "limit"]) chain[method] = () => chain;
+    for (const method of ["select", "order", "limit", "in"]) chain[method] = () => chain;
     chain.then = (resolve: (value: unknown) => unknown) => resolve(result);
     return chain;
   };

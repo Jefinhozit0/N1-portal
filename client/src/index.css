@@ -1217,6 +1217,10 @@ tbody tr:hover { background: var(--surface-muted); }
 
 .client-detail-header {
   margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .back-button {
@@ -2474,6 +2478,58 @@ tbody tr:hover { background: var(--surface-muted); }
   .client-bubble { max-width: 88%; }
 }
 
+/* Client portal: one screen. Computer = process on the left, chat on the right.
+   Phone = two tabs, so the client can always go back to the process. */
+.client-portal-main-wide { max-width: 1200px; }
+.client-portal-tabs { display: none; }
+.client-portal-to-chat { display: none; }
+.client-portal-layout { display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.client-portal-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.client-portal-layout .client-portal-chat { position: sticky; top: 20px; }
+.client-portal-layout .client-portal-hero h1 { font-size: 30px; }
+.client-portal-layout .client-portal-status { grid-template-columns: 1fr; }
+.client-portal-layout .client-portal-chat { height: calc(100dvh - 150px); min-height: 460px; }
+.client-portal-layout .client-portal-chat-body { flex: 1; height: auto; min-height: 0; }
+.client-portal-layout .client-portal-card.client-portal-chat { padding: 0; }
+
+@media (max-width: 900px) {
+  .client-portal-tabs {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+  }
+  .client-portal-tabs button {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 42px;
+    border: 0;
+    border-radius: 9px;
+    color: var(--muted);
+    background: transparent;
+    font: inherit;
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .client-portal-tabs button[aria-selected="true"] { color: var(--on-primary); background: var(--navy); }
+  .client-portal-layout { grid-template-columns: 1fr; }
+  .client-portal-layout .client-portal-chat { position: static; }
+  .client-portal-layout[data-tab="processo"] .client-portal-chat { display: none; }
+  .client-portal-layout[data-tab="conversa"] .client-portal-side { display: none; }
+  .client-portal-layout .client-portal-chat { height: calc(100dvh - 200px); min-height: 420px; }
+  .client-portal-to-chat { display: inline-flex; width: 100%; justify-content: center; margin-top: 22px; }
+}
+
 /* Theme toggle placements */
 .topbar-actions > .theme-toggle { width: 38px; height: 38px; }
 .login-panel { position: relative; }
@@ -2815,3 +2871,33 @@ tbody tr.empty-row:hover { background: transparent; }
 }
 .activity-list > .dashboard-empty { margin: 10px 0; }
 .activity-list > .skeleton-list { padding: 12px 0; }
+
+/* Apagar cliente: discreto até o hover, para não ser clicado por engano. */
+.client-delete-button { gap: 8px; color: var(--red); border-color: var(--border); }
+.client-delete-button:hover { color: var(--red); background: var(--red-soft); border-color: var(--red); }
+
+/* Client portal: progress, documents and history */
+.client-portal-progress { margin-top: 18px; }
+.client-portal-progress > div:first-child { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.client-portal-progress small { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.client-portal-progress strong { color: var(--text); font-size: 15px; }
+.client-portal-block { padding: 22px 24px; }
+.client-portal-block h2 { margin: 0 0 12px; color: var(--text); font-size: 17px; font-weight: 600; }
+.client-doc-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.client-doc-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--surface-muted); }
+.client-doc-list li > svg { flex: none; color: var(--link); }
+.client-doc-list li > div { flex: 1; min-width: 0; }
+.client-doc-list strong { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.client-doc-list small { color: var(--muted); font-size: 12.5px; }
+.client-history { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
+.client-history li { position: relative; padding: 0 0 16px 20px; border-left: 2px solid var(--border-subtle); margin-left: 5px; }
+.client-history li:last-child { padding-bottom: 0; border-left-color: transparent; }
+.client-history li::before { content: ""; position: absolute; top: 4px; left: -7px; width: 12px; height: 12px; border: 2px solid var(--surface); border-radius: 50%; background: var(--link); }
+.client-history strong { display: block; color: var(--text); font-size: 14px; font-weight: 600; }
+.client-history p { margin: 2px 0 0; color: var(--text-soft); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.client-history small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+.detail-empty { margin: 0; padding: 18px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); font-size: 14px; line-height: 1.5; text-align: center; }
+
+/* Atendimento: ações no topo da conversa */
+.chat-head-actions { display: flex; align-items: center; gap: 6px; }
+.chat-clear-button:hover { color: var(--red); background: var(--red-soft); }

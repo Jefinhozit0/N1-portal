@@ -56,7 +56,7 @@ export async function computeDashboard(now = Date.now()) {
     supabase.from("clientes").select("*").limit(10000),
     supabase.from("chargebacks").select("*").limit(10000),
     supabase.from("vendas").select("client, product, cbk, created_at").limit(10000),
-    supabase.from("mensagens").select("client_id, client_name, sender, text, created_at").order("created_at", { ascending: true }).limit(20000),
+    supabase.from("mensagens").select("client_id, client_name, sender, text, created_at").in("sender", ["client", "team"]).order("created_at", { ascending: true }).limit(20000),
     listAllUsers().catch((error) => {
       console.warn("[dashboard] Could not list auth users:", error);
       return [] as User[];

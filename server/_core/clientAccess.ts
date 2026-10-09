@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { User } from "@supabase/supabase-js";
 import { sendClientAccessEmail } from "./email";
 import { supabase } from "./supabase";
-import { isWhatsAppConfigured, normalizeBrazilPhone, sendAccessWhatsApp } from "./whatsapp";
+import { isWhatsAppEnabled, normalizeBrazilPhone, sendAccessMessage } from "./whatsapp";
 
 export type ChannelResult = { sent: true } | { sent: false; reason: string };
 export type ClientAccessResult = { email: ChannelResult; whatsapp: ChannelResult };
@@ -116,11 +116,11 @@ export async function provisionClientAccess(
         return { sent: false, reason: error instanceof Error ? error.message : "Não foi possível enviar o e-mail." };
       }),
     (async (): Promise<ChannelResult> => {
-      if (!isWhatsAppConfigured()) return { sent: false, reason: "WhatsApp corporativo ainda não configurado." };
+      if (!isWhatsAppEnabled()) return { sent: false, reason: "WhatsApp corporativo ainda não configurado." };
       const phone = normalizeBrazilPhone(cliente.phone);
       if (!phone) return { sent: false, reason: cliente.phone ? `Telefone "${cliente.phone}" inválido. Use DDD + número.` : "Cliente sem telefone cadastrado." };
       try {
-        await sendAccessWhatsApp(phone, { firstName, link });
+        await sendAccessMessage(phone, { firstName, link });
         return { sent: true };
       } catch (error) {
         console.error("[ClientAccess] Access WhatsApp failed:", error);
@@ -130,4 +130,20 @@ export async function provisionClientAccess(
   ]);
 
   return { email: emailResult, whatsapp: whatsappResult };
+}
+
+/** Deletes every portal login tied to a cliente row, so a removed client can no longer sign in. */
+export async function removeClientLogins(clienteId: number): Promise<number> {
+  const linked: string[] = [];
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    for (const user of data.users) if (getClienteId(user) === clienteId) linked.push(user.id);
+    if (data.users.length < 1000) break;
+  }
+  for (const id of linked) {
+    const { error } = await supabase.auth.admin.deleteUser(id);
+    if (error) throw error;
+  }
+  return linked.length;
 }

@@ -13,7 +13,7 @@ Portal da **N1 Soluções** com duas áreas:
 | API | Express + tRPC (`/api/trpc`), superjson |
 | Banco e autenticação | Supabase (Postgres + Auth) |
 | E-mail | Gmail SMTP (nodemailer) ou Resend |
-| WhatsApp | Meta WhatsApp Cloud API (template de primeiro acesso) |
+| WhatsApp | Baileys (conexão não oficial pelo QR code) ou Meta WhatsApp Cloud API |
 | Testes | Vitest |
 
 ## O que já está pronto
@@ -77,11 +77,15 @@ Preencha o `.env`:
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Envio de e-mails pelo Gmail (senha de app) |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Alternativa ao Gmail para e-mails |
 | `APP_URL` | URL pública usada nos links de primeiro acesso |
-| `WHATSAPP_*` | Envio do link de primeiro acesso pelo WhatsApp (opcional) |
+| `WHATSAPP_PROVIDER` | `web` (não oficial, gratuito), `cloud` (API oficial da Meta) ou `off` |
+| `WHATSAPP_*` | Configuração da API oficial, usada só quando `WHATSAPP_PROVIDER=cloud` |
+| `STAFF_EMAILS` | E-mails da equipe, separados por vírgula. Só essas contas abrem a área interna |
 | `PORT` | Porta do servidor (padrão 3000) |
 
 ### 3. Criar as tabelas no Supabase
 No Supabase, abra **SQL Editor** e rode o conteúdo de `supabase-schema.sql`. Depois rode os arquivos de `supabase/migrations/` em ordem.
+
+As tabelas ficam com RLS ligado e sem políticas. Só o servidor, com a service role key, lê e grava os dados. Nunca crie políticas que liberem as tabelas para `anon`, porque essa chave vai junto no site.
 
 Para popular dados de exemplo (opcional):
 ```bash
@@ -103,6 +107,14 @@ pnpm build
 pnpm start
 ```
 
+### WhatsApp (conexão não oficial)
+Com `WHATSAPP_PROVIDER=web`, o servidor mostra um QR code no terminal ao iniciar. No celular da empresa, abra **WhatsApp > Configurações > Dispositivos conectados > Conectar um dispositivo** e escaneie. A sessão fica salva na pasta `.whatsapp-auth/`, então o QR só volta a aparecer se o aparelho for desconectado no celular.
+
+- Essa conexão não é oficial. O WhatsApp pode bloquear o número se as mensagens parecerem spam.
+- Para reduzir o risco, o portal envia uma mensagem por vez, com 8 a 15 segundos de intervalo, e só no cadastro ou no reenvio de acesso.
+- Rode apenas um servidor por vez com a mesma pasta `.whatsapp-auth/`. Dois servidores com a mesma sessão derrubam um ao outro.
+- Trate a pasta `.whatsapp-auth/` como uma senha: quem a tiver consegue enviar mensagens pelo número.
+
 ### Outros comandos
 ```bash
 pnpm test     # testes (Vitest)
@@ -111,7 +123,6 @@ pnpm format   # formatação (Prettier)
 ```
 
 ## Pendências conhecidas
-- **Rotas da equipe sem autenticação no servidor:** as rotas `portal.*` usam `publicProcedure`. Antes de publicar, elas devem exigir um usuário da equipe logado.
 - Página 404 ainda em inglês.
 - Janelas do Sales HUB não fecham com Esc nem prendem o foco do teclado.
 - `DashboardLayout.tsx` e `ComponentShowcase.tsx` não são usados e podem ser removidos.
