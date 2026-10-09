@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { hubMoney } from "./salesHubData";
 
 // The Sales HUB is only downloaded when someone opens it, so the portal opens faster.
@@ -18,6 +18,9 @@ import type { Session } from "@supabase/supabase-js";
 import { trpc } from "@/lib/trpc";
 import { N1Logo } from "@/components/N1Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { CountUp } from "@/components/CountUp";
+import { useArrivedIds } from "@/hooks/useArrivedIds";
+import { playEnter } from "@/lib/motion";
 import { supabase } from "@/lib/supabase";
 import {
   AlertTriangle,
@@ -84,6 +87,14 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  // Switching between entrar / criar login / redefinir senha replays a short fade on the card body.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const firstMode = useRef(true);
+  useEffect(() => {
+    if (firstMode.current) { firstMode.current = false; return; }
+    const panel = panelRef.current;
+    if (panel) playEnter(panel.querySelectorAll(":scope > h2, :scope > .login-subtitle, :scope > form, :scope > .link-button, :scope > .first-access, :scope > .login-button"));
+  }, [mode]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -209,7 +220,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       </section>
       <section className="login-panel">
         <ThemeToggle className="login-theme-toggle" />
-        <div className="login-panel-inner">
+        <div className="login-panel-inner" ref={panelRef}>
           <div className="login-mobile-logo"><Logo size="md" /></div>
           <div className="secure-badge"><LockKeyhole size={16} /> Acesso seguro</div>
           <h2>{mode === "login" ? "Entrar no portal" : mode === "register" ? "Criar login" : mode === "verify" ? "Verificar e-mail" : mode === "forgot" ? "Redefinir senha" : mode === "reset" ? "Criar nova senha" : "E-mail verificado"}</h2>
@@ -349,6 +360,8 @@ function Topbar({ view, onMenu, onSearch, onNotifications, onWhatsApp, userName 
 }
 
 const formatInt = (value: number) => value.toLocaleString("pt-BR");
+/** Integers while counting up: intermediate frames are rounded, the last one is the exact value. */
+const formatCount = (value: number) => formatInt(Math.round(value));
 const formatPercent = (value: number | null) => (value === null ? "—" : `${(value * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
 
 /** "agora", "há 18 min", "há 2 h", "ontem", "há 3 dias" or the date. */
@@ -385,11 +398,11 @@ function Dashboard({ navigate, userName }: { navigate: (view: View, filter?: Lis
   const processos = data?.processos;
   const loading = "…";
 
-  const heroes: { id: keyof typeof METRIC_HELP; label: string; value: string; detail: string; icon: typeof Users; target: View; filter?: ListFilter; alert?: boolean }[] = [
-    { id: "ativos", label: "Clientes ativos", value: m ? formatInt(m.ativos) : loading, detail: m ? `${formatInt(m.andamento)} em andamento · ${formatInt(m.atencao)} com atenção` : "", icon: Users, target: "clientes", filter: "ativos" },
-    { id: "pendentes", label: "Solicitações pendentes", value: m ? formatInt(m.pendentes) : loading, detail: m ? (m.pendentes ? "Conversas aguardando resposta" : "Nenhuma conversa esperando") : "", icon: MessageCircle, target: "atendimento", alert: (m?.pendentes ?? 0) > 0 },
-    { id: "cbkAbertos", label: "Chargebacks abertos", value: m ? formatInt(m.cbkAbertos) : loading, detail: m ? (m.ticketCbk === null ? "Sem valores registrados" : `Ticket médio ${hubMoney(m.ticketCbk)}`) : "", icon: CreditCard, target: "chargebacks", filter: "abertos", alert: (m?.prazosVencidos ?? 0) > 0 },
-    { id: "reversao", label: "Taxa de reversão", value: m ? formatPercent(m.reversao.percent) : loading, detail: m ? (m.reversao.encerrados ? `${m.reversao.revertidos} de ${m.reversao.encerrados} chargebacks encerrados` : "Nenhum caso encerrado ainda") : "", icon: ArrowUpRight, target: "chargebacks" },
+  const heroes: { id: keyof typeof METRIC_HELP; label: string; value: ReactNode; detail: string; icon: typeof Users; target: View; filter?: ListFilter; alert?: boolean }[] = [
+    { id: "ativos", label: "Clientes ativos", value: m ? <CountUp value={m.ativos} format={formatCount} /> : loading, detail: m ? `${formatInt(m.andamento)} em andamento · ${formatInt(m.atencao)} com atenção` : "", icon: Users, target: "clientes", filter: "ativos" },
+    { id: "pendentes", label: "Solicitações pendentes", value: m ? <CountUp value={m.pendentes} format={formatCount} /> : loading, detail: m ? (m.pendentes ? "Conversas aguardando resposta" : "Nenhuma conversa esperando") : "", icon: MessageCircle, target: "atendimento", alert: (m?.pendentes ?? 0) > 0 },
+    { id: "cbkAbertos", label: "Chargebacks abertos", value: m ? <CountUp value={m.cbkAbertos} format={formatCount} /> : loading, detail: m ? (m.ticketCbk === null ? "Sem valores registrados" : `Ticket médio ${hubMoney(m.ticketCbk)}`) : "", icon: CreditCard, target: "chargebacks", filter: "abertos", alert: (m?.prazosVencidos ?? 0) > 0 },
+    { id: "reversao", label: "Taxa de reversão", value: m ? (m.reversao.percent === null ? formatPercent(null) : <CountUp value={m.reversao.percent} format={formatPercent} />) : loading, detail: m ? (m.reversao.encerrados ? `${m.reversao.revertidos} de ${m.reversao.encerrados} chargebacks encerrados` : "Nenhum caso encerrado ainda") : "", icon: ArrowUpRight, target: "chargebacks" },
   ];
 
   const attention: { id: ListFilter; label: string; help: string; value: number | undefined; target: View; severity: "yellow" | "red" }[] = [
@@ -704,6 +717,8 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
 
   const mensagensQuery = trpc.portal.mensagens.useQuery({ clientId: activeId ?? 0 }, { enabled: activeId !== null, retry: false, refetchInterval: 15_000 });
   const messages = activeId === null ? [] : mensagensQuery.data ?? [];
+  // Only messages that arrive while the conversation is open slide in, not the loaded history.
+  const arrived = useArrivedIds(activeId, activeId === null ? undefined : mensagensQuery.data?.map((message) => message.id));
   const sendMensagemMutation = trpc.portal.sendMensagem.useMutation({
     // Stays pending until the reply shows in the chat and the list stops flagging the conversation.
     onSuccess: () => Promise.all([mensagensQuery.refetch(), utils.portal.conversas.invalidate()]),
@@ -791,7 +806,7 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
             const showDay = day && day !== dayLabel(messages[index - 1]?.createdAt ?? null);
             return <Fragment key={message.id}>
               {showDay && <div className="chat-date">{day}</div>}
-              <div className={`chat-message ${message.from === "team" ? "message-team" : "message-client"}`}>
+              <div className={`chat-message ${message.from === "team" ? "message-team" : "message-client"}${message.from !== "team" && arrived(message.id) ? " chat-message-new" : ""}`}>
                 {ticket && <span className="ticket-label">Ticket · {ticket.topic}</span>}
                 <p>{ticket ? ticket.body : message.text}</p>
                 <small>{message.time} {message.from === "team" && <CheckCircle2 size={12} />}</small>

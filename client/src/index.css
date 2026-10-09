@@ -252,6 +252,9 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+    /* Staggered entrances must not keep content hidden for their delay either */
+    animation-delay: 0s !important;
+    transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
 }
@@ -2980,3 +2983,107 @@ tbody tr.empty-row:hover { background: transparent; }
 .login-features { display: flex; flex-direction: column; gap: 12px; margin: 28px 0 0; padding: 0; list-style: none; }
 .login-features li { display: flex; align-items: flex-start; gap: 10px; color: rgba(255, 255, 255, 0.86); font-size: 15px; line-height: 1.45; }
 .login-features svg { flex: none; margin-top: 2px; color: var(--gold, #c9ad66); }
+
+/* ==========================================================================
+ * Motion
+ * Short (160–400ms), ease-out, nothing bouncy. Only transform/opacity move,
+ * except bars and progress fills, which grow their own width/height inside a
+ * fixed track (no layout shift around them).
+ * Entrances use fill-mode "backwards": once they end the element is back to its
+ * own styles, so hover lifts keep working and no transform lingers (a lingering
+ * transform would also re-anchor position:fixed modals inside the page).
+ * "Reduzir movimento" switches all of it off: see the prefers-reduced-motion
+ * block near the top of this file (durations and delays forced to ~0).
+ * ========================================================================== */
+:root {
+  --ease-out: cubic-bezier(.2, .7, .2, 1);
+  --motion-fast: 160ms;
+  --motion-base: 240ms;
+  --motion-slow: 360ms;
+}
+/* Keyframes without "to" animate towards the element's own value (e.g. its inline width). */
+@keyframes n1-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes n1-rise-sm { from { opacity: 0; transform: translateY(4px); } }
+@keyframes n1-fade { from { opacity: 0; } }
+@keyframes n1-fill-x { from { width: 0; } }
+@keyframes n1-fill-y { from { height: 0; } }
+
+/* Login: hero copy and features in sequence, card rises gently */
+.hero-copy > :not(.login-features) { animation: n1-rise 400ms var(--ease-out) backwards; }
+.hero-copy > :nth-child(2) { animation-delay: 60ms; }
+.hero-copy > :nth-child(3) { animation-delay: 120ms; }
+.login-features li { animation: n1-rise-sm var(--motion-slow) var(--ease-out) backwards; animation-delay: 180ms; }
+.login-features li:nth-child(2) { animation-delay: 230ms; }
+.login-features li:nth-child(3) { animation-delay: 280ms; }
+.login-hero-footer { animation: n1-fade 400ms ease-out 200ms backwards; }
+.login-panel-inner { animation: n1-rise var(--motion-slow) var(--ease-out) backwards; }
+
+/* App shell: each view fades/slides in when it opens (views mount fresh, so it replays) */
+.main-area > .page-content,
+.main-area > .client-detail-page,
+.main-area > .hub-dashboard { animation: n1-rise-sm var(--motion-base) var(--ease-out) backwards; }
+
+/* Sidebar: the gold active marker and colors ease between items */
+.nav-item { transition: color var(--motion-fast) ease, background var(--motion-fast) ease, box-shadow var(--motion-base) var(--ease-out); }
+.nav-item svg { transition: color var(--motion-fast) ease; }
+
+/* Cards: staggered entrance */
+.kpi-grid > .kpi-card,
+.hub-metrics > .hub-metric,
+.control-metrics > .hub-metric,
+.ranking-grid > .ranking-card { animation: n1-rise var(--motion-slow) var(--ease-out) backwards; }
+.kpi-grid > :nth-child(2), .hub-metrics > :nth-child(2), .control-metrics > :nth-child(2), .ranking-grid > :nth-child(2) { animation-delay: 50ms; }
+.kpi-grid > :nth-child(3), .hub-metrics > :nth-child(3), .control-metrics > :nth-child(3), .ranking-grid > :nth-child(3) { animation-delay: 100ms; }
+.kpi-grid > :nth-child(4), .hub-metrics > :nth-child(4), .control-metrics > :nth-child(4), .ranking-grid > :nth-child(4) { animation-delay: 150ms; }
+.ranking-grid > :nth-child(5) { animation-delay: 190ms; }
+.ranking-grid > :nth-child(n+6) { animation-delay: 220ms; }
+
+/* Clickable cards lift a little on hover (pointer devices only, so taps don't leave it stuck) */
+.kpi-card, .ranking-card { transition: border-color .15s ease, box-shadow .2s ease, transform .2s var(--ease-out); }
+@media (hover: hover) {
+  .kpi-card:hover, .ranking-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+}
+.kpi-card:active, .ranking-card:active { transform: translateY(0); }
+
+/* Bars and progress fills grow from zero, then ease to new values */
+.hub-evolution-bars span { animation: n1-fill-y 400ms var(--ease-out) backwards; transition: height .3s var(--ease-out); }
+.hub-evolution-month:nth-child(2) .hub-evolution-bars span { animation-delay: 20ms; }
+.hub-evolution-month:nth-child(3) .hub-evolution-bars span { animation-delay: 40ms; }
+.hub-evolution-month:nth-child(4) .hub-evolution-bars span { animation-delay: 60ms; }
+.hub-evolution-month:nth-child(5) .hub-evolution-bars span { animation-delay: 80ms; }
+.hub-evolution-month:nth-child(6) .hub-evolution-bars span { animation-delay: 100ms; }
+.hub-evolution-month:nth-child(7) .hub-evolution-bars span { animation-delay: 120ms; }
+.hub-evolution-month:nth-child(8) .hub-evolution-bars span { animation-delay: 140ms; }
+.hub-evolution-month:nth-child(9) .hub-evolution-bars span { animation-delay: 160ms; }
+.hub-evolution-month:nth-child(10) .hub-evolution-bars span { animation-delay: 180ms; }
+.hub-evolution-month:nth-child(11) .hub-evolution-bars span { animation-delay: 200ms; }
+.hub-evolution-month:nth-child(12) .hub-evolution-bars span { animation-delay: 220ms; }
+.hub-tooltip { animation: n1-fade 120ms ease-out; }
+.progress-bar-fill, .progress-bar span, .progress-track span, .distribution-row i, .sector-overview i, .ranking-card > i {
+  animation: n1-fill-x 400ms var(--ease-out) 120ms backwards;
+  transition: width .3s var(--ease-out);
+}
+
+/* Heatmap cells fade in row by row and ease between shades when filters change */
+.heatmap i { animation: n1-fade 320ms ease-out backwards; transition: background-color .25s ease; }
+.heatmap > :nth-child(3) i { animation-delay: 30ms; }
+.heatmap > :nth-child(4) i { animation-delay: 60ms; }
+.heatmap > :nth-child(5) i { animation-delay: 90ms; }
+.heatmap > :nth-child(6) i { animation-delay: 120ms; }
+.heatmap > :nth-child(7) i { animation-delay: 150ms; }
+.heatmap > :nth-child(8) i { animation-delay: 180ms; }
+
+/* Chat: messages that arrive (and the one being sent) slide in; assistant options follow in sequence */
+.chat-message-new, .chat-message-pending, .client-bubble-new, .client-bubble-pending { animation: n1-rise-sm 260ms var(--ease-out) backwards; }
+.client-bot-options button { animation: n1-rise-sm var(--motion-base) var(--ease-out) 120ms backwards; }
+.client-bot-options button:nth-child(2) { animation-delay: 165ms; }
+.client-bot-options button:nth-child(3) { animation-delay: 210ms; }
+.client-bot-options button:nth-child(4) { animation-delay: 255ms; }
+.client-bot-options button:nth-child(n+5) { animation-delay: 290ms; }
+
+/* Client portal: cards rise in on open (and when a mobile tab is shown again) */
+.client-portal-side > .client-portal-card,
+.client-portal-layout > .client-portal-chat { animation: n1-rise var(--motion-slow) var(--ease-out) backwards; }
+.client-portal-side > :nth-child(2) { animation-delay: 60ms; }
+.client-portal-side > :nth-child(n+3) { animation-delay: 110ms; }
+.client-portal-layout > .client-portal-chat { animation-delay: 80ms; }

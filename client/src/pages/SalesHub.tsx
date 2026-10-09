@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { StatusPill } from "./Home";
+import { CountUp } from "@/components/CountUp";
 import {
   DAY_PERIODS, SECTOR_LABEL, WEEKDAYS, buildSalesHubCsv, capitalize, currentMonth, escapeHtml, filterSales, heatLevel, heatmap, hubMoney, hubPercent,
   monthLabel, monthlyEvolution, ranking as buildRanking, sectorOf, shiftMonth, totals, type HubSale, type Sector,
@@ -334,7 +335,8 @@ export default function SalesHubPage({ userName, isAdmin }: { userName: string; 
       ) : evolutionMax === 0 ? (
         <p className="hub-chart-empty">Nenhuma venda nos últimos 12 meses{consultant !== "Todos" ? ` para ${consultant}` : ""}.</p>
       ) : (
-        <div className="hub-evolution" onMouseLeave={() => setHoveredMonth(null)}>
+        // Keyed on sector and consultant so the bars grow from the baseline again when those filters change.
+        <div className="hub-evolution" key={`${sector}-${consultant}`} onMouseLeave={() => setHoveredMonth(null)}>
           {evolution.map((point, index) => (
             <div
               key={point.month}
@@ -395,10 +397,10 @@ export default function SalesHubPage({ userName, isAdmin }: { userName: string; 
         <section className="control-dashboard">
           <div className="control-title"><div><span className="eyebrow eyebrow-muted">N1 Control</span><h2>Inteligência consolidada</h2><p>Vendas, margem e exposição a chargebacks · {periodText}</p></div></div>
           <div className="control-metrics">
-            <HubMetric label="Bruto consolidado" value={hubMoney(all.gross)} detail={`${all.count} venda(s)`} tone="gold" />
-            <HubMetric label="Líquido" value={hubMoney(all.net)} detail={`Margem líquida ${hubPercent(all.netShare)}`} tone="green" />
-            <HubMetric label="Chargebacks" value={hubMoney(all.cbkNet)} detail={`${all.cbkCount} caso(s) · taxa ${hubPercent(all.count ? all.cbkCount / all.count : null)}`} tone="red" />
-            <HubMetric label="Resultado líquido final" value={hubMoney(all.resultado)} detail="Líquido − perda com CBK" tone="gold" />
+            <HubMetric label="Bruto consolidado" amount={all.gross} format={hubMoney} detail={`${all.count} venda(s)`} tone="gold" />
+            <HubMetric label="Líquido" amount={all.net} format={hubMoney} detail={`Margem líquida ${hubPercent(all.netShare)}`} tone="green" />
+            <HubMetric label="Chargebacks" amount={all.cbkNet} format={hubMoney} detail={`${all.cbkCount} caso(s) · taxa ${hubPercent(all.count ? all.cbkCount / all.count : null)}`} tone="red" />
+            <HubMetric label="Resultado líquido final" amount={all.resultado} format={hubMoney} detail="Líquido − perda com CBK" tone="gold" />
           </div>
           <section className="control-panel">
             <h3>Distribuição do faturamento</h3>
@@ -463,10 +465,10 @@ export default function SalesHubPage({ userName, isAdmin }: { userName: string; 
       </section>
       {tabs}
       <div className="hub-metrics">
-        <HubMetric label="Vendas" value={loading ? "…" : String(current.count)} detail={periodText} tone="blue" />
-        <HubMetric label="Valor bruto" value={hubMoney(current.gross)} detail="Total faturado" tone="green" />
-        <HubMetric label="Valor líquido" value={hubMoney(current.net)} detail={current.netShare === null ? "Sem vendas" : `${hubPercent(current.netShare)} do bruto`} tone="gold" />
-        <HubMetric label="Chargebacks" value={String(current.cbkCount)} detail={current.cbkCount ? `Perda de ${hubMoney(current.cbkNet)}` : "Nenhum chargeback no período"} tone="red" />
+        <HubMetric label="Vendas" value={loading ? "…" : undefined} amount={current.count} format={formatCount} detail={periodText} tone="blue" />
+        <HubMetric label="Valor bruto" amount={current.gross} format={hubMoney} detail="Total faturado" tone="green" />
+        <HubMetric label="Valor líquido" amount={current.net} format={hubMoney} detail={current.netShare === null ? "Sem vendas" : `${hubPercent(current.netShare)} do bruto`} tone="gold" />
+        <HubMetric label="Chargebacks" amount={current.cbkCount} format={formatCount} detail={current.cbkCount ? `Perda de ${hubMoney(current.cbkNet)}` : "Nenhum chargeback no período"} tone="red" />
       </div>
       {filters}
       <section className="hub-panel ranking-panel">
@@ -497,6 +499,10 @@ export default function SalesHubPage({ userName, isAdmin }: { userName: string; 
   );
 }
 
-function HubMetric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: string }) {
-  return <div className={`hub-metric hub-metric-${tone}`}><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>;
+/** `value` (e.g. "…" while loading) wins over `amount`, which counts up with `format`. */
+function HubMetric({ label, value, amount, format, detail, tone }: { label: string; value?: string; amount: number; format: (value: number) => string; detail: string; tone: string }) {
+  return <div className={`hub-metric hub-metric-${tone}`}><span>{label}</span><strong>{value ?? <CountUp value={amount} format={format} />}</strong><small>{detail}</small></div>;
 }
+
+/** Whole numbers while counting up; the last frame is the exact count, same as String(count). */
+const formatCount = (value: number) => String(Math.round(value));

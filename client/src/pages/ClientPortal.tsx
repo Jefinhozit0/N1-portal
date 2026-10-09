@@ -10,6 +10,7 @@ import { N1Logo } from "@/components/N1Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
+import { useArrivedIds } from "@/hooks/useArrivedIds";
 import { StatusPill } from "./Home";
 
 /** Shown on the first login with the temporary password sent by e-mail. */
@@ -104,6 +105,9 @@ export function ClientPortal({ onLogout }: { onLogout: () => void }) {
   const processo = processoQuery.data;
   const firstName = processo?.name.split(" ")[0] ?? "";
   const messages = mensagensQuery.data ?? [];
+  // Team replies that arrive while the page is open slide in; the loaded history and saved copies of
+  // lines already on screen (assistant, own messages) do not animate again.
+  const arrived = useArrivedIds("conversa", mensagensQuery.data?.map((message) => message.id));
   const pendingText = enviarMensagem.isPending ? enviarMensagem.variables?.text : undefined;
   const processInfo: ProcessInfo = {
     firstName,
@@ -286,19 +290,19 @@ export function ClientPortal({ onLogout }: { onLogout: () => void }) {
               ) : message.from === "choice" ? (
                 <div key={message.id} className="client-bubble client-bubble-own client-bubble-choice"><p>{message.text}</p></div>
               ) : (
-                <div key={message.id} className={`client-bubble ${message.from === "client" ? "client-bubble-own" : "client-bubble-team"}`}>
+                <div key={message.id} className={`client-bubble ${message.from === "client" ? "client-bubble-own" : "client-bubble-team"}${message.from === "team" && arrived(message.id) ? " client-bubble-new" : ""}`}>
                   {message.from === "team" && <span className="client-bubble-author">Equipe N1</span>}
                   <p>{message.text}</p>
                   <small>{message.time} {message.from === "client" && <CheckCircle2 size={12} />}</small>
                 </div>
               ))}
               {botTrail.map((entry) => entry.from === "bot" ? (
-                <div key={`local-${entry.id}`} className="client-bubble client-bubble-team client-bubble-bot">
+                <div key={`local-${entry.id}`} className="client-bubble client-bubble-team client-bubble-bot client-bubble-new">
                   <span className="client-bubble-author"><Bot size={13} /> Assistente N1</span>
                   <p>{entry.text}</p>
                 </div>
               ) : (
-                <div key={`local-${entry.id}`} className="client-bubble client-bubble-own client-bubble-choice"><p>{entry.text}</p></div>
+                <div key={`local-${entry.id}`} className="client-bubble client-bubble-own client-bubble-choice client-bubble-new"><p>{entry.text}</p></div>
               ))}
               {pendingText && <div className="client-bubble client-bubble-own client-bubble-pending"><p>{pendingText}</p><small>Enviando...</small></div>}
               {!enviarMensagem.isPending && botOptions.length > 0 && (
