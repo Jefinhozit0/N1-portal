@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DatabaseBackup, History, Link2, MessageCircle, RefreshCw, Search, Smartphone } from "lucide-react";
+import { AlertTriangle, DatabaseBackup, HardDrive, History, Link2, MessageCircle, RefreshCw, Search, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,38 @@ const STATUS_TEXT: Record<string, string> = {
   off: "Desligado",
 };
 
+/** "12,4 MB" */
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: value < 10 ? 1 : 0 })} ${units[unit]}`;
+}
+
+/** "cerca de 3 meses", "mais de 10 anos" */
+function formatMonths(months: number | null) {
+  if (months === null) return "sem crescimento no último mês";
+  if (months < 1) return "menos de 1 mês";
+  if (months < 24) return `cerca de ${Math.round(months)} ${Math.round(months) === 1 ? "mês" : "meses"}`;
+  const years = months / 12;
+  return years > 10 ? "mais de 10 anos" : `cerca de ${Math.round(years)} anos`;
+}
+
+type UsageItem = { usado: number; limite: number; percent: number; alerta: boolean; mesesAteOLimite: number | null };
+
+function UsageGauge({ label, item, format, detail, projection = true }: { label: string; item: UsageItem; format: (n: number) => string; detail: string; projection?: boolean }) {
+  const tone = item.percent >= 0.9 ? "red" : item.alerta ? "yellow" : "ok";
+  return (
+    <div className={`admin-gauge admin-gauge-${tone}`}>
+      <div className="admin-gauge-head"><span>{label}</span><strong>{format(item.usado)} <small>de {format(item.limite)}</small></strong></div>
+      <div className="progress-track" role="progressbar" aria-label={label} aria-valuenow={Math.round(item.percent * 100)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.min(100, Math.max(item.percent * 100, item.usado > 0 ? 1 : 0))}%` }} /></div>
+      <small>{(item.percent * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% usado · {detail}{projection ? ` · no ritmo atual, chega ao limite em ${formatMonths(item.mesesAteOLimite)}` : ""}</small>
+    </div>
+  );
+}
+
 /** Administration: corporate WhatsApp, daily backup, reminders and the team's action log. */
 export default function AdminPage() {
   // Refreshes often while a QR code is on screen, since WhatsApp replaces it every ~20 seconds.
@@ -25,6 +57,7 @@ export default function AdminPage() {
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const auditoria = trpc.admin.auditoria.useQuery({ busca: buscaAplicada || undefined, limite: 200 }, { retry: false });
+  const uso = trpc.admin.usoSupabase.useQuery(undefined, { retry: false, refetchInterval: 10 * 60_000 });
   const [confirmLogout, setConfirmLogout] = useState(false);
   const desconectar = trpc.admin.desconectarWhatsApp.useMutation({
     onSuccess: () => { toast.success("WhatsApp desconectado. Um novo QR code aparece em alguns segundos."); setConfirmLogout(false); sistema.refetch(); },
@@ -82,6 +115,28 @@ export default function AdminPage() {
               <p className="admin-muted">Clientes recebem aviso por WhatsApp e e-mail quando a equipe responde, muda o status ou anexa um documento: <b>{data.avisosParaClientes ? "ligado" : "desligado (NOTIFY_CLIENTS=off)"}</b>.</p>
               <p className="admin-muted">Lembrete para quem não criou a senha em 2 dias, uma vez, das 9h às 20h. Última verificação: <b>{when(data.lembretes.lastRun)}</b>{data.lembretes.lastResult ? ` · ${data.lembretes.lastResult}` : ""}.</p>
               {data.lembretes.lastError && <p className="form-message">A última verificação falhou: {data.lembretes.lastError}</p>}
+            </>
+          )}
+        </section>
+
+        <section className="panel admin-card admin-usage">
+          <div className="admin-card-head"><HardDrive size={18} /><h3>Uso do Supabase</h3>{uso.data && <span className="admin-usage-plan">Plano {uso.data.plano}</span>}</div>
+          {uso.isLoading && <p className="admin-muted">Calculando...</p>}
+          {uso.error && <p className="form-message">Não foi possível calcular o uso agora: {uso.error.message}</p>}
+          {uso.data && (
+            <>
+              {uso.data.alerta && <p className="form-message admin-usage-alert"><AlertTriangle size={15} /> Algum item passou de {Math.round(uso.data.avisarEm * 100)}% do limite do plano grátis. Hora de considerar o plano Pro (US$ 25/mês).</p>}
+              <UsageGauge label="Documentos dos clientes" item={uso.data.arquivos} format={formatBytes} detail={`${uso.data.detalhes.documentos} arquivo(s) · ${formatBytes(uso.data.detalhes.bytesUltimos30Dias)} nos últimos 30 dias`} />
+              <UsageGauge label={uso.data.tamanhoExato ? "Banco de dados" : "Banco de dados (estimativa)"} item={uso.data.banco} format={formatBytes} detail={`${uso.data.detalhes.linhas.toLocaleString("pt-BR")} registros · ${uso.data.detalhes.linhasUltimos30Dias.toLocaleString("pt-BR")} nos últimos 30 dias`} />
+              <UsageGauge label="Logins ativos no mês" item={uso.data.usuarios} format={(n) => n.toLocaleString("pt-BR")} detail={`${uso.data.detalhes.logins} login(s) no total, entre equipe e clientes`} projection={false} />
+              {uso.data.detalhes.maioresClientes.length > 0 && (
+                <div className="admin-usage-top">
+                  <small>Clientes com mais documentos</small>
+                  <ol>{uso.data.detalhes.maioresClientes.map((item) => <li key={item.id}><span>{item.nome}</span><b>{formatBytes(item.bytes)}</b></li>)}</ol>
+                </div>
+              )}
+              {!uso.data.tamanhoExato && <p className="admin-muted">Para ver o tamanho exato do banco, rode o arquivo supabase/migrations/20261013_tamanho_banco.sql no Supabase.</p>}
+              <p className="admin-muted">Projeção pelo ritmo dos últimos 30 dias. O tráfego de downloads não aparece aqui: veja em <a href="https://supabase.com/dashboard/org/_/usage" target="_blank" rel="noreferrer">Supabase → Usage</a>.</p>
             </>
           )}
         </section>
