@@ -102,4 +102,20 @@ describe("computeDashboard", () => {
     expect(atividade[0].title).toBe("Termos aceitos");
     expect(atividade.some((a) => a.title === "Ticket · Documentos")).toBe(true);
   });
+
+  it("stops counting a conversation the team marked as answered until the client writes again", async () => {
+    const bruno = tables.clientes[1] as Record<string, unknown>;
+    try {
+      bruno.conversa_respondida_em = daysAgo(0.5); // after Bruno's last message (1 day ago)
+      let { metrics } = await computeDashboard(NOW);
+      expect(metrics.pendentes).toBe(0);
+      expect(metrics.conversao).toEqual({ respondidas: 2, total: 2, percent: 1 });
+
+      bruno.conversa_respondida_em = daysAgo(2); // before it: still waiting
+      ({ metrics } = await computeDashboard(NOW));
+      expect(metrics.pendentes).toBe(1);
+    } finally {
+      delete bruno.conversa_respondida_em;
+    }
+  });
 });

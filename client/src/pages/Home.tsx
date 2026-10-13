@@ -28,6 +28,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  CheckCheck,
   CheckCircle2,
   ChevronRight,
   Clock3,
@@ -725,6 +726,13 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
     onError: (_error, variables) => setDraft((current) => current || variables.text),
   });
   const pendingText = sendMensagemMutation.isPending ? sendMensagemMutation.variables?.text : undefined;
+  const marcarRespondida = trpc.portal.marcarRespondida.useMutation({
+    onSuccess: async () => {
+      await Promise.all([utils.portal.conversas.invalidate(), utils.portal.dashboard.invalidate()]);
+      toast.success("Conversa marcada como respondida.");
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const [confirmClear, setConfirmClear] = useState(false);
   const apagarConversa = trpc.portal.apagarConversa.useMutation({
     onSuccess: async () => {
@@ -780,7 +788,7 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
     </section>
     <section className="panel chat-panel">
       {selected ? <>
-        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><div className="chat-head-actions"><button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button>{isAdmin && <button className="icon-button chat-clear-button" aria-label="Apagar conversa" title="Apagar conversa" onClick={() => setConfirmClear(true)}><Trash2 size={17} /></button>}</div></div>
+        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><div className="chat-head-actions">{selected.awaitingReply && <button className="secondary-button chat-mark-answered" aria-label="Marcar como respondida" title="Tira a conversa de &quot;aguardando resposta&quot; sem mandar mensagem. Se o cliente escrever de novo, ela volta." disabled={marcarRespondida.isPending} onClick={() => marcarRespondida.mutate({ clientId: selected.clientId })}><CheckCheck size={16} /><span>{marcarRespondida.isPending ? "Marcando..." : "Marcar como respondida"}</span></button>}<button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button>{isAdmin && <button className="icon-button chat-clear-button" aria-label="Apagar conversa" title="Apagar conversa" onClick={() => setConfirmClear(true)}><Trash2 size={17} /></button>}</div></div>
         <AlertDialog open={confirmClear} onOpenChange={(open) => !apagarConversa.isPending && setConfirmClear(open)}>
           <AlertDialogContent>
             <AlertDialogHeader>

@@ -103,9 +103,12 @@ export async function computeDashboard(now = Date.now()) {
   }
 
   // ── Conversations ─────────────────────────────────────────
-  const pendentes = Array.from(lastSender.values()).filter((sender) => sender === "client").length;
+  // A conversation the team marked as answered stops waiting until the client writes again.
+  const markedAnsweredAt = new Map(clientes.map((c) => [c.id as number, time(c.conversa_respondida_em) ?? 0]));
+  const waiting = (id: number) => lastSender.get(id) === "client" && (lastMessageAt.get(id) ?? 0) > (markedAnsweredAt.get(id) ?? 0);
+  const pendentes = Array.from(lastSender.keys()).filter(waiting).length;
   const conversasDeClientes = hasClientMessage.size;
-  const respondidas = Array.from(hasClientMessage).filter((id) => lastSender.get(id) === "team").length;
+  const respondidas = Array.from(hasClientMessage).filter((id) => !waiting(id)).length;
 
   // ── Client accounts (portal logins and terms) ─────────────
   const accounts = users.filter((u) => u.app_metadata?.role === "client");
