@@ -1,13 +1,15 @@
-import { FormEvent, Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FormEvent, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { hubMoney } from "./salesHubData";
 
 // The Sales HUB is only downloaded when someone opens it, so the portal opens faster.
 const SalesHubPage = lazy(() => import("./SalesHub"));
 const AdminPage = lazy(() => import("./Admin"));
 const TermosPage = lazy(() => import("./Termos"));
+const ChargebacksPage = lazy(() => import("./Chargebacks"));
 import { useQueryClient } from "@tanstack/react-query";
 import { parseTicketMessage } from "@shared/tickets";
 import { INITIAL_STATUS } from "@shared/processo";
+import type { ChargebackDraft } from "@shared/chargebacks";
 import { CHARGEBACK_LIST_FILTERS, CLIENT_LIST_FILTERS, DASHBOARD_RULES, METRIC_HELP, type ChargebackListFilter, type ClientListFilter, type ListFilter } from "@shared/dashboard";
 const ClientDetail = lazy(() => import("./ClientDetail"));
 const ClientPortal = lazy(() => import("./ClientPortal").then((module) => ({ default: module.ClientPortal })));
@@ -63,7 +65,6 @@ type Client = { id?: number; name: string; cpf: string; type: string; status: st
 const clientServices = ["Financiamento Imobiliário", "Financiamento Veicular", "Empréstimo Pessoal", "Empréstimo Consignado", "Cartão de Crédito", "Outros"];
 
 export { hubMoney } from "./salesHubData";
-const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 
 function Logo({ compact = false, size = "md" }: { compact?: boolean; size?: "sm" | "md" | "lg" | "xl" }) {
   return <N1Logo compact={compact} size={size} />;
@@ -527,7 +528,7 @@ function Dashboard({ navigate, userName }: { navigate: (view: View, filter?: Lis
 }
 
 /** Shows which dashboard filter a list is under, with a way out. */
-function ListFilterBar({ label, count, noun, onClear }: { label: string; count: number | undefined; noun: string; onClear: () => void }) {
+export function ListFilterBar({ label, count, noun, onClear }: { label: string; count: number | undefined; noun: string; onClear: () => void }) {
   return <div className="list-filter-bar" role="status">
     <span>Filtro do painel: <b>{label}</b>{count !== undefined && <> · {count} {noun}</>}</span>
     <button type="button" className="text-button" onClick={onClear}>Limpar filtro <X size={14} /></button>
@@ -632,58 +633,6 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
       </div>}
     </div>
   );
-}
-
-function ChargebacksPage({ listFilter, onClearFilter }: { listFilter: ChargebackListFilter | null; onClearFilter: () => void }) {
-  const chargebacksQuery = trpc.portal.chargebacks.useQuery(undefined, { retry: false });
-  const dashboardQuery = trpc.portal.dashboard.useQuery(undefined, { retry: false });
-  const cbSummary = dashboardQuery.data?.chargebacks;
-  const reversao = dashboardQuery.data?.metrics.reversao;
-  const remoteChargebacks = chargebacksQuery.data;
-  const chargebackList = useMemo(() => {
-    if (remoteChargebacks && remoteChargebacks.length > 0) {
-      return (remoteChargebacks as Record<string, unknown>[]).map((row) => ({
-        id: typeof row.id === "number" ? row.id : undefined,
-        client: String(row.client ?? ""),
-        bank: String(row.bank ?? ""),
-        amount: String(row.amount ?? ""),
-        deadline: String(row.deadline ?? ""),
-        status: String(row.status ?? ""),
-        tone: String(row.tone ?? "blue"),
-      }));
-    }
-    return [];
-  }, [remoteChargebacks]);
-  const [selected, setSelected] = useState<(typeof chargebackList)[number] | null>(null);
-  const filterIds = listFilter ? dashboardQuery.data?.listas.chargebacks[listFilter] : undefined;
-  const visibleChargebacks = listFilter
-    ? chargebackList.filter((item) => {
-      const id = (item as { id?: number }).id;
-      return id !== undefined && (filterIds ?? []).includes(id);
-    })
-    : chargebackList;
-
-  function exportReport() {
-    const rows = [
-      ["Cliente", "Instituição", "Valor estimado", "Prazo", "Status"],
-      ...visibleChargebacks.map((item) => [item.client, item.bank, item.amount, item.deadline, item.status]),
-    ];
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([`\ufeff${rows.map((row) => row.map(csvCell).join(";")).join("\r\n")}`], { type: "text/csv;charset=utf-8" }));
-    link.download = "solicitacoes-chargeback.csv";
-    link.click();
-    URL.revokeObjectURL(link.href);
-  }
-
-  return <div className="page-content">
-    <div className="chargeback-summary"><div title="Soma dos chargebacks revertidos registrados neste ano."><span>Valor recuperado em {cbSummary?.ano ?? new Date().getFullYear()}</span><strong>{cbSummary ? hubMoney(cbSummary.recuperadoNoAno) : "…"}</strong><small>{reversao ? `${reversao.revertidos} caso(s) revertido(s)` : "Calculando..."}</small></div><div title="Chargebacks que ainda não foram revertidos nem negados."><span>Solicitações abertas</span><strong>{cbSummary ? cbSummary.abertos : "…"}</strong><small>{chargebackList.length} registrada(s) no total</small></div><div title="Revertidos dentre os já encerrados (revertidos + negados)."><span>Taxa de sucesso</span><strong>{cbSummary ? formatPercent(cbSummary.taxaSucesso) : "…"}</strong><small>{reversao ? (reversao.encerrados ? `${reversao.revertidos} de ${reversao.encerrados} encerrados` : "Nenhum caso encerrado ainda") : "Calculando..."}</small></div></div>
-    <section className="panel table-panel">
-      <div className="panel-heading"><div><h3>Solicitações de chargeback</h3><p>Acompanhe devoluções e recuperações financeiras</p></div><button className="secondary-button" onClick={exportReport}><FileText size={16} /> Exportar CSV</button></div>
-      {listFilter && <ListFilterBar label={CHARGEBACK_LIST_FILTERS[listFilter]} count={filterIds ? visibleChargebacks.length : undefined} noun="chargeback(s)" onClear={onClearFilter} />}
-      <div className="table-wrap"><table><thead><tr><th>Cliente</th><th>Instituição</th><th>Valor estimado</th><th>Prazo</th><th>Status</th><th /></tr></thead><tbody>{visibleChargebacks.length === 0 && <tr className="empty-row"><td colSpan={6}>{listFilter && !filterIds ? "Carregando..." : listFilter ? "Nenhum chargeback nesta situação." : "Nenhum chargeback registrado."}</td></tr>}{visibleChargebacks.map((item) => <tr key={item.client} onClick={() => setSelected(item)}><td><div className="table-person"><span className="avatar avatar-gradient">{item.client.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{item.client}</strong></div></td><td>{item.bank}</td><td><strong>{item.amount}</strong></td><td className="muted-cell">{item.deadline}</td><td><StatusPill tone={item.tone}>{item.status}</StatusPill></td><td><button className="row-more icon-button" aria-label={`Ver solicitação de ${item.client}`} onClick={(event) => { event.stopPropagation(); setSelected(item); }}><ChevronRight size={17} /></button></td></tr>)}</tbody></table></div>
-    </section>
-    {selected && <div className="detail-drawer"><button className="drawer-close icon-button" onClick={() => setSelected(null)} aria-label="Fechar detalhes"><X size={18} /></button><span className="eyebrow eyebrow-muted">Solicitação de chargeback</span><div className="drawer-person"><span className="avatar avatar-large avatar-gradient">{selected.client.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div><h2>{selected.client}</h2><p>{selected.bank}</p></div></div><StatusPill tone={selected.tone}>{selected.status}</StatusPill><div className="drawer-section"><span>Valor estimado</span><strong>{selected.amount}</strong></div><div className="drawer-section"><span>Prazo</span><strong>{selected.deadline}</strong></div></div>}
-  </div>;
 }
 
 const avatarTones = ["avatar-coral", "avatar-green", "avatar-purple", "avatar-blue"];
@@ -848,6 +797,10 @@ export default function Home() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [userName, setUserName] = useState("Usuário");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  // A sale marked with chargeback in the Sales HUB opens the chargeback form already filled in.
+  const [chargebackDraft, setChargebackDraft] = useState<ChargebackDraft | null>(null);
+  const clearChargebackDraft = useCallback(() => setChargebackDraft(null), []);
+  const openClientRow = (row: Record<string, unknown>) => { setSelectedClient(toClient(row)); setView("client-detail"); };
   // Logins created automatically when a client is registered carry role "client" in app_metadata.
   const [isClientUser, setIsClientUser] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
@@ -937,11 +890,11 @@ export default function Home() {
         {view === "dashboard" && <Dashboard navigate={navigate} userName={userName} />}
         {view === "clientes" && <ClientsPage setView={setView} selectedClient={selectedClient} setSelectedClient={setSelectedClient} listFilter={clientFilter} onClearFilter={() => setListFilter(null)} />}
         {view === "client-detail" && selectedClient && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><ClientDetail client={selectedClient} onBack={() => setView("clientes")} isAdmin={isAdmin} /></Suspense>}
-        {view === "chargebacks" && <ChargebacksPage listFilter={chargebackFilter} onClearFilter={() => setListFilter(null)} />}
+        {view === "chargebacks" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><ChargebacksPage listFilter={chargebackFilter} onClearFilter={() => setListFilter(null)} isAdmin={isAdmin} draft={chargebackDraft} onDraftUsed={clearChargebackDraft} onOpenClient={openClientRow} /></Suspense>}
         {view === "atendimento" && <AtendimentoPage isAdmin={isAdmin} />}
-        {view === "termos" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><TermosPage onOpenClient={(row) => { setSelectedClient(toClient(row)); setView("client-detail"); }} /></Suspense>}
+        {view === "termos" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><TermosPage onOpenClient={openClientRow} /></Suspense>}
         {view === "admin" && isAdmin && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><AdminPage /></Suspense>}
-        {view === "saleshub" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><SalesHubPage userName={userName} isAdmin={isAdmin} /></Suspense>}
+        {view === "saleshub" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><SalesHubPage userName={userName} isAdmin={isAdmin} onChargeback={(draft) => { setChargebackDraft(draft); navigate("chargebacks"); }} /></Suspense>}
         <footer className="app-footer">© 2026 N1 Soluções <span>·</span> Todos os direitos reservados.</footer>
       </main>
     </div>

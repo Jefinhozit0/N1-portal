@@ -1211,6 +1211,22 @@ tbody tr:hover { background: var(--surface-muted); }
 .drawer-section span { color: var(--muted); font-size: 13px; }
 .drawer-section strong { color: var(--text); font-size: 15px; }
 
+/* Chargebacks: register, edit and history */
+.cbk-drawer { overflow-y: auto; }
+.cbk-drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.cbk-drawer-actions .secondary-button { display: inline-flex; align-items: center; gap: 6px; }
+.cbk-delete { color: var(--red); }
+.cbk-drawer .drawer-section > span { display: inline-flex; align-items: center; gap: 6px; }
+.cbk-note { margin: 0; color: var(--text); font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cbk-link { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
+.cbk-muted { color: var(--muted); font-size: 13px; }
+.cbk-history { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 0; padding: 0; list-style: none; }
+.cbk-history li { padding-left: 12px; border-left: 2px solid var(--border); }
+.cbk-history strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 600; }
+.cbk-history small { color: var(--muted); font-size: 12px; }
+.cbk-status-filters { flex-wrap: wrap; padding: 0 20px 12px; }
+.cbk-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; font-weight: 400; }
+
 /* Client Detail Page */
 .client-detail-page {
   max-width: 1400px;
