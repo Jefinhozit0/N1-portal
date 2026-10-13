@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bot, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, LockKeyhole, LogOut, MessageCircle, Send, X } from "lucide-react";
-import { formatFileSize } from "@shared/processo";
+import { AlertTriangle, Bot, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, LockKeyhole, LogOut, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { caseSummary, formatFileSize } from "@shared/processo";
 
 const formatDay = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replace(" de ", " ").replace(".", "");
 import type { TicketTopic } from "@shared/tickets";
@@ -242,6 +242,13 @@ export function ClientPortal({ onLogout }: { onLogout: () => void }) {
             )}
             <button type="button" className="primary-button client-portal-to-chat" onClick={() => setTab("conversa")}><MessageCircle size={17} /> Falar com a equipe</button>
           </section>
+
+          {documentosQuery.isSuccess && historicoQuery.isSuccess && (
+            <section className="client-portal-card client-portal-block">
+              <h2><Sparkles size={17} /> Resumo do seu caso</h2>
+              <p className="client-portal-summary">{caseSummary({ name: processo.name ?? "", type: processo.type, status: processo.status, progress: processo.progresso ?? 0, documents: documentos, events: historico }, "cliente")}</p>
+            </section>
+          )}
 
           <section className="client-portal-card client-portal-block">
             <h2>Documentos</h2>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, FileText, Phone, Mail, Upload, Trash2, Sparkles, AlertTriangle, ChevronDown, Clock, Plus, Download, RefreshCw } from "lucide-react";
-import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, formatFileSize } from "@shared/processo";
+import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, caseSummary, formatFileSize } from "@shared/processo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -103,13 +103,7 @@ export default function ClientDetail({ client, onBack, isAdmin }: ClientDetailPr
 
   /** Summary built only from what is registered for this client. */
   function handleGenerateSummary() {
-    const firstName = client.name.split(" ")[0];
-    const lastEvent = timeline[0];
-    setSummary([
-      `${firstName} tem um processo de ${cliente?.type || client.type || "tipo ainda não definido"}, com status "${status || "sem status"}" e ${progress}% de progresso.`,
-      documents.length === 0 ? "Nenhum documento anexado até agora." : `${documents.length} ${documents.length === 1 ? "documento anexado" : "documentos anexados"}, o mais recente em ${formatDate(documents[0].created_at)}.`,
-      lastEvent ? `Última movimentação: ${lastEvent.titulo.toLowerCase()} em ${formatDate(lastEvent.created_at)}.` : "",
-    ].filter(Boolean).join(" "));
+    setSummary(caseSummary({ name: client.name, type: cliente?.type || client.type, status, progress, documents, events: timeline }, "equipe"));
   }
 
   /** Simple warning signs from the real data: time without updates, pending status and no documents. */
