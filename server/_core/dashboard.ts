@@ -108,7 +108,9 @@ export async function computeDashboard(now = Date.now()) {
   const respondidas = Array.from(hasClientMessage).filter((id) => lastSender.get(id) === "team").length;
 
   // ── Client accounts (portal logins and terms) ─────────────
-  const accounts = users.filter((u) => u.app_metadata?.role === "client");
+  // Only logins of clients that still exist: a client removed straight in the database leaves its login behind.
+  const existingClientIds = new Set(clientes.map((c) => c.id as number));
+  const accounts = users.filter((u) => u.app_metadata?.role === "client" && existingClientIds.has(u.app_metadata?.cliente_id as number));
   const aceitos = accounts.filter((u) => (u.app_metadata?.terms as { version?: string } | undefined)?.version === TERMS_VERSION).length;
   const ativos30d = accounts.filter((u) => (time(u.last_sign_in_at) ?? 0) >= now - DASHBOARD_RULES.recentLoginDays * DAY).length;
 

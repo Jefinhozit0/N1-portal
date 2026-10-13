@@ -102,6 +102,10 @@ const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
   if (clienteId === null) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Esta conta não está vinculada a um cliente." });
   }
+  // A client removed straight in the database leaves its login behind: that login opens nothing.
+  const { data: cliente, error } = await supabase.from("clientes").select("id").eq("id", clienteId).maybeSingle();
+  if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível abrir o portal agora. Tente novamente." });
+  if (!cliente) throw new TRPCError({ code: "FORBIDDEN", message: "Este acesso foi encerrado. Fale com a equipe da N1." });
   return next({ ctx: { ...ctx, clienteId, clienteUser: user } });
 });
 

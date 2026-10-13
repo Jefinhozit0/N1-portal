@@ -12,7 +12,7 @@ SELECT 'vendas', id, client FROM public.vendas WHERE created_at = '2026-09-28 20
 
 -- Para os CLIENTES, prefira o botão "Apagar cliente" no portal: ele também apaga o login do
 -- cliente (o Rafael de exemplo tem um) e os arquivos dele. As linhas de clientes abaixo servem
--- só se preferir fazer tudo por aqui.
+-- só se preferir fazer tudo por aqui: os logins que sobrarem o portal apaga sozinho em até 1 hora.
 -- Se a lista estiver certa, selecione as linhas abaixo e rode:
 -- DELETE FROM public.mensagens   WHERE client_id IN (SELECT id FROM public.clientes WHERE created_at = '2026-09-28 20:40:39.424902+00');
 -- DELETE FROM public.clientes    WHERE created_at = '2026-09-28 20:40:39.424902+00';
