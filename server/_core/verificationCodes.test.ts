@@ -48,6 +48,35 @@ describe("verification codes after a resend", () => {
     expect(checkCode("nobody@example.com", "123456")).toBe("expired");
   });
 
+  it("blocks the e-mail for an hour after ten wrong codes, even across resends", () => {
+    vi.useFakeTimers();
+    const email = "guesser@example.com";
+    let code = "";
+    for (let round = 0; round < 2; round += 1) {
+      code = createVerificationCode(email);
+      const wrong = code === "000000" ? "000001" : "000000";
+      for (let attempt = 0; attempt < 5; attempt += 1) checkCode(email, wrong);
+    }
+
+    code = createVerificationCode(email);
+    expect(checkCode(email, code)).toBe("blocked");
+
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    code = createVerificationCode(email);
+    expect(checkCode(email, code)).toBe("ok");
+  });
+
+  it("counts wrong sign-up and reset codes together", () => {
+    const email = "both@example.com";
+    for (const key of [email, `reset:${email}`]) {
+      const code = createVerificationCode(key);
+      const wrong = code === "000000" ? "000001" : "000000";
+      for (let attempt = 0; attempt < 5; attempt += 1) checkCode(key, wrong);
+    }
+
+    expect(checkCode(`reset:${email}`, createVerificationCode(`reset:${email}`))).toBe("blocked");
+  });
+
   it("drops only the code whose e-mail failed", () => {
     const kept = createVerificationCode("partial@example.com");
     const failed = createVerificationCode("partial@example.com");

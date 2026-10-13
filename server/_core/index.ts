@@ -36,8 +36,20 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
-  // The Cloudflare tunnel connects from this machine; trust it so req.ip is the visitor, not 127.0.0.1.
+  // The tunnel (Tailscale Funnel or Cloudflare) connects from this machine; trust it so req.ip is the visitor, not 127.0.0.1.
   app.set("trust proxy", "loopback");
+  app.disable("x-powered-by");
+  app.use((_req, res, next) => {
+    // No other site may show the portal inside a frame (clickjacking).
+    res.set("X-Frame-Options", "DENY");
+    res.set("Content-Security-Policy", "frame-ancestors 'none'");
+    res.set("X-Content-Type-Options", "nosniff");
+    res.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    // Browsers ignore this header over plain http (localhost), so it only pins the public HTTPS address.
+    res.set("Strict-Transport-Security", "max-age=31536000");
+    next();
+  });
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
