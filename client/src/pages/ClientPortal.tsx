@@ -8,6 +8,7 @@ import { TERMS_SECTIONS, TERMS_TITLE, TERMS_VERSION } from "@shared/termos";
 import { BOT_STEPS, TICKET_SENT_REPLY, greeting, type BotStepId, type ProcessInfo } from "./clientChatbot";
 import { N1Logo } from "@/components/N1Logo";
 import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
+import { InstallAppCard } from "@/components/InstallAppCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
@@ -250,6 +251,8 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
             )}
             <button type="button" className="primary-button client-portal-to-chat" onClick={() => setTab("conversa")}><MessageCircle size={17} /> Falar com a equipe</button>
           </section>
+
+          <InstallAppCard />
 
           {documentosQuery.isSuccess && historicoQuery.isSuccess && (
             <section className="client-portal-card client-portal-block">

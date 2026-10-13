@@ -2930,6 +2930,13 @@ tbody tr.empty-row:hover { background: transparent; }
 .client-portal-progress small { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
 .client-portal-progress strong { color: var(--text); font-size: 15px; }
 .client-portal-block { padding: 22px 24px; }
+.install-app-card { position: relative; display: flex; gap: 14px; padding: 20px 24px; border-color: var(--gold-line); background: var(--gold-soft); }
+.install-app-card h2 { margin: 0 0 6px; padding-right: 26px; color: var(--text); font-size: 16px; font-weight: 600; }
+.install-app-card p { margin: 0; color: var(--text-soft); font-size: 14px; line-height: 1.55; }
+.install-app-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: var(--gold); background: var(--surface); }
+.install-app-close { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; }
+.install-app-button { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; }
+.install-inline-icon { vertical-align: -2px; }
 .client-portal-block h2 { margin: 0 0 12px; color: var(--text); font-size: 17px; font-weight: 600; }
 .client-portal-block h2 > svg { margin-right: 6px; color: var(--link); vertical-align: -2px; }
 .client-portal-summary { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
