@@ -12,6 +12,7 @@ import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId
 import { TERMS_VERSION } from "@shared/termos";
 import { computeDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
+import { computeSupabaseUsage } from "./_core/usoSupabase";
 import { chargebackErrorMessage, chargebackInput, chargebackRow, describeChanges, historyEntry } from "./_core/chargebacks";
 import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
@@ -888,6 +889,9 @@ export const appRouter = router({
       await registrarAcao(ctx.staffUser.email, "Fez backup manual", jobState.backup.lastResult ?? undefined);
       return jobState.backup;
     }),
+
+    /** Space and logins used against the Supabase plan limits */
+    usoSupabase: adminOnlyProcedure.query(() => computeSupabaseUsage()),
 
     auditoria: adminOnlyProcedure
       .input(z.object({ busca: z.string().max(100).optional(), limite: z.number().int().min(10).max(1000).default(200) }))
