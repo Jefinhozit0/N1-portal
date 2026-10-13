@@ -41,9 +41,11 @@ vi.mock("./supabase", () => {
     return chain;
   };
   const users = [
-    { email: "ana@x.com", app_metadata: { role: "client", terms: { version: "2026-10-v1", accepted_at: daysAgo(0.5) } }, user_metadata: { name: "Ana" }, last_sign_in_at: daysAgo(3) },
-    { email: "bruno@x.com", app_metadata: { role: "client", terms: { version: "versao-antiga" } }, user_metadata: { name: "Bruno" }, last_sign_in_at: daysAgo(45) },
-    { email: "carla@x.com", app_metadata: { role: "client" }, user_metadata: { name: "Carla" }, last_sign_in_at: null },
+    { email: "ana@x.com", app_metadata: { role: "client", cliente_id: 1, terms: { version: "2026-10-v1", accepted_at: daysAgo(0.5) } }, user_metadata: { name: "Ana" }, last_sign_in_at: daysAgo(3) },
+    { email: "bruno@x.com", app_metadata: { role: "client", cliente_id: 2, terms: { version: "versao-antiga" } }, user_metadata: { name: "Bruno" }, last_sign_in_at: daysAgo(45) },
+    { email: "carla@x.com", app_metadata: { role: "client", cliente_id: 3 }, user_metadata: { name: "Carla" }, last_sign_in_at: null },
+    // Login left behind by a client deleted straight in the database: never counted.
+    { email: "apagado@x.com", app_metadata: { role: "client", cliente_id: 99, terms: { version: "2026-10-v1", accepted_at: daysAgo(0.2) } }, user_metadata: { name: "Apagado" }, last_sign_in_at: daysAgo(1) },
     { email: "equipe@x.com", app_metadata: {}, user_metadata: {}, last_sign_in_at: daysAgo(0) },
   ];
   return { supabase: { from: query, auth: { admin: { listUsers: async () => ({ data: { users }, error: null }) } } } };
@@ -101,5 +103,21 @@ describe("computeDashboard", () => {
     expect(atividade).toHaveLength(5);
     expect(atividade[0].title).toBe("Termos aceitos");
     expect(atividade.some((a) => a.title === "Ticket · Documentos")).toBe(true);
+  });
+
+  it("stops counting a conversation the team marked as answered until the client writes again", async () => {
+    const bruno = tables.clientes[1] as Record<string, unknown>;
+    try {
+      bruno.conversa_respondida_em = daysAgo(0.5); // after Bruno's last message (1 day ago)
+      let { metrics } = await computeDashboard(NOW);
+      expect(metrics.pendentes).toBe(0);
+      expect(metrics.conversao).toEqual({ respondidas: 2, total: 2, percent: 1 });
+
+      bruno.conversa_respondida_em = daysAgo(2); // before it: still waiting
+      ({ metrics } = await computeDashboard(NOW));
+      expect(metrics.pendentes).toBe(1);
+    } finally {
+      delete bruno.conversa_respondida_em;
+    }
   });
 });

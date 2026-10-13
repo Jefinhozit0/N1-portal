@@ -103,12 +103,17 @@ export async function computeDashboard(now = Date.now()) {
   }
 
   // ── Conversations ─────────────────────────────────────────
-  const pendentes = Array.from(lastSender.values()).filter((sender) => sender === "client").length;
+  // A conversation the team marked as answered stops waiting until the client writes again.
+  const markedAnsweredAt = new Map(clientes.map((c) => [c.id as number, time(c.conversa_respondida_em) ?? 0]));
+  const waiting = (id: number) => lastSender.get(id) === "client" && (lastMessageAt.get(id) ?? 0) > (markedAnsweredAt.get(id) ?? 0);
+  const pendentes = Array.from(lastSender.keys()).filter(waiting).length;
   const conversasDeClientes = hasClientMessage.size;
-  const respondidas = Array.from(hasClientMessage).filter((id) => lastSender.get(id) === "team").length;
+  const respondidas = Array.from(hasClientMessage).filter((id) => !waiting(id)).length;
 
   // ── Client accounts (portal logins and terms) ─────────────
-  const accounts = users.filter((u) => u.app_metadata?.role === "client");
+  // Only logins of clients that still exist: a client removed straight in the database leaves its login behind.
+  const existingClientIds = new Set(clientes.map((c) => c.id as number));
+  const accounts = users.filter((u) => u.app_metadata?.role === "client" && existingClientIds.has(u.app_metadata?.cliente_id as number));
   const aceitos = accounts.filter((u) => (u.app_metadata?.terms as { version?: string } | undefined)?.version === TERMS_VERSION).length;
   const ativos30d = accounts.filter((u) => (time(u.last_sign_in_at) ?? 0) >= now - DASHBOARD_RULES.recentLoginDays * DAY).length;
 

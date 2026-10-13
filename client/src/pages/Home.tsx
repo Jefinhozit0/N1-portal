@@ -32,6 +32,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  CheckCheck,
   CheckCircle2,
   ChevronRight,
   Clock3,
@@ -47,6 +48,7 @@ import {
   MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
   Plus,
   Scale,
   Search,
@@ -680,6 +682,13 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
     onError: (_error, variables) => setDraft((current) => current || variables.text),
   });
   const pendingText = sendMensagemMutation.isPending ? sendMensagemMutation.variables?.text : undefined;
+  const marcarRespondida = trpc.portal.marcarRespondida.useMutation({
+    onSuccess: async () => {
+      await Promise.all([utils.portal.conversas.invalidate(), utils.portal.dashboard.invalidate()]);
+      toast.success("Conversa marcada como respondida.");
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const [confirmClear, setConfirmClear] = useState(false);
   const apagarConversa = trpc.portal.apagarConversa.useMutation({
     onSuccess: async () => {
@@ -735,7 +744,7 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
     </section>
     <section className="panel chat-panel">
       {selected ? <>
-        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><div className="chat-head-actions"><button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button>{isAdmin && <button className="icon-button chat-clear-button" aria-label="Apagar conversa" title="Apagar conversa" onClick={() => setConfirmClear(true)}><Trash2 size={17} /></button>}</div></div>
+        <div className="chat-head"><div className="table-person"><span className={`avatar ${avatarTones[selected.clientId % avatarTones.length]}`}>{initialsOf(selected.name)}</span><div><strong>{selected.name}</strong><small>{[selected.type, selected.status].filter(Boolean).join(" · ") || "Processo acompanhado pela equipe"}</small></div></div><div className="chat-head-actions">{selected.awaitingReply && <button className="secondary-button chat-mark-answered" aria-label="Marcar como respondida" title="Tira a conversa de &quot;aguardando resposta&quot; sem mandar mensagem. Se o cliente escrever de novo, ela volta." disabled={marcarRespondida.isPending} onClick={() => marcarRespondida.mutate({ clientId: selected.clientId })}><CheckCheck size={16} /><span>{marcarRespondida.isPending ? "Marcando..." : "Marcar como respondida"}</span></button>}<button className="icon-button" aria-label="Baixar conversa" title="Baixar conversa" onClick={downloadTranscript}><FileText size={17} /></button>{isAdmin && <button className="icon-button chat-clear-button" aria-label="Apagar conversa" title="Apagar conversa" onClick={() => setConfirmClear(true)}><Trash2 size={17} /></button>}</div></div>
         <AlertDialog open={confirmClear} onOpenChange={(open) => !apagarConversa.isPending && setConfirmClear(open)}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -775,6 +784,15 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
       </> : <div className="chat-empty"><MessageCircle size={28} /><p>{conversasQuery.isLoading ? "Carregando..." : "Selecione uma conversa para ver as mensagens."}</p></div>}
     </section>
   </div></div>;
+}
+
+/** Warns the team while the notebook that runs the portal is on battery and about to go offline. */
+function PowerBanner() {
+  const energia = trpc.portal.energia.useQuery(undefined, { retry: false, refetchInterval: 30_000, refetchIntervalInBackground: true });
+  const state = energia.data;
+  if (!state || state.naTomada) return null;
+  const battery = [state.bateria !== null && `bateria em ${state.bateria}%`, state.minutosRestantes && `cerca de ${state.minutosRestantes} min restantes`].filter(Boolean).join(" · ");
+  return <div className="power-banner" role="alert"><Plug size={18} /><div><strong>O notebook do portal está fora da tomada{battery ? ` (${battery})` : ""}</strong><p>Os clientes estão vendo a tela "Em manutenção". Ligue o carregador de volta: sem ele, o notebook dorme e o portal sai do ar para todos.</p></div></div>;
 }
 
 /** Shimmering placeholder rows while a panel loads. */
@@ -887,6 +905,7 @@ export default function Home() {
       <Sidebar view={view} setView={(next) => navigate(next)} collapsed={collapsed} setCollapsed={setCollapsed} onLogout={handleLogout} userName={userName} isAdmin={isAdmin} />
       <main className={`main-area ${collapsed ? "main-area-wide" : ""}`}>
         <Topbar view={view} onMenu={() => setMobileMenu(true)} onSearch={() => navigate("clientes")} onNotifications={() => navigate("atendimento")} onWhatsApp={() => navigate(isAdmin ? "admin" : "atendimento")} userName={userName} />
+        <PowerBanner />
         {view === "dashboard" && <Dashboard navigate={navigate} userName={userName} />}
         {view === "clientes" && <ClientsPage setView={setView} selectedClient={selectedClient} setSelectedClient={setSelectedClient} listFilter={clientFilter} onClearFilter={() => setListFilter(null)} />}
         {view === "client-detail" && selectedClient && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><ClientDetail client={selectedClient} onBack={() => setView("clientes")} isAdmin={isAdmin} /></Suspense>}

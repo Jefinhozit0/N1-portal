@@ -83,6 +83,13 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+// Shows public/manutencao.html when the portal server cannot be reached (see public/sw.js).
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("[sw] Registration failed:", error));
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>

@@ -15,7 +15,7 @@ export default defineConfig({
   test: {
     environment: "node",
     // Tests never talk to the real Supabase: these placeholders only let the modules load.
-    env: { SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SECRET_KEY: "test-service-key", BACKGROUND_JOBS: "off", WHATSAPP_PROVIDER: "off" },
+    env: { SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SECRET_KEY: "test-service-key", BACKGROUND_JOBS: "off", WHATSAPP_PROVIDER: "off", POWER_STATE_FILE: "" },
     include: ["server/**/*.test.ts", "server/**/*.spec.ts", "client/**/*.test.ts", "client/**/*.spec.ts"],
   },
 });

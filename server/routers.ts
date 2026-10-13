@@ -14,6 +14,7 @@ import { computeDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
 import { computeSupabaseUsage } from "./_core/usoSupabase";
 import { chargebackErrorMessage, chargebackInput, chargebackRow, describeChanges, historyEntry } from "./_core/chargebacks";
+import { MAINTENANCE_MESSAGE, getPowerState, isUnderMaintenance } from "./_core/energia";
 import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
@@ -105,6 +106,14 @@ const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
   if (clienteId === null) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Esta conta não está vinculada a um cliente." });
   }
+  // A client removed straight in the database leaves its login behind: that login opens nothing.
+  const { data: cliente, error } = await supabase.from("clientes").select("id").eq("id", clienteId).maybeSingle();
+  if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível abrir o portal agora. Tente novamente." });
+  if (!cliente) throw new TRPCError({ code: "FORBIDDEN", message: "Este acesso foi encerrado. Fale com a equipe da N1." });
+  // The client screen turns into "em manutenção" on this error (see MaintenanceScreen).
+  if (await isUnderMaintenance()) {
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: MAINTENANCE_MESSAGE });
+  }
   return next({ ctx: { ...ctx, clienteId, clienteUser: user } });
 });
 
@@ -158,6 +167,8 @@ const nowHHmm = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", 
 
 const MIGRATION_MELHORIAS = "Rode o arquivo supabase/migrations/20261010_melhorias.sql no SQL Editor do Supabase.";
 
+const MIGRATION_CONVERSA_RESPONDIDA = "supabase/migrations/20261013_conversa_respondida.sql";
+
 /** A clearer message when a table or column from a migration that was not run is missing. */
 function missingTableMessage(message: string, what: string) {
   return /does not exist|schema cache|column/i.test(message) ? `O banco ainda não tem ${what}. ${MIGRATION_MELHORIAS}` : message;
@@ -197,6 +208,11 @@ const firstAccessInput = z.object({ u: z.string().max(64), t: z.string().max(128
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+
+  /** Public: whether clients should see the maintenance screen. */
+  status: router({
+    manutencao: publicProcedure.query(async () => ({ manutencao: await isUnderMaintenance() })),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -387,6 +403,8 @@ export const appRouter = router({
 
     /** Who accepted the portal terms, who is still pending and why, client by client */
     termos: staffProcedure.query(() => computeTermsReport()),
+    /** Whether the notebook running the portal is plugged in (null when unknown) */
+    energia: staffProcedure.query(() => getPowerState()),
 
     /** Create a client */
     createCliente: staffProcedure
@@ -726,6 +744,27 @@ export const appRouter = router({
       }),
 
     /** Clears a client's whole conversation (messages, tickets and the assistant's lines). The client stays registered. */
+    /** "Marcar como respondida": the client's messages so far stop counting as waiting for a reply. */
+    marcarRespondida: staffProcedure
+      .input(z.object({ clientId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await supabase
+          .from("clientes")
+          .update({ conversa_respondida_em: new Date().toISOString() })
+          .eq("id", input.clientId)
+          .select("name")
+          .maybeSingle();
+        if (error) {
+          const message = /does not exist|schema cache|column/i.test(error.message)
+            ? `O banco ainda não tem essa opção. Rode o arquivo ${MIGRATION_CONVERSA_RESPONDIDA} no SQL Editor do Supabase.`
+            : error.message;
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
+        }
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+        await registrarAcao(ctx.staffUser.email, "Marcou conversa como respondida", data.name, input.clientId);
+        return { success: true } as const;
+      }),
+
     apagarConversa: adminOnlyProcedure
       .input(z.object({ clientId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
@@ -793,19 +832,26 @@ export const appRouter = router({
       }
 
       const ids = Array.from(byClient.keys());
-      const { data: clientes } = ids.length
-        ? await supabase.from("clientes").select("id, name, type, status, tone").in("id", ids)
-        : { data: [] };
-      const clienteById = new Map((clientes ?? []).map((c) => [c.id as number, c]));
+      const fetchClientes = (columns: string) => supabase.from("clientes").select(columns).in("id", ids);
+      let clientes: Record<string, unknown>[] = [];
+      if (ids.length) {
+        // Before the migration that adds conversa_respondida_em, reads the clients without it.
+        let result = await fetchClientes("id, name, type, status, tone, conversa_respondida_em");
+        if (result.error) result = await fetchClientes("id, name, type, status, tone");
+        clientes = (result.data ?? []) as unknown as Record<string, unknown>[];
+      }
+      const clienteById = new Map(clientes.map((c) => [c.id as number, c]));
 
       return ids.map((clientId) => {
         const history = byClient.get(clientId)!; // newest first
         const last = history[0];
-        // Client messages since the team last answered: those are what is still waiting.
-        const lastTeamReply = history.findIndex((m) => m.sender === "team");
-        const unanswered = lastTeamReply === -1 ? history : history.slice(0, lastTeamReply);
-        const openTicket = unanswered.map((m) => parseTicketMessage(m.text)).find(Boolean) ?? null;
         const cliente = clienteById.get(clientId);
+        // Client messages since the team last answered (or marked the conversation as answered): those are what is still waiting.
+        const markedAt = cliente?.conversa_respondida_em ? Date.parse(String(cliente.conversa_respondida_em)) : 0;
+        const answered = (m: Row) => m.sender === "team" || Date.parse(m.created_at) <= markedAt;
+        const lastAnswered = history.findIndex(answered);
+        const unanswered = lastAnswered === -1 ? history : history.slice(0, lastAnswered);
+        const openTicket = unanswered.map((m) => parseTicketMessage(m.text)).find(Boolean) ?? null;
         return {
           clientId,
           name: (cliente?.name as string) ?? last.client_name ?? `Cliente #${clientId}`,
@@ -815,7 +861,7 @@ export const appRouter = router({
           lastText: parseTicketMessage(last.text)?.body ?? last.text,
           lastFrom: last.sender,
           lastAt: last.created_at,
-          awaitingReply: last.sender === "client",
+          awaitingReply: unanswered.length > 0,
           ticketTopic: openTicket?.topic ?? null,
         };
       });

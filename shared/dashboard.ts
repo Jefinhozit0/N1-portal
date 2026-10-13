@@ -44,7 +44,7 @@ export const METRIC_HELP: Record<string, string> = {
   concluidos: "Clientes com status de concluído.",
   ociosos: `Clientes ativos sem nenhuma movimentação (atualização de status ou mensagem) há ${DASHBOARD_RULES.idleDays} dias ou mais.`,
   semAtualizacao: `Clientes ativos cujo status não é atualizado pela equipe há ${DASHBOARD_RULES.staleDays} dias ou mais.`,
-  pendentes: "Conversas em que a última mensagem é do cliente (aguardando resposta da equipe).",
+  pendentes: "Conversas em que a última mensagem é do cliente (aguardando resposta da equipe) e que não foram marcadas como respondidas.",
   ativos30d: `Clientes que entraram no portal nos últimos ${DASHBOARD_RULES.recentLoginDays} dias.`,
   aceite: "Clientes com login no portal que aceitaram a versão atual dos termos.",
   conversao: "Conversas iniciadas por clientes que já foram respondidas pela equipe.",

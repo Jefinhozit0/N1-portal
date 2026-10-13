@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bot, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, LockKeyhole, LogOut, MessageCircle, Send, X } from "lucide-react";
-import { formatFileSize } from "@shared/processo";
+import { AlertTriangle, Bot, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, LockKeyhole, LogOut, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { caseSummary, formatFileSize } from "@shared/processo";
 
 const formatDay = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replace(" de ", " ").replace(".", "");
 import type { TicketTopic } from "@shared/tickets";
 import { TERMS_SECTIONS, TERMS_TITLE, TERMS_VERSION } from "@shared/termos";
 import { BOT_STEPS, TICKET_SENT_REPLY, greeting, type BotStepId, type ProcessInfo } from "./clientChatbot";
 import { N1Logo } from "@/components/N1Logo";
+import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
@@ -51,7 +52,14 @@ export function ChangePasswordScreen({ onDone, onLogout }: { onDone: () => void;
 }
 
 /** What a logged-in client sees: only their own process and the conversation with the team. */
+/** While the portal is in maintenance (or unreachable), clients see only the maintenance screen. */
 export function ClientPortal({ onLogout }: { onLogout: () => void }) {
+  const { maintenance, retry, checking } = useMaintenance();
+  if (maintenance) return <MaintenanceScreen onRetry={retry} checking={checking} />;
+  return <ClientPortalContent onLogout={onLogout} />;
+}
+
+function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
   // The process and the chat only load once the current terms are accepted (the server enforces it too).
   const termosQuery = trpc.cliente.termos.useQuery(undefined, { retry: false });
   const termsAccepted = termosQuery.data?.accepted === true;
@@ -242,6 +250,13 @@ export function ClientPortal({ onLogout }: { onLogout: () => void }) {
             )}
             <button type="button" className="primary-button client-portal-to-chat" onClick={() => setTab("conversa")}><MessageCircle size={17} /> Falar com a equipe</button>
           </section>
+
+          {documentosQuery.isSuccess && historicoQuery.isSuccess && (
+            <section className="client-portal-card client-portal-block">
+              <h2><Sparkles size={17} /> Resumo do seu caso</h2>
+              <p className="client-portal-summary">{caseSummary({ name: processo.name ?? "", type: processo.type, status: processo.status, progress: processo.progresso ?? 0, documents: documentos, events: historico }, "cliente")}</p>
+            </section>
+          )}
 
           <section className="client-portal-card client-portal-block">
             <h2>Documentos</h2>
