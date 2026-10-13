@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Briefcase, FileText, LayoutDashboard, Pencil, Plus, Scale, Search, Table2, Trash2, Trophy, Users, X } from "lucide-react";
 import { toast } from "sonner";
+import type { ChargebackDraft } from "@shared/chargebacks";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,7 +30,7 @@ function parseMoney(value: string) {
   return Number(normalized);
 }
 
-export default function SalesHubPage({ userName, isAdmin }: { userName: string; isAdmin: boolean }) {
+export default function SalesHubPage({ userName, isAdmin, onChargeback }: { userName: string; isAdmin: boolean; onChargeback: (draft: ChargebackDraft) => void }) {
   const utils = trpc.useUtils();
   const [section, setSection] = useState<Section>("comercial");
   const [month, setMonth] = useState(currentMonth());
@@ -118,10 +119,19 @@ export default function SalesHubPage({ userName, isAdmin }: { userName: string; 
       date: toBrDate(saleForm.date), client: saleForm.client.trim(), phone: saleForm.phone.trim(), consultants: saleForm.consultants, product: saleForm.product,
       status: saleForm.status, cbk: saleForm.cbk, gross, net, note: saleForm.note.trim(), setor: saleForm.setor,
     };
+    const wasCbk = saleForm.id ? sales.find((sale) => sale.id === saleForm.id)?.cbk === true : false;
     try {
-      if (saleForm.id) await updateVenda.mutateAsync({ id: saleForm.id, ...payload });
-      else await createVenda.mutateAsync(payload);
+      const saved = saleForm.id ? await updateVenda.mutateAsync({ id: saleForm.id, ...payload }) : await createVenda.mutateAsync(payload);
       toast.success(saleForm.id ? "Venda atualizada." : "Venda cadastrada.");
+      // Just marked with chargeback: offer to open the chargeback with the sale data filled in.
+      if (payload.cbk && !wasCbk) {
+        const vendaId = typeof saved?.id === "number" ? saved.id : saleForm.id;
+        toast("Venda marcada com chargeback.", {
+          description: "Quer registrar o chargeback para acompanhar a contestação?",
+          duration: 12_000,
+          action: { label: "Abrir chargeback", onClick: () => onChargeback({ client: payload.client, amount: payload.gross, vendaId, note: [payload.product, `venda de ${payload.date}`].filter(Boolean).join(" · ") }) },
+        });
+      }
       setSaleForm(null);
       await refresh();
     } catch (error) {

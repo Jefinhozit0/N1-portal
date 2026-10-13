@@ -12,6 +12,7 @@ import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId
 import { TERMS_VERSION } from "@shared/termos";
 import { computeDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
+import { chargebackErrorMessage, chargebackInput, chargebackRow, describeChanges, historyEntry } from "./_core/chargebacks";
 import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
@@ -473,6 +474,49 @@ export const appRouter = router({
       }
       return data ?? [];
     }),
+
+    /** Register a chargeback */
+    createChargeback: staffProcedure
+      .input(chargebackInput)
+      .mutation(async ({ ctx, input }) => {
+        const row = chargebackRow(input);
+        const now = new Date();
+        const historico = [historyEntry(ctx.staffUser.email, `Registrado com status ${input.status}`, now)];
+        const { data, error } = await supabase.from("chargebacks").insert({ ...row, historico, atualizado_em: now.toISOString() }).select().single();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: chargebackErrorMessage(error.message) });
+        await registrarAcao(ctx.staffUser.email, "Registrou chargeback", [input.client, input.bank, row.amount, input.status].filter(Boolean).join(" · "), input.clienteId ?? undefined);
+        return data;
+      }),
+
+    /** Edit a chargeback; each change goes to its history with who made it */
+    updateChargeback: staffProcedure
+      .input(chargebackInput.extend({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: before, error: readError } = await supabase.from("chargebacks").select("*").eq("id", input.id).maybeSingle();
+        if (readError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: readError.message });
+        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "Chargeback não encontrado." });
+        const row = chargebackRow(input);
+        const changes = describeChanges(before, row);
+        if (changes.length === 0) return before;
+        const now = new Date();
+        const previous = Array.isArray(before.historico) ? before.historico : [];
+        const historico = [...previous, ...changes.map((acao) => historyEntry(ctx.staffUser.email, acao, now))];
+        const { data, error } = await supabase.from("chargebacks").update({ ...row, historico, atualizado_em: now.toISOString() }).eq("id", input.id).select().single();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: chargebackErrorMessage(error.message) });
+        await registrarAcao(ctx.staffUser.email, "Editou chargeback", `#${input.id} · ${input.client} · ${changes.join("; ")}`, input.clienteId ?? undefined);
+        return data;
+      }),
+
+    /** Delete a chargeback (administrators only) */
+    deleteChargeback: adminOnlyProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { data, error } = await supabase.from("chargebacks").delete().eq("id", input.id).select("client, bank, amount, status").maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Este chargeback já foi apagado." });
+        await registrarAcao(ctx.staffUser.email, "Apagou chargeback", `#${input.id} · ${[data.client, data.bank, data.amount, data.status].filter(Boolean).join(" · ")}`);
+        return { success: true };
+      }),
 
     /** List sales (vendas) */
     vendas: staffProcedure.query(async () => {
