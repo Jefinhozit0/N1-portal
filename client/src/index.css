@@ -2983,6 +2983,21 @@ tbody tr.empty-row:hover { background: transparent; }
 .hub-empty-row { padding: 28px 12px !important; color: var(--muted); text-align: center; }
 .hub-note { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .hub-row-actions { white-space: nowrap; }
+
+/* Sales HUB · Vendas tab */
+.sales-manager-filters { flex-wrap: wrap; }
+.sales-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.sales-sort:hover { color: var(--text); }
+.sales-row { cursor: pointer; }
+.sales-row.is-selected td { background: var(--gold-soft); }
+.sales-cbk-tag { margin-left: 6px; padding: 1px 6px; border: 1px solid var(--red-line); border-radius: 99px; color: var(--red); background: var(--red-soft); font-size: 11px; font-weight: 600; }
+.sales-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px 16px; color: var(--muted); font-size: 13px; }
+.sales-drawer { overflow-y: auto; }
+.sales-drawer-title { margin: 14px 0 10px; color: var(--text); font: 600 22px/1.2 var(--font-display); }
+.sales-drawer-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.sales-drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.sales-drawer-actions .secondary-button { display: inline-flex; align-items: center; gap: 6px; }
+.sales-drawer-created { margin-top: 18px; }
 .hub-row-actions .icon-button { width: 30px; height: 30px; }
 .hub-delete:hover { color: var(--red); background: var(--red-soft); }
 .hub-dialog { max-width: 640px; max-height: 90vh; overflow-y: auto; }

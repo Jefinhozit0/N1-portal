@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterSales, heatLevel, heatmap, monthlyEvolution, ranking, shiftMonth, totals, type HubSale } from "./salesHubData";
+import { filterSales, heatLevel, heatmap, monthlyEvolution, ranking, shiftMonth, sortSales, totals, type HubSale } from "./salesHubData";
 
 const sale = (overrides: Partial<HubSale>): HubSale => ({
   id: 1, date: "15/09/2026", client: "Cliente", phone: "", consultants: [], product: "Revisão", status: "OK",
@@ -53,5 +53,23 @@ describe("Sales HUB numbers", () => {
     expect(heatLevel(0, 4)).toBe(0);
     expect(heatLevel(1, 4)).toBe(1);
     expect(heatLevel(4, 4)).toBe(4);
+  });
+});
+
+describe("sortSales", () => {
+  const sales = [
+    sale({ id: 1, date: "28/09/2026", client: "Bruno", gross: 500 }),
+    sale({ id: 2, date: "03/10/2026", client: "Ana", gross: 2000 }),
+    sale({ id: 3, date: "03/10/2026", client: "Carla", gross: 1000 }),
+  ];
+
+  it("sorts dates as dates, newest first, with the latest registered on top on the same day", () => {
+    expect(sortSales(sales, "date", "desc").map((item) => item.id)).toEqual([3, 2, 1]);
+    expect(sortSales(sales, "date", "asc").map((item) => item.id)).toEqual([1, 3, 2]);
+  });
+
+  it("sorts by name and by value", () => {
+    expect(sortSales(sales, "client", "asc").map((item) => item.client)).toEqual(["Ana", "Bruno", "Carla"]);
+    expect(sortSales(sales, "gross", "desc").map((item) => item.gross)).toEqual([2000, 1000, 500]);
   });
 });
