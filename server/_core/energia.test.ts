@@ -31,3 +31,15 @@ describe("isUnderMaintenance", () => {
     }
   });
 });
+
+describe("maintenanceFromPower", () => {
+  it("lets clients keep using the portal on battery until it is nearly empty", async () => {
+    const { maintenanceFromPower } = await import("./energia");
+    expect(maintenanceFromPower(null)).toBe(false);
+    expect(maintenanceFromPower({ naTomada: true, bateria: 5 })).toBe(false);
+    expect(maintenanceFromPower({ naTomada: false, bateria: 60 })).toBe(false);
+    expect(maintenanceFromPower({ naTomada: false, bateria: 16 })).toBe(false);
+    expect(maintenanceFromPower({ naTomada: false, bateria: 15 })).toBe(true);
+    expect(maintenanceFromPower({ naTomada: false, bateria: null })).toBe(false);
+  });
+});

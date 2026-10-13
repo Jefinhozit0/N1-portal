@@ -789,10 +789,16 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
 /** Warns the team while the notebook that runs the portal is on battery and about to go offline. */
 function PowerBanner() {
   const energia = trpc.portal.energia.useQuery(undefined, { retry: false, refetchInterval: 30_000, refetchIntervalInBackground: true });
-  const state = energia.data;
-  if (!state || state.naTomada) return null;
+  const state = energia.data?.energia;
+  const clientsBlocked = energia.data?.manutencaoClientes === true;
+  if (!clientsBlocked && (!state || state.naTomada)) return null;
+  if (!state || state.naTomada) {
+    return <div className="power-banner" role="status"><Plug size={18} /><div><strong>Portal em manutenção para os clientes</strong><p>Ligado à mão com MANUTENCAO=on no .env. A equipe continua usando normalmente.</p></div></div>;
+  }
   const battery = [state.bateria !== null && `bateria em ${state.bateria}%`, state.minutosRestantes && `cerca de ${state.minutosRestantes} min restantes`].filter(Boolean).join(" · ");
-  return <div className="power-banner" role="alert"><Plug size={18} /><div><strong>O notebook do portal está fora da tomada{battery ? ` (${battery})` : ""}</strong><p>Os clientes estão vendo a tela "Em manutenção". Ligue o carregador de volta: sem ele, o notebook dorme e o portal sai do ar para todos.</p></div></div>;
+  return <div className={`power-banner ${clientsBlocked ? "" : "power-banner-soft"}`} role="alert"><Plug size={18} /><div><strong>O notebook do portal está fora da tomada{battery ? ` (${battery})` : ""}</strong><p>{clientsBlocked
+    ? "Bateria acabando: os clientes já estão vendo a tela \"Em manutenção\". Ligue o carregador agora."
+    : "Por enquanto tudo funciona para a equipe e para os clientes. Não feche a tampa nem deixe o notebook parado: se ele dormir, o portal sai do ar."}</p></div></div>;
 }
 
 /** Shimmering placeholder rows while a panel loads. */

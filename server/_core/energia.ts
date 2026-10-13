@@ -20,6 +20,7 @@ const CHECK_EVERY_MS = 30_000;
 
 let onBatterySince: number | null = null;
 let noticeSent = false;
+let lowBatteryNoticeSent = false;
 
 export function parsePowerFile(content: string, now = Date.now()): Omit<PowerState, "desde"> | null {
   try {
@@ -44,14 +45,22 @@ export async function getPowerState(now = Date.now()): Promise<PowerState | null
   return { ...state, desde: !state.naTomada && onBatterySince ? new Date(onBatterySince).toISOString() : null };
 }
 
+/** On battery at or below this, the notebook is about to shut down: clients see "em manutenção". */
+export const LOW_BATTERY_PERCENT = 15;
+
+/** Clients may keep using the portal on battery; only a nearly empty battery sends them to maintenance. */
+export function maintenanceFromPower(state: Pick<PowerState, "naTomada" | "bateria"> | null): boolean {
+  return state !== null && !state.naTomada && state.bateria !== null && state.bateria <= LOW_BATTERY_PERCENT;
+}
+
 /**
- * Clients see "em manutenção" while the notebook is on battery (it is about to sleep and take the
- * portal down) or while MANUTENCAO=on is set in .env. The team keeps working, with a warning.
+ * Clients see "em manutenção" when the battery is nearly empty or while MANUTENCAO=on is set in .env.
+ * If the notebook sleeps without warning (lid closed), the service worker shows the same page.
+ * The team keeps working, with a warning.
  */
 export async function isUnderMaintenance(): Promise<boolean> {
   if ((process.env.MANUTENCAO ?? "").toLowerCase() === "on") return true;
-  const state = await getPowerState();
-  return state !== null && !state.naTomada;
+  return maintenanceFromPower(await getPowerState());
 }
 
 export const MAINTENANCE_MESSAGE = "MANUTENCAO";
@@ -64,22 +73,32 @@ async function check() {
     if (noticeSent) {
       notifyTeam(
         "O notebook do portal voltou para a tomada",
-        ["O carregador foi ligado de novo. O portal segue no ar e os clientes já voltaram a usar normalmente."],
-        "✅ *O notebook do portal N1 voltou para a tomada.* Os clientes já voltaram a usar o portal normalmente.",
+        ["O carregador foi ligado de novo. O portal segue no ar normalmente para a equipe e para os clientes."],
+        "✅ *O notebook do portal N1 voltou para a tomada.* O portal segue no ar normalmente.",
       );
     }
     onBatterySince = null;
     noticeSent = false;
+    lowBatteryNoticeSent = false;
     return;
   }
   onBatterySince ??= now;
+  const battery = [state.bateria !== null && `bateria em ${state.bateria}%`, state.minutosRestantes && `cerca de ${state.minutosRestantes} minutos restantes`].filter(Boolean).join(", ");
+  if (!lowBatteryNoticeSent && maintenanceFromPower(state)) {
+    lowBatteryNoticeSent = noticeSent = true;
+    notifyTeam(
+      "Bateria do notebook do portal acabando: clientes em manutenção",
+      [`O notebook que mantém o portal no ar está quase sem bateria${battery ? ` (${battery})` : ""}.`, "Os clientes já estão vendo a tela \"Em manutenção\". Ligue o carregador agora: quando a bateria acabar, o portal sai do ar para todos."],
+      `🔴 *Bateria do notebook do portal N1 acabando*${battery ? ` (${battery})` : ""}.\n\nOs clientes já estão vendo a tela "Em manutenção". Ligue o carregador agora.`,
+    );
+    return;
+  }
   if (!noticeSent && now - onBatterySince >= NOTIFY_AFTER_MS) {
     noticeSent = true;
-    const battery = [state.bateria !== null && `bateria em ${state.bateria}%`, state.minutosRestantes && `cerca de ${state.minutosRestantes} minutos restantes`].filter(Boolean).join(", ");
     notifyTeam(
       "O notebook do portal saiu da tomada",
-      [`O notebook que mantém o portal no ar está na bateria${battery ? ` (${battery})` : ""}.`, "Enquanto isso, os clientes veem a tela \"Em manutenção\". Ligue o carregador de volta: sem ele o notebook dorme e o portal sai do ar para todos."],
-      `⚠️ *O notebook do portal N1 saiu da tomada*${battery ? ` (${battery})` : ""}.\n\nOs clientes estão vendo a tela "Em manutenção". Ligue o carregador de volta: sem ele o portal sai do ar.`,
+      [`O notebook que mantém o portal no ar está na bateria${battery ? ` (${battery})` : ""}. Por enquanto, tudo funciona normalmente para a equipe e para os clientes.`, `Mas não feche a tampa nem deixe o notebook parado: se ele dormir, o portal sai do ar. Com a bateria em ${LOW_BATTERY_PERCENT}%, os clientes passam a ver a tela "Em manutenção".`],
+      `⚠️ *O notebook do portal N1 saiu da tomada*${battery ? ` (${battery})` : ""}.\n\nPor enquanto tudo funciona. Não feche a tampa nem deixe parado: se ele dormir, o portal cai. Ligue o carregador assim que puder.`,
     );
   }
 }
