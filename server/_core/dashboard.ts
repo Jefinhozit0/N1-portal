@@ -38,7 +38,7 @@ export function parseDeadline(value: unknown): Date | null {
   return iso === null ? null : new Date(iso);
 }
 
-async function listAllUsers(): Promise<User[]> {
+export async function listAllUsers(): Promise<User[]> {
   const users: User[] = [];
   for (let page = 1; ; page++) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });

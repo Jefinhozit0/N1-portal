@@ -4,6 +4,7 @@ import { hubMoney } from "./salesHubData";
 // The Sales HUB is only downloaded when someone opens it, so the portal opens faster.
 const SalesHubPage = lazy(() => import("./SalesHub"));
 const AdminPage = lazy(() => import("./Admin"));
+const TermosPage = lazy(() => import("./Termos"));
 import { useQueryClient } from "@tanstack/react-query";
 import { parseTicketMessage } from "@shared/tickets";
 import { INITIAL_STATUS } from "@shared/processo";
@@ -35,6 +36,7 @@ import {
   CreditCard,
   Eye,
   EyeOff,
+  FileCheck2,
   FileText,
   LayoutDashboard,
   LockKeyhole,
@@ -55,7 +57,7 @@ import {
   X,
 } from "lucide-react";
 
-type View = "dashboard" | "clientes" | "chargebacks" | "atendimento" | "saleshub" | "client-detail" | "admin";
+type View = "dashboard" | "clientes" | "chargebacks" | "atendimento" | "termos" | "saleshub" | "client-detail" | "admin";
 type Client = { id?: number; name: string; cpf: string; type: string; status: string; updated: string; tone: "green" | "yellow" | "red"; email?: string; phone?: string; services?: string[]; tags?: string[] };
 
 const clientServices = ["Financiamento Imobiliário", "Financiamento Veicular", "Empréstimo Pessoal", "Empréstimo Consignado", "Cartão de Crédito", "Outros"];
@@ -65,6 +67,23 @@ const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}
 
 function Logo({ compact = false, size = "md" }: { compact?: boolean; size?: "sm" | "md" | "lg" | "xl" }) {
   return <N1Logo compact={compact} size={size} />;
+}
+
+/** A row of the clientes table as the client screens use it. */
+function toClient(row: Record<string, unknown>): Client {
+  return {
+    id: typeof row.id === "number" ? row.id : undefined,
+    name: String(row.name ?? ""),
+    cpf: String(row.cpf ?? ""),
+    type: String(row.type ?? ""),
+    status: String(row.status ?? ""),
+    updated: String(row.updated ?? ""),
+    tone: (row.tone as "green" | "yellow" | "red") ?? "green",
+    email: row.email ? String(row.email) : undefined,
+    phone: row.phone ? String(row.phone) : undefined,
+    services: Array.isArray(row.services) ? (row.services as string[]) : undefined,
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : undefined,
+  };
 }
 
 export function StatusPill({ children, tone }: { children: string; tone: string }) {
@@ -295,6 +314,7 @@ function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName, i
     { id: "clientes", label: "Clientes", icon: Users },
     { id: "chargebacks", label: "Chargebacks", icon: CreditCard },
     { id: "atendimento", label: "Atendimento", icon: MessageCircle },
+    { id: "termos", label: "Termos", icon: FileCheck2 },
     { id: "saleshub", label: "Sales HUB", icon: FileText },
     ...(isAdmin ? [{ id: "admin" as View, label: "Administração", icon: ShieldCheck }] : []),
   ];
@@ -355,7 +375,7 @@ function WhatsAppIndicator({ onClick }: { onClick: () => void }) {
 
 function Topbar({ view, onMenu, onSearch, onNotifications, onWhatsApp, userName }: { view: View; onMenu: () => void; onSearch: () => void; onNotifications: () => void; onWhatsApp: () => void; userName: string }) {
   const hasAwaiting = useAwaitingConversations().length > 0;
-  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", "Visão geral do seu portal"], clientes: ["Clientes", "Acompanhe pessoas e processos"], "client-detail": ["Detalhes do Cliente", "Informações completas do cliente"], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", "Converse com seus clientes"], saleshub: ["Sales HUB", "Centro de inteligência comercial e jurídico"], admin: ["Administração", "WhatsApp, backup e registro de ações"] };
+  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", "Visão geral do seu portal"], clientes: ["Clientes", "Acompanhe pessoas e processos"], "client-detail": ["Detalhes do Cliente", "Informações completas do cliente"], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", "Converse com seus clientes"], termos: ["Termos", "Quem já aceitou os termos do portal e quem está pendente"], saleshub: ["Sales HUB", "Centro de inteligência comercial e jurídico"], admin: ["Administração", "WhatsApp, backup e registro de ações"] };
   const initials = userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
   return <header className="topbar"><button className="mobile-menu-button icon-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button><div><p className="breadcrumb">N1 Soluções <ChevronRight size={14} /> {titles[view][0]}</p><h1>{titles[view][0]}</h1><span>{titles[view][1]}</span></div><div className="topbar-actions"><button className="icon-button" aria-label="Buscar clientes" title="Buscar clientes" onClick={onSearch}><Search size={19} /></button><button className="icon-button notification-button" aria-label="Abrir atendimentos" title="Abrir atendimentos" onClick={onNotifications}><Bell size={19} />{hasAwaiting && <span />}</button><WhatsAppIndicator onClick={onWhatsApp} /><ThemeToggle /><span className="topbar-separator" /><div className="topbar-user"><span className="avatar avatar-gold">{initials}</span><div><strong>{userName}</strong><small>Online agora</small></div></div></div></header>;
 }
@@ -462,11 +482,11 @@ function Dashboard({ navigate, userName }: { navigate: (view: View, filter?: Lis
       <section className="panel">
         <div className="panel-heading"><div><h3>Portal do cliente</h3><p>Uso do portal pelos clientes</p></div></div>
         <div className="portal-stats">
-          <div title={METRIC_HELP.aceite}>
-            <div className="portal-stat-head"><span>Aceite do termo</span><strong>{m ? formatPercent(m.aceite.percent) : loading}</strong></div>
+          <button type="button" className="portal-stat-link" title={METRIC_HELP.aceite} onClick={() => setView("termos")}>
+            <div className="portal-stat-head"><span>Aceite do termo <ChevronRight size={14} /></span><strong>{m ? formatPercent(m.aceite.percent) : loading}</strong></div>
             <div className="progress-track"><span style={{ width: `${(m?.aceite.percent ?? 0) * 100}%` }} /></div>
             <small>{m ? `${m.aceite.aceitos} de ${m.aceite.elegiveis} clientes com login` : ""}</small>
-          </div>
+          </button>
           <div title={METRIC_HELP.conversao}>
             <div className="portal-stat-head"><span>Solicitações respondidas</span><strong>{m ? formatPercent(m.conversao.percent) : loading}</strong></div>
             <div className="progress-track"><span style={{ width: `${(m?.conversao.percent ?? 0) * 100}%` }} /></div>
@@ -534,22 +554,7 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
   const remoteClientes = clientesQuery.data;
   // Merge remote + fallback to local static data
   const clientList: Client[] = useMemo(() => {
-    if (remoteClientes && remoteClientes.length > 0) {
-      return (remoteClientes as Record<string, unknown>[]).map((row) => ({
-        id: typeof row.id === "number" ? row.id : undefined,
-        name: String(row.name ?? ""),
-        cpf: String(row.cpf ?? ""),
-        type: String(row.type ?? ""),
-        status: String(row.status ?? ""),
-        updated: String(row.updated ?? ""),
-        tone: (row.tone as "green" | "yellow" | "red") ?? "green",
-        email: row.email ? String(row.email) : undefined,
-        phone: row.phone ? String(row.phone) : undefined,
-        services: Array.isArray(row.services) ? (row.services as string[]) : undefined,
-        tags: Array.isArray(row.tags) ? (row.tags as string[]) : undefined,
-      } as Client));
-    }
-    return [];
+    return remoteClientes ? (remoteClientes as Record<string, unknown>[]).map(toClient) : [];
   }, [remoteClientes]);
 
   const filtered = useMemo(() => clientList.filter((client) => {
@@ -934,6 +939,7 @@ export default function Home() {
         {view === "client-detail" && selectedClient && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><ClientDetail client={selectedClient} onBack={() => setView("clientes")} isAdmin={isAdmin} /></Suspense>}
         {view === "chargebacks" && <ChargebacksPage listFilter={chargebackFilter} onClearFilter={() => setListFilter(null)} />}
         {view === "atendimento" && <AtendimentoPage isAdmin={isAdmin} />}
+        {view === "termos" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><TermosPage onOpenClient={(row) => { setSelectedClient(toClient(row)); setView("client-detail"); }} /></Suspense>}
         {view === "admin" && isAdmin && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><AdminPage /></Suspense>}
         {view === "saleshub" && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><SalesHubPage userName={userName} isAdmin={isAdmin} /></Suspense>}
         <footer className="app-footer">© 2026 N1 Soluções <span>·</span> Todos os direitos reservados.</footer>
