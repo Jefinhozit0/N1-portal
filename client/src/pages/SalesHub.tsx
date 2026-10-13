@@ -226,14 +226,14 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Data</th>{section === "control" && <th>Setor</th>}<th>Cliente</th><th>Telefone</th><th>Consultor</th><th>Produto</th><th>Status</th><th>CBK</th><th>Bruto</th><th>Líquido</th><th><span className="sr-only">Ações</span></th></tr></thead>
+          <thead><tr><th>Data</th>{section === "control" && <th>Setor</th>}<th>Cliente</th><th>Telefone</th><th>Consultor</th><th>Produto</th><th>Status</th><th>CBK</th><th>Bruto</th><th>Líquido</th><th className="hub-row-actions-head"><span className="sr-only">Ações</span></th></tr></thead>
           <tbody>
             {!loading && filtered.length === 0 && <tr><td colSpan={section === "control" ? 11 : 10} className="hub-empty-row">Nenhuma venda em {periodText}{consultant !== "Todos" ? ` para ${consultant}` : ""}. Use "Nova venda" para registrar.</td></tr>}
             {filtered.map((sale) => (
-              <tr key={sale.id}>
+              <tr key={sale.id} className="hub-sale-row" title="Clique para editar a venda" onClick={() => openEditSale(sale)}>
                 <td>{sale.date}</td>
                 {section === "control" && <td>{SECTOR_LABEL[sectorOf(sale)]}</td>}
-                <td><strong>{sale.client}</strong>{sale.note && <small className="hub-note">{sale.note}</small>}</td>
+                <td><strong>{sale.client}</strong>{sale.note && <small className="hub-note hub-note-clamp" title={sale.note}>{sale.note}</small>}</td>
                 <td>{sale.phone || "—"}</td>
                 <td>{sale.consultants.join(", ") || "—"}</td>
                 <td>{sale.product || "—"}</td>
@@ -241,7 +241,7 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
                 <td>{sale.cbk ? "sim" : "não"}</td>
                 <td>{hubMoney(sale.gross)}</td>
                 <td>{hubMoney(sale.net)}</td>
-                <td className="hub-row-actions">
+                <td className="hub-row-actions" onClick={(event) => event.stopPropagation()}>
                   <button type="button" className="icon-button" onClick={() => openEditSale(sale)} aria-label={`Editar venda de ${sale.client}`} title="Editar venda"><Pencil size={15} /></button>
                   {isAdmin && <button type="button" className="icon-button hub-delete" onClick={() => setSaleToDelete(sale)} aria-label={`Apagar venda de ${sale.client}`} title="Apagar venda"><Trash2 size={15} /></button>}
                 </td>

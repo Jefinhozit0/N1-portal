@@ -2983,6 +2983,13 @@ tbody tr.empty-row:hover { background: transparent; }
 .hub-empty-row { padding: 28px 12px !important; color: var(--muted); text-align: center; }
 .hub-note { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .hub-row-actions { white-space: nowrap; }
+/* Sales table: the whole row opens the edit form; edit/delete stay pinned to the right edge. */
+.hub-sale-row { cursor: pointer; }
+.hub-sale-row:hover td { background: var(--surface-muted); }
+.hub-note-clamp { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sales-table-panel td.hub-row-actions, .sales-table-panel th.hub-row-actions-head { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -8px 0 8px -8px rgba(0, 0, 0, .35); }
+.sales-table-panel th.hub-row-actions-head { background: var(--surface-muted); }
+.hub-sale-row:hover td.hub-row-actions { background: var(--surface-muted); }
 .hub-row-actions .icon-button { width: 30px; height: 30px; }
 .hub-delete:hover { color: var(--red); background: var(--red-soft); }
 .hub-dialog { max-width: 640px; max-height: 90vh; overflow-y: auto; }
