@@ -68,6 +68,22 @@ export function filterSales(sales: HubSale[], filter: SalesFilter) {
   });
 }
 
+/** "13/10/2026" → "20261013", so dates sort as text. */
+export const dateKey = (date: string) => date.split("/").reverse().join("");
+
+export type SaleSortKey = "date" | "client" | "gross" | "net";
+
+/** Newest first by default; ties keep the most recently registered on top. */
+export function sortSales(sales: HubSale[], key: SaleSortKey, direction: "asc" | "desc") {
+  const sign = direction === "asc" ? 1 : -1;
+  const compare = (a: HubSale, b: HubSale) => {
+    if (key === "client") return a.client.localeCompare(b.client, "pt-BR");
+    if (key === "gross" || key === "net") return a[key] - b[key];
+    return dateKey(a.date).localeCompare(dateKey(b.date));
+  };
+  return [...sales].sort((a, b) => compare(a, b) * sign || b.id - a.id);
+}
+
 export type Totals = { count: number; gross: number; net: number; cbkCount: number; cbkNet: number; netShare: number | null; ticket: number | null; resultado: number };
 
 /** Chargeback loss = the net value of the sales marked with a chargeback. */

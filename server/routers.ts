@@ -404,7 +404,10 @@ export const appRouter = router({
     /** Who accepted the portal terms, who is still pending and why, client by client */
     termos: staffProcedure.query(() => computeTermsReport()),
     /** Whether the notebook running the portal is plugged in (null when unknown) */
-    energia: staffProcedure.query(() => getPowerState()),
+    energia: staffProcedure.query(async () => {
+      const state = await getPowerState();
+      return { energia: state, manutencaoClientes: await isUnderMaintenance() };
+    }),
 
     /** Create a client */
     createCliente: staffProcedure

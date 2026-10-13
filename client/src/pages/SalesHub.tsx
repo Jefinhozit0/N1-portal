@@ -8,12 +8,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { StatusPill } from "./Home";
 import { CountUp } from "@/components/CountUp";
+import { SalesManager } from "./SalesManager";
 import {
   DAY_PERIODS, SECTOR_LABEL, WEEKDAYS, buildSalesHubCsv, capitalize, currentMonth, escapeHtml, filterSales, heatLevel, heatmap, hubMoney, hubPercent,
   monthLabel, monthlyEvolution, ranking as buildRanking, sectorOf, shiftMonth, totals, type HubSale, type Sector,
 } from "./salesHubData";
 
-type Section = Sector | "control";
+type Section = Sector | "control" | "vendas";
 type SaleForm = { id?: number; date: string; client: string; phone: string; product: string; status: HubSale["status"]; cbk: boolean; gross: string; net: string; note: string; consultants: string[]; setor: Sector };
 
 const PRODUCTS = ["Revisão de Juros", "Revisão de contrato", "Portabilidade", "Laudo", "Busca e apreensão", "Outros"];
@@ -74,7 +75,7 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [activeConsultants, sales]);
 
-  const sector: Sector | "todos" = section === "control" ? "todos" : section;
+  const sector: Sector | "todos" = section === "control" || section === "vendas" ? "todos" : section;
   const filtered = useMemo(() => filterSales(sales, { month, sector, consultant, query }), [sales, month, sector, consultant, query]);
   const current = useMemo(() => totals(filtered), [filtered]);
   const monthAll = useMemo(() => filterSales(sales, { month, sector: "todos", consultant: "Todos", query: "" }), [sales, month]);
@@ -139,6 +140,19 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
     }
   }
 
+  async function markPaid(sale: HubSale) {
+    try {
+      await updateVenda.mutateAsync({
+        id: sale.id, date: sale.date, client: sale.client, phone: sale.phone, consultants: sale.consultants, product: sale.product,
+        status: "OK", cbk: sale.cbk, gross: sale.gross, net: sale.net, note: sale.note, setor: sectorOf(sale),
+      });
+      toast.success(`Venda de ${sale.client} marcada como OK.`);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a venda.");
+    }
+  }
+
   function toggleFormConsultant(name: string) {
     setSaleForm((form) => form && { ...form, consultants: form.consultants.includes(name) ? form.consultants.filter((item) => item !== name) : [...form.consultants, name] });
   }
@@ -161,22 +175,26 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
     const cell = (value: string) => `<td>${escapeHtml(value)}</td>`;
     const rows = filtered.map((sale) => `<tr>${[sale.date, SECTOR_LABEL[sectorOf(sale)], sale.client, sale.consultants.join(", "), sale.product, sale.status, hubMoney(sale.gross), hubMoney(sale.net)].map(cell).join("")}</tr>`).join("");
     const rankingRows = rankingItems.map((item, index) => `<tr>${[String(index + 1), item.name, String(item.count), hubMoney(item.gross), hubMoney(item.net)].map(cell).join("")}</tr>`).join("");
-    const title = section === "control" ? "N1 Control" : SECTOR_LABEL[section];
+    const title = section === "control" ? "N1 Control" : section === "vendas" ? "Vendas" : SECTOR_LABEL[section];
     printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Sales HUB — ${escapeHtml(title)}</title><style>body{font:12px Arial;color:#202020;margin:34px}h1{color:#8a6016;margin-bottom:4px}h2{margin-top:28px;border-bottom:2px solid #d5a63d;padding-bottom:7px}p{color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#f5e7c2}tr:nth-child(even){background:#fafafa}.meta{display:flex;gap:24px;margin:18px 0;font-weight:bold}@media print{body{margin:15mm}}</style></head><body><h1>Sales HUB · ${escapeHtml(title)}</h1><p>Relatório de vendas e ranking de consultores</p><div class="meta"><span>Período: ${escapeHtml(periodText)}</span><span>Vendas: ${current.count}</span><span>Bruto: ${hubMoney(current.gross)}</span><span>Líquido: ${hubMoney(current.net)}</span></div><h2>Vendas</h2><table><thead><tr><th>Data</th><th>Setor</th><th>Cliente</th><th>Consultor(es)</th><th>Produto</th><th>Status</th><th>Bruto</th><th>Líquido</th></tr></thead><tbody>${rows || '<tr><td colspan="8">Nenhuma venda encontrada.</td></tr>'}</tbody></table><h2>Ranking de consultores</h2><table><thead><tr><th>Posição</th><th>Consultor</th><th>Vendas</th><th>Bruto</th><th>Líquido</th></tr></thead><tbody>${rankingRows || '<tr><td colspan="5">Nenhuma venda com consultor.</td></tr>'}</tbody></table><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`);
     printWindow.document.close();
   }
+
+  const monthControl = (
+    <div className="month-control">
+      <button type="button" aria-label="Mês anterior" onClick={() => setMonth(shiftMonth(month || currentMonth(), -1))}>‹</button>
+      <input id="hub-month" type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+      <button type="button" aria-label="Próximo mês" onClick={() => setMonth(shiftMonth(month || currentMonth(), 1))}>›</button>
+      <button type="button" aria-label="Ver todo o período" title="Ver todo o período" onClick={() => setMonth("")}>×</button>
+    </div>
+  );
 
   const filters = (
     <section className="hub-filter-panel">
       <div className="hub-filter-row">
         <div>
           <label htmlFor="hub-month">Período</label>
-          <div className="month-control">
-            <button type="button" aria-label="Mês anterior" onClick={() => setMonth(shiftMonth(month || currentMonth(), -1))}>‹</button>
-            <input id="hub-month" type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
-            <button type="button" aria-label="Próximo mês" onClick={() => setMonth(shiftMonth(month || currentMonth(), 1))}>›</button>
-            <button type="button" aria-label="Ver todo o período" title="Ver todo o período" onClick={() => setMonth("")}>×</button>
-          </div>
+          {monthControl}
         </div>
         <div>
           <label htmlFor="hub-consultant">Consultor</label>
@@ -212,6 +230,7 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
     <div className="hub-tabs" role="tablist" aria-label="Setores">
       <button type="button" role="tab" aria-selected={section === "comercial"} className={section === "comercial" ? "active" : ""} onClick={() => setSection("comercial")}><Briefcase size={16} /> Comercial</button>
       <button type="button" role="tab" aria-selected={section === "juridico"} className={section === "juridico" ? "active" : ""} onClick={() => setSection("juridico")}><Scale size={16} /> Jurídico</button>
+      <button type="button" role="tab" aria-selected={section === "vendas"} className={section === "vendas" ? "active" : ""} onClick={() => setSection("vendas")}><Table2 size={16} /> Vendas</button>
       <button type="button" role="tab" aria-selected={section === "control"} className={section === "control" ? "active" : ""} onClick={() => setSection("control")}><LayoutDashboard size={16} /> N1 Control</button>
     </div>
   );
@@ -334,7 +353,7 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
   const evolutionChart = (
     <div className="hub-panel">
       <div className="hub-panel-heading">
-        <div><h3>Evolução — últimos 12 meses</h3><p>Bruto e líquido por mês{section !== "control" ? ` · ${SECTOR_LABEL[section]}` : ""}{consultant !== "Todos" ? ` · ${consultant}` : ""}</p></div>
+        <div><h3>Evolução — últimos 12 meses</h3><p>Bruto e líquido por mês{section === "comercial" || section === "juridico" ? ` · ${SECTOR_LABEL[section]}` : ""}{consultant !== "Todos" ? ` · ${consultant}` : ""}</p></div>
         <div className="hub-chart-tools">
           <span className="hub-legend"><i className="hub-swatch-gross" /> Bruto <i className="hub-swatch-net" /> Líquido</span>
           <button type="button" className="icon-button" aria-pressed={showChartTable} onClick={() => setShowChartTable((value) => !value)} title={showChartTable ? "Ver gráfico" : "Ver como tabela"} aria-label={showChartTable ? "Ver gráfico" : "Ver como tabela"}><Table2 size={16} /></button>
@@ -397,6 +416,29 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
       <p className="heatmap-caption">{heat.peak ? <>Pico: <b>{heat.peak.count} venda(s)</b> na {DAY_PERIODS[heat.peak.period].toLowerCase()} de {WEEKDAYS[heat.peak.weekday].toLowerCase()}.</> : "Sem vendas no período."} Madrugada 0h–6h · manhã 6h–12h · tarde 12h–18h · noite 18h–24h.</p>
     </div>
   );
+
+  if (section === "vendas") {
+    return (
+      <div className="hub-dashboard">
+        {header}
+        {tabs}
+        <SalesManager
+          sales={sales}
+          loading={loading}
+          consultantOptions={consultantOptions}
+          isAdmin={isAdmin}
+          month={month}
+          monthControl={monthControl}
+          onEdit={openEditSale}
+          onDelete={setSaleToDelete}
+          onMarkPaid={markPaid}
+          markingPaid={updateVenda.isPending}
+          onChargeback={(sale) => onChargeback({ client: sale.client, amount: sale.gross, vendaId: sale.id, note: [sale.product, `venda de ${sale.date}`].filter(Boolean).join(" · ") })}
+        />
+        {dialogs}
+      </div>
+    );
+  }
 
   if (section === "control") {
     const all = bySector.todos;
