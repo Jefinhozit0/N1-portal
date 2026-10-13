@@ -14,7 +14,7 @@ import { computeDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
 import { computeSupabaseUsage } from "./_core/usoSupabase";
 import { chargebackErrorMessage, chargebackInput, chargebackRow, describeChanges, historyEntry } from "./_core/chargebacks";
-import { getPowerState } from "./_core/energia";
+import { MAINTENANCE_MESSAGE, getPowerState, isUnderMaintenance } from "./_core/energia";
 import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
@@ -110,6 +110,10 @@ const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
   const { data: cliente, error } = await supabase.from("clientes").select("id").eq("id", clienteId).maybeSingle();
   if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível abrir o portal agora. Tente novamente." });
   if (!cliente) throw new TRPCError({ code: "FORBIDDEN", message: "Este acesso foi encerrado. Fale com a equipe da N1." });
+  // The client screen turns into "em manutenção" on this error (see MaintenanceScreen).
+  if (await isUnderMaintenance()) {
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: MAINTENANCE_MESSAGE });
+  }
   return next({ ctx: { ...ctx, clienteId, clienteUser: user } });
 });
 
@@ -204,6 +208,11 @@ const firstAccessInput = z.object({ u: z.string().max(64), t: z.string().max(128
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+
+  /** Public: whether clients should see the maintenance screen. */
+  status: router({
+    manutencao: publicProcedure.query(async () => ({ manutencao: await isUnderMaintenance() })),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

@@ -51,9 +51,8 @@ function TunnelReady {
   try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 "http://127.0.0.1:20241/ready").StatusCode -eq 200 } catch { $false }
 }
 
-# Fora da tomada o Windows põe o notebook para dormir e o portal sai do ar. A cada volta: grava a
-# situação em logs\energia.json (o portal mostra um aviso para a equipe) e abre o aviso em tela cheia.
-$alert = $null
+# Fora da tomada o Windows põe o notebook para dormir e o portal sai do ar. A cada volta grava a
+# situação em logs\energia.json: o portal mostra "em manutenção" para os clientes e avisa a equipe.
 $wasOnline = $true
 function CheckPower {
   $online = $true
@@ -64,9 +63,6 @@ function CheckPower {
     ConvertTo-Json -Compress | Out-File -Encoding utf8 (Join-Path $logs "energia.json")
   if ($online -ne $script:wasOnline) { Log $(if ($online) { "Carregador ligado de volta." } else { "Notebook saiu da tomada (bateria $($battery.EstimatedChargeRemaining)%)." }) }
   $script:wasOnline = $online
-  if (-not $online -and (-not $script:alert -or $script:alert.HasExited)) {
-    $script:alert = Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", (Join-Path $PSScriptRoot "alerta-tomada.ps1")) -PassThru
-  }
 }
 
 while ($true) {

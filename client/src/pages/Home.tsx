@@ -792,7 +792,7 @@ function PowerBanner() {
   const state = energia.data;
   if (!state || state.naTomada) return null;
   const battery = [state.bateria !== null && `bateria em ${state.bateria}%`, state.minutosRestantes && `cerca de ${state.minutosRestantes} min restantes`].filter(Boolean).join(" · ");
-  return <div className="power-banner" role="alert"><Plug size={18} /><div><strong>O notebook do portal está fora da tomada{battery ? ` (${battery})` : ""}</strong><p>Ligue o carregador de volta. Sem ele, o notebook dorme e o portal sai do ar para a equipe e para os clientes.</p></div></div>;
+  return <div className="power-banner" role="alert"><Plug size={18} /><div><strong>O notebook do portal está fora da tomada{battery ? ` (${battery})` : ""}</strong><p>Os clientes estão vendo a tela "Em manutenção". Ligue o carregador de volta: sem ele, o notebook dorme e o portal sai do ar para todos.</p></div></div>;
 }
 
 /** Shimmering placeholder rows while a panel loads. */

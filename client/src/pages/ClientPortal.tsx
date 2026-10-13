@@ -7,6 +7,7 @@ import type { TicketTopic } from "@shared/tickets";
 import { TERMS_SECTIONS, TERMS_TITLE, TERMS_VERSION } from "@shared/termos";
 import { BOT_STEPS, TICKET_SENT_REPLY, greeting, type BotStepId, type ProcessInfo } from "./clientChatbot";
 import { N1Logo } from "@/components/N1Logo";
+import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
@@ -51,7 +52,14 @@ export function ChangePasswordScreen({ onDone, onLogout }: { onDone: () => void;
 }
 
 /** What a logged-in client sees: only their own process and the conversation with the team. */
+/** While the portal is in maintenance (or unreachable), clients see only the maintenance screen. */
 export function ClientPortal({ onLogout }: { onLogout: () => void }) {
+  const { maintenance, retry, checking } = useMaintenance();
+  if (maintenance) return <MaintenanceScreen onRetry={retry} checking={checking} />;
+  return <ClientPortalContent onLogout={onLogout} />;
+}
+
+function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
   // The process and the chat only load once the current terms are accepted (the server enforces it too).
   const termosQuery = trpc.cliente.termos.useQuery(undefined, { retry: false });
   const termsAccepted = termosQuery.data?.accepted === true;

@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { ChevronRight, Eye, EyeOff, LinkIcon } from "lucide-react";
 import { N1Logo } from "@/components/N1Logo";
+import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
@@ -10,6 +11,12 @@ import { trpc } from "@/lib/trpc";
  * The client creates their password here and lands in the portal (terms come next).
  */
 export default function FirstAccess() {
+  const { maintenance, retry, checking } = useMaintenance();
+  if (maintenance) return <MaintenanceScreen onRetry={retry} checking={checking} />;
+  return <FirstAccessForm />;
+}
+
+function FirstAccessForm() {
   const { u, t } = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return { u: params.get("u") ?? "", t: params.get("t") ?? "" };

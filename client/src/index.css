@@ -2443,6 +2443,12 @@ tbody tr:hover { background: var(--surface-muted); }
 .client-portal-header .secondary-button:hover { background: rgba(255, 255, 255, 0.08); }
 .client-portal-main { flex: 1; width: 100%; max-width: 920px; margin: 0 auto; padding: 32px 20px 40px; display: flex; flex-direction: column; gap: 18px; }
 .client-portal-center { position: relative; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.maintenance-screen .login-panel-inner { max-width: 440px; text-align: center; }
+.maintenance-screen .n1-brand-logo { display: flex; justify-content: center; }
+.maintenance-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 26px auto 0; border-radius: 50%; color: var(--gold); background: var(--gold-soft); }
+.maintenance-screen .login-panel-inner h2 { margin-top: 18px; }
+.maintenance-screen .primary-button { margin: 10px auto 0; }
+.maintenance-note { display: block; margin-top: 14px; color: var(--muted); font-size: 12.5px; }
 .client-portal-muted { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--muted); font-size: 14px; }
 .client-portal-card {
   padding: 28px;

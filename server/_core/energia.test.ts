@@ -18,3 +18,16 @@ describe("parsePowerFile", () => {
     expect(parsePowerFile(`{"bateria":38,"em":"2026-10-13T17:59:50.000Z"}`, NOW)).toBeNull();
   });
 });
+
+describe("isUnderMaintenance", () => {
+  it("can be turned on by hand with MANUTENCAO=on", async () => {
+    const { isUnderMaintenance } = await import("./energia");
+    expect(await isUnderMaintenance()).toBe(false);
+    process.env.MANUTENCAO = "on";
+    try {
+      expect(await isUnderMaintenance()).toBe(true);
+    } finally {
+      delete process.env.MANUTENCAO;
+    }
+  });
+});
