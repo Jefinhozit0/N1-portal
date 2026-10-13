@@ -11,6 +11,7 @@ import { supabase } from "./_core/supabase";
 import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId, provisionClientAccess, removeClientLogins } from "./_core/clientAccess";
 import { TERMS_VERSION } from "@shared/termos";
 import { computeDashboard } from "./_core/dashboard";
+import { computeTermsReport } from "./_core/termsReport";
 import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
@@ -381,6 +382,9 @@ export const appRouter = router({
 
     /** Every number on the dashboard, computed from the real data */
     dashboard: staffProcedure.query(() => computeDashboard()),
+
+    /** Who accepted the portal terms, who is still pending and why, client by client */
+    termos: staffProcedure.query(() => computeTermsReport()),
 
     /** Create a client */
     createCliente: staffProcedure

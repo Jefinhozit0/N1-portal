@@ -2703,6 +2703,21 @@ a.primary-button { text-decoration: none; }
 .portal-stats small { display: block; margin-top: 6px; color: var(--muted); font-size: 12.5px; }
 .progress-track { height: 8px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: var(--surface-sunken); }
 .progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
+.portal-stat-link { display: block; width: 100%; margin: -8px -10px; padding: 8px 10px; box-sizing: content-box; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 150ms ease; }
+.portal-stat-link:hover { background: var(--surface-muted); }
+.portal-stat-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.portal-stat-link .portal-stat-head span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Termos */
+.terms-funnel { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px 6px; }
+.terms-weeks { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); align-items: end; gap: 8px; height: 190px; padding: 18px 20px 16px; }
+.terms-weeks > div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; min-width: 0; }
+.terms-weeks b { color: var(--text); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.terms-weeks span { width: 100%; max-width: 30px; min-height: 3px; border-radius: 6px 6px 2px 2px; background: var(--gold); }
+.terms-weeks small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.terms-actions { margin-top: 16px; }
+.terms-sub { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+.terms-resend { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; white-space: nowrap; }
 
 .deadline-list { padding: 4px 20px 12px; }
 .deadline-row { min-height: 66px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-subtle); }
