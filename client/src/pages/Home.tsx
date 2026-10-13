@@ -48,6 +48,7 @@ import {
   MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
   Plus,
   Scale,
   Search,
@@ -785,6 +786,15 @@ function AtendimentoPage({ isAdmin }: { isAdmin: boolean }) {
   </div></div>;
 }
 
+/** Warns the team while the notebook that runs the portal is on battery and about to go offline. */
+function PowerBanner() {
+  const energia = trpc.portal.energia.useQuery(undefined, { retry: false, refetchInterval: 30_000, refetchIntervalInBackground: true });
+  const state = energia.data;
+  if (!state || state.naTomada) return null;
+  const battery = [state.bateria !== null && `bateria em ${state.bateria}%`, state.minutosRestantes && `cerca de ${state.minutosRestantes} min restantes`].filter(Boolean).join(" · ");
+  return <div className="power-banner" role="alert"><Plug size={18} /><div><strong>O notebook do portal está fora da tomada{battery ? ` (${battery})` : ""}</strong><p>Ligue o carregador de volta. Sem ele, o notebook dorme e o portal sai do ar para a equipe e para os clientes.</p></div></div>;
+}
+
 /** Shimmering placeholder rows while a panel loads. */
 function LoadingRows() { return <div className="skeleton-list" role="status" aria-label="Carregando..."><i /><i /><i /></div>; }
 
@@ -895,6 +905,7 @@ export default function Home() {
       <Sidebar view={view} setView={(next) => navigate(next)} collapsed={collapsed} setCollapsed={setCollapsed} onLogout={handleLogout} userName={userName} isAdmin={isAdmin} />
       <main className={`main-area ${collapsed ? "main-area-wide" : ""}`}>
         <Topbar view={view} onMenu={() => setMobileMenu(true)} onSearch={() => navigate("clientes")} onNotifications={() => navigate("atendimento")} onWhatsApp={() => navigate(isAdmin ? "admin" : "atendimento")} userName={userName} />
+        <PowerBanner />
         {view === "dashboard" && <Dashboard navigate={navigate} userName={userName} />}
         {view === "clientes" && <ClientsPage setView={setView} selectedClient={selectedClient} setSelectedClient={setSelectedClient} listFilter={clientFilter} onClearFilter={() => setListFilter(null)} />}
         {view === "client-detail" && selectedClient && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><ClientDetail client={selectedClient} onBack={() => setView("clientes")} isAdmin={isAdmin} /></Suspense>}

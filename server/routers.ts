@@ -14,6 +14,7 @@ import { computeDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
 import { computeSupabaseUsage } from "./_core/usoSupabase";
 import { chargebackErrorMessage, chargebackInput, chargebackRow, describeChanges, historyEntry } from "./_core/chargebacks";
+import { getPowerState } from "./_core/energia";
 import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
@@ -393,6 +394,8 @@ export const appRouter = router({
 
     /** Who accepted the portal terms, who is still pending and why, client by client */
     termos: staffProcedure.query(() => computeTermsReport()),
+    /** Whether the notebook running the portal is plugged in (null when unknown) */
+    energia: staffProcedure.query(() => getPowerState()),
 
     /** Create a client */
     createCliente: staffProcedure

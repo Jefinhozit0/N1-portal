@@ -51,6 +51,24 @@ function TunnelReady {
   try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 "http://127.0.0.1:20241/ready").StatusCode -eq 200 } catch { $false }
 }
 
+# Fora da tomada o Windows põe o notebook para dormir e o portal sai do ar. A cada volta: grava a
+# situação em logs\energia.json (o portal mostra um aviso para a equipe) e abre o aviso em tela cheia.
+$alert = $null
+$wasOnline = $true
+function CheckPower {
+  $online = $true
+  try { $online = [bool](Get-CimInstance -Namespace root/wmi -ClassName BatteryStatus -ErrorAction Stop | Select-Object -First 1).PowerOnline } catch {}
+  $battery = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+  $minutes = if ($battery -and $battery.EstimatedRunTime -and $battery.EstimatedRunTime -lt 6000) { [int]$battery.EstimatedRunTime } else { $null }
+  @{ naTomada = $online; bateria = if ($battery) { [int]$battery.EstimatedChargeRemaining } else { $null }; minutosRestantes = $minutes; em = (Get-Date).ToUniversalTime().ToString("o") } |
+    ConvertTo-Json -Compress | Out-File -Encoding utf8 (Join-Path $logs "energia.json")
+  if ($online -ne $script:wasOnline) { Log $(if ($online) { "Carregador ligado de volta." } else { "Notebook saiu da tomada (bateria $($battery.EstimatedChargeRemaining)%)." }) }
+  $script:wasOnline = $online
+  if (-not $online -and (-not $script:alert -or $script:alert.HasExited)) {
+    $script:alert = Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", (Join-Path $PSScriptRoot "alerta-tomada.ps1")) -PassThru
+  }
+}
+
 while ($true) {
   # O túnel temporário pode sumir do lado do Cloudflare ("Tunnel not found"): o cloudflared continua
   # aberto tentando para sempre e o endereço deixa de existir. Sem conexão por 2 minutos: religa.
@@ -81,5 +99,6 @@ while ($true) {
     if (Test-Path $err) { Move-Item -Force $err (Join-Path $logs "portal-erros-anterior.log") }
     $portal = Start-Process -FilePath $node -ArgumentList "dist/index.js" -WorkingDirectory $root -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
   }
+  CheckPower
   Start-Sleep -Seconds 15
 }

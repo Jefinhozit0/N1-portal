@@ -74,6 +74,25 @@ export function notifyClient(clientId: number, kind: ClientNoticeKind, detail?: 
   })().catch((error) => console.warn("[notificacoes] Client notice failed:", error));
 }
 
+/** A notice about the portal itself to the team, by e-mail and WhatsApp. Runs in the background. */
+export function notifyTeam(subject: string, paragraphs: string[], whatsappText: string) {
+  void (async () => {
+    const url = await getPublicUrl();
+    const recipients = ENV.teamNotifyEmails.length > 0 ? ENV.teamNotifyEmails : ENV.staffEmails;
+    await Promise.all([
+      ...recipients.map((to) =>
+        sendNoticeEmail(to, { subject, title: subject, paragraphs, button: { label: "Abrir o portal", url } })
+          .catch((error) => console.warn(`[notificacoes] Team e-mail to ${to} failed:`, error instanceof Error ? error.message : error))),
+      ...(canSendFreeText() ? ENV.teamNotifyWhatsApp : []).map((raw) => {
+        const phone = normalizeBrazilPhone(raw);
+        return phone
+          ? sendFreeText(phone, whatsappText).catch((error) => console.warn("[notificacoes] Team WhatsApp failed:", error instanceof Error ? error.message : error))
+          : undefined;
+      }),
+    ]);
+  })().catch((error) => console.warn("[notificacoes] Team notice failed:", error));
+}
+
 /** Tells the team a client wrote in the portal. Runs in the background; call it without await. */
 export function notifyTeamNewMessage(clientId: number, clientName: string, storedText: string) {
   if (!claimSlot(`team:${clientId}`, TEAM_INTERVAL_MS)) return;

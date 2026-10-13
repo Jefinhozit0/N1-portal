@@ -2,6 +2,7 @@ import { hasBackupForToday, runBackup } from "./backup";
 import { registrarAcao } from "./auditoria";
 import { removeOrphanClientLogins } from "./clientAccess";
 import { sendAccessReminders } from "./lembretes";
+import { startPowerWatch } from "./energia";
 
 /**
  * Background jobs, checked every hour while the server runs:
@@ -52,6 +53,7 @@ async function hourlyCheck() {
 }
 
 export function startBackgroundJobs() {
+  startPowerWatch();
   // First check a minute after start, so it doesn't compete with the server warming up.
   setTimeout(() => void hourlyCheck(), 60_000);
   setInterval(() => void hourlyCheck(), HOUR);
