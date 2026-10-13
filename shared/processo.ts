@@ -11,6 +11,9 @@ export const PROCESS_STATUSES = [
   { label: "Suspenso", tone: "red" },
 ] as const;
 
+/** Status of a client who was just registered. */
+export const INITIAL_STATUS = PROCESS_STATUSES[0];
+
 export type ProcessTone = "green" | "yellow" | "red";
 
 export function toneForStatus(status: string, fallback: ProcessTone = "yellow"): ProcessTone {

@@ -6,6 +6,7 @@ const SalesHubPage = lazy(() => import("./SalesHub"));
 const AdminPage = lazy(() => import("./Admin"));
 import { useQueryClient } from "@tanstack/react-query";
 import { parseTicketMessage } from "@shared/tickets";
+import { INITIAL_STATUS } from "@shared/processo";
 import { CHARGEBACK_LIST_FILTERS, CLIENT_LIST_FILTERS, DASHBOARD_RULES, METRIC_HELP, type ChargebackListFilter, type ClientListFilter, type ListFilter } from "@shared/dashboard";
 const ClientDetail = lazy(() => import("./ClientDetail"));
 const ClientPortal = lazy(() => import("./ClientPortal").then((module) => ({ default: module.ClientPortal })));
@@ -570,9 +571,9 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
       name: newClient.name.trim(),
       cpf: newClient.cpf.trim(),
       type: newClient.services.join(", "),
-      status: "Em andamento",
+      status: INITIAL_STATUS.label,
       updated: "Agora",
-      tone: "green" as const,
+      tone: INITIAL_STATUS.tone,
       email: newClient.email.trim() || undefined,
       phone: newClient.phone.trim() || undefined,
       services: newClient.services,
