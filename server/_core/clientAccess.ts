@@ -161,6 +161,40 @@ export async function provisionClientAccess(
   return { email: emailResult, whatsapp: whatsappResult };
 }
 
+/**
+ * Deletes the client logins whose cliente row no longer exists. "Apagar cliente" already takes the
+ * login with it; this catches clients removed straight in the database (e.g. limpar-dados-de-exemplo.sql).
+ * Returns the e-mails of the logins removed.
+ */
+export async function removeOrphanClientLogins(): Promise<string[]> {
+  const logins: { id: string; clienteId: number; email: string }[] = [];
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    for (const user of data.users) {
+      const clienteId = getClienteId(user);
+      if (clienteId !== null) logins.push({ id: user.id, clienteId, email: user.email ?? user.id });
+    }
+    if (data.users.length < 1000) break;
+  }
+
+  const ids = Array.from(new Set(logins.map((login) => login.clienteId)));
+  const existing = new Set<number>();
+  for (let start = 0; start < ids.length; start += 200) {
+    const { data, error } = await supabase.from("clientes").select("id").in("id", ids.slice(start, start + 200));
+    // Never guess: if the clients can't be read, nothing is removed.
+    if (error) throw error;
+    for (const row of data ?? []) existing.add(row.id as number);
+  }
+
+  const orphans = logins.filter((login) => !existing.has(login.clienteId));
+  for (const orphan of orphans) {
+    const { error } = await supabase.auth.admin.deleteUser(orphan.id);
+    if (error) throw error;
+  }
+  return orphans.map((orphan) => orphan.email);
+}
+
 /** Deletes every portal login tied to a cliente row, so a removed client can no longer sign in. */
 export async function removeClientLogins(clienteId: number): Promise<number> {
   const linked: string[] = [];
