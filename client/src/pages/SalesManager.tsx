@@ -7,6 +7,10 @@ const PAGE_SIZE = 50;
 
 type Props = {
   sales: HubSale[];
+  /** Sector filter to start with (the sector tab the user came from). */
+  initialSector: Sector | "todos";
+  /** Export, consultants and new sale buttons, shared with the other tabs. */
+  actions: React.ReactNode;
   loading: boolean;
   consultantOptions: string[];
   isAdmin: boolean;
@@ -21,8 +25,8 @@ type Props = {
 };
 
 /** Every registered sale, to look up, check and fix one by one. */
-export function SalesManager({ sales, loading, consultantOptions, isAdmin, month, monthControl, onEdit, onDelete, onMarkPaid, markingPaid, onChargeback }: Props) {
-  const [sector, setSector] = useState<Sector | "todos">("todos");
+export function SalesManager({ initialSector, actions, sales, loading, consultantOptions, isAdmin, month, monthControl, onEdit, onDelete, onMarkPaid, markingPaid, onChargeback }: Props) {
+  const [sector, setSector] = useState<Sector | "todos">(initialSector);
   const [status, setStatus] = useState<"todos" | HubSale["status"]>("todos");
   const [cbk, setCbk] = useState<"todos" | "sim" | "nao">("todos");
   const [consultant, setConsultant] = useState("Todos");
@@ -57,8 +61,8 @@ export function SalesManager({ sales, loading, consultantOptions, isAdmin, month
     setPage(0);
   }
   const sortIcon = (key: SaleSortKey) => sort.key !== key ? null : sort.direction === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
-  const header = (key: SaleSortKey, label: string) => (
-    <th aria-sort={sort.key === key ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+  const header = (key: SaleSortKey, label: string, className?: string) => (
+    <th className={className} aria-sort={sort.key === key ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
       <button type="button" className="sales-sort" onClick={() => sortBy(key)}>{label} {sortIcon(key)}</button>
     </th>
   );
@@ -101,6 +105,7 @@ export function SalesManager({ sales, loading, consultantOptions, isAdmin, month
             <div><Search size={15} /><input id="sales-search" value={query} onChange={(event) => change(setQuery)(event.target.value)} placeholder="Cliente, telefone, produto, observação..." /></div>
           </div>
         </div>
+        {actions}
       </section>
 
       <section className="hub-panel sales-table-panel">
@@ -112,20 +117,20 @@ export function SalesManager({ sales, loading, consultantOptions, isAdmin, month
           {hasFilters && <button type="button" className="text-button" onClick={clearFilters}>Limpar filtros <X size={14} /></button>}
         </div>
         <div className="table-wrap">
-          <table>
-            <thead><tr>{header("date", "Data")}<th>Setor</th>{header("client", "Cliente")}<th>Consultor</th><th>Produto</th><th>Status</th>{header("gross", "Bruto")}{header("net", "Líquido")}<th><span className="sr-only">Ações</span></th></tr></thead>
+          <table className="sales-fit">
+            <thead><tr>{header("date", "Data")}<th>Setor</th>{header("client", "Cliente")}<th>Consultor</th><th>Produto</th><th>Status</th>{header("gross", "Bruto", "num")}{header("net", "Líquido", "num")}<th><span className="sr-only">Ações</span></th></tr></thead>
             <tbody>
               {!loading && filtered.length === 0 && <tr><td colSpan={9} className="hub-empty-row">Nenhuma venda com esses filtros.</td></tr>}
               {visible.map((sale) => (
                 <tr key={sale.id} className={`sales-row ${selectedId === sale.id ? "is-selected" : ""}`} onClick={() => setSelectedId(sale.id)}>
-                  <td>{sale.date}</td>
+                  <td className="nowrap">{sale.date}</td>
                   <td>{SECTOR_LABEL[sectorOf(sale)]}</td>
-                  <td><strong>{sale.client}</strong>{sale.phone && <small className="hub-note">{sale.phone}</small>}</td>
+                  <td className="sales-client"><strong>{sale.client}</strong>{sale.phone && <small className="hub-note">{sale.phone}</small>}</td>
                   <td>{sale.consultants.join(", ") || "—"}</td>
                   <td>{sale.product || "—"}</td>
-                  <td><StatusPill tone={sale.status === "OK" ? "green" : "yellow"}>{sale.status}</StatusPill>{sale.cbk && <span className="sales-cbk-tag">CBK</span>}</td>
-                  <td>{hubMoney(sale.gross)}</td>
-                  <td>{hubMoney(sale.net)}</td>
+                  <td className="nowrap"><StatusPill tone={sale.status === "OK" ? "green" : "yellow"}>{sale.status}</StatusPill>{sale.cbk && <span className="sales-cbk-tag">CBK</span>}</td>
+                  <td className="num">{hubMoney(sale.gross)}</td>
+                  <td className="num">{hubMoney(sale.net)}</td>
                   <td className="hub-row-actions" onClick={(event) => event.stopPropagation()}>
                     <button type="button" className="icon-button" onClick={() => onEdit(sale)} aria-label={`Editar venda de ${sale.client}`} title="Editar venda"><Pencil size={15} /></button>
                     {isAdmin && <button type="button" className="icon-button hub-delete" onClick={() => onDelete(sale)} aria-label={`Apagar venda de ${sale.client}`} title="Apagar venda"><Trash2 size={15} /></button>}
