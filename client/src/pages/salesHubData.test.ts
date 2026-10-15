@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterSales, heatLevel, heatmap, monthlyEvolution, ranking, shiftMonth, sortSales, totals, type HubSale } from "./salesHubData";
+import { CARD_FEES, filterSales, netAfterCardFee, heatLevel, heatmap, monthlyEvolution, ranking, shiftMonth, sortSales, totals, type HubSale } from "./salesHubData";
 
 const sale = (overrides: Partial<HubSale>): HubSale => ({
   id: 1, date: "15/09/2026", client: "Cliente", phone: "", consultants: [], product: "Revisão", status: "OK",
@@ -71,5 +71,23 @@ describe("sortSales", () => {
   it("sorts by name and by value", () => {
     expect(sortSales(sales, "client", "asc").map((item) => item.client)).toEqual(["Ana", "Bruno", "Carla"]);
     expect(sortSales(sales, "gross", "desc").map((item) => item.gross)).toEqual([2000, 1000, 500]);
+  });
+});
+
+describe("netAfterCardFee", () => {
+  it("matches sales the team already calculated by hand", () => {
+    expect(netAfterCardFee(20000, 4)).toBe(18326); // Reginaldo, 4x
+    expect(netAfterCardFee(8282.49, 7)).toBe(7074.07); // Cleber, 7x (the team rounded to 7.074)
+  });
+
+  it("applies each part's fee when a payment is split", () => {
+    expect(netAfterCardFee(7000, 5)).toBe(6341.3);
+    expect(netAfterCardFee(230, 1)).toBe(218.8);
+  });
+
+  it("has a fee from 1x to 10x and nothing beyond", () => {
+    expect(CARD_FEES).toHaveLength(10);
+    expect(netAfterCardFee(1000, 10)).toBe(810.6);
+    expect(() => netAfterCardFee(1000, 11)).toThrow();
   });
 });

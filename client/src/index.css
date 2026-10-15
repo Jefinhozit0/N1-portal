@@ -2279,6 +2279,7 @@ tbody tr:hover { background: var(--surface-muted); }
 .new-sale-grid input, .new-sale-grid select, .new-sale-grid textarea { width: 100%; margin-top: 6px; }
 .new-sale-grid textarea { min-height: 84px; resize: vertical; }
 .new-sale-grid .full-field, .new-sale-grid .consultant-picker { grid-column: 1 / -1; }
+.sale-fee-hint { margin-top: -8px; color: var(--muted); font-size: 12.5px; }
 .checkbox-label { display: flex !important; align-items: center; gap: 8px; }
 .checkbox-label input { width: 16px !important; height: 16px; min-height: 0 !important; margin: 0 !important; accent-color: var(--link); }
 .consultant-picker > div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

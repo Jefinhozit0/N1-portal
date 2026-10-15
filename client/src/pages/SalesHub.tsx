@@ -10,25 +10,44 @@ import { StatusPill } from "./Home";
 import { CountUp } from "@/components/CountUp";
 import { SalesManager } from "./SalesManager";
 import {
-  DAY_PERIODS, SECTOR_LABEL, WEEKDAYS, buildSalesHubCsv, capitalize, currentMonth, escapeHtml, filterSales, heatLevel, heatmap, hubMoney, hubPercent,
-  monthLabel, monthlyEvolution, ranking as buildRanking, sectorOf, shiftMonth, totals, type HubSale, type Sector,
+  DAY_PERIODS, SECTOR_LABEL, WEEKDAYS, CARD_FEES, buildSalesHubCsv, capitalize, currentMonth, escapeHtml, filterSales, heatLevel, heatmap, hubMoney, hubPercent,
+  monthLabel, monthlyEvolution, netAfterCardFee, ranking as buildRanking, sectorOf, shiftMonth, totals, type HubSale, type Sector,
 } from "./salesHubData";
 
 type Section = Sector | "control" | "vendas";
-type SaleForm = { id?: number; date: string; client: string; phone: string; product: string; status: HubSale["status"]; cbk: boolean; gross: string; net: string; note: string; consultants: string[]; setor: Sector };
+type SaleForm = { id?: number; date: string; client: string; phone: string; product: string; status: HubSale["status"]; cbk: boolean; gross: string; net: string; note: string; consultants: string[]; setor: Sector; payment: string };
 
 const PRODUCTS = ["Revisão de Juros", "Revisão de contrato", "Portabilidade", "Laudo", "Busca e apreensão", "Outros"];
 const todayInput = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
 /** "2026-09-28" <-> "28/09/2026" */
 const toBrDate = (iso: string) => iso.split("-").reverse().join("/");
 const toIsoDate = (br: string) => br.split("/").reverse().join("-");
-const emptyForm = (setor: Sector): SaleForm => ({ date: todayInput(), client: "", phone: "", product: PRODUCTS[0], status: "Pendente", cbk: false, gross: "", net: "", note: "", consultants: [], setor });
+const emptyForm = (setor: Sector): SaleForm => ({ date: todayInput(), client: "", phone: "", product: PRODUCTS[0], status: "Pendente", cbk: false, gross: "", net: "", note: "", consultants: [], setor, payment: "" });
 /** Accepts "1.234,56", "1234,56" and "1234.56". */
 function parseMoney(value: string) {
   const cleaned = value.trim().replace(/[^\d.,]/g, "");
   if (!cleaned) return NaN;
   const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
   return Number(normalized);
+}
+
+/** "" = typed by hand, "pix" = PIX or boleto (no fee), "1".."10" = card installments. */
+const paymentLabel = (payment: string) => (payment === "pix" ? "PIX/boleto" : payment ? `Cartão ${payment}x (taxa ${CARD_FEES[Number(payment) - 1].toLocaleString("pt-BR")}%)` : "");
+
+/** The note saved with the sale starts with how it was paid, so the net value can be checked later. */
+function noteWithPayment(form: SaleForm) {
+  const note = form.note.trim();
+  const label = paymentLabel(form.payment);
+  return !label || note.includes(label) ? note : [label, note].filter(Boolean).join(" · ");
+}
+
+/** Applies a change to the form and, when a payment is chosen, fills the net value from the card fee table. */
+function withPayment(form: SaleForm, changes: Partial<SaleForm>): SaleForm {
+  const next = { ...form, ...changes };
+  const gross = parseMoney(next.gross);
+  if (!next.payment || !Number.isFinite(gross)) return next;
+  const net = next.payment === "pix" ? gross : netAfterCardFee(gross, Number(next.payment));
+  return { ...next, net: net.toFixed(2).replace(".", ",") };
 }
 
 export default function SalesHubPage({ userName, isAdmin, onChargeback }: { userName: string; isAdmin: boolean; onChargeback: (draft: ChargebackDraft) => void }) {
@@ -104,7 +123,7 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
   }
 
   function openEditSale(sale: HubSale) {
-    setSaleForm({ id: sale.id, date: toIsoDate(sale.date), client: sale.client, phone: sale.phone, product: sale.product, status: sale.status, cbk: sale.cbk, gross: String(sale.gross).replace(".", ","), net: String(sale.net).replace(".", ","), note: sale.note, consultants: sale.consultants, setor: sectorOf(sale) });
+    setSaleForm({ id: sale.id, date: toIsoDate(sale.date), client: sale.client, phone: sale.phone, product: sale.product, status: sale.status, cbk: sale.cbk, gross: String(sale.gross).replace(".", ","), net: String(sale.net).replace(".", ","), note: sale.note, consultants: sale.consultants, setor: sectorOf(sale), payment: "" });
   }
 
   async function saveSale(event: FormEvent) {
@@ -118,7 +137,7 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
     if (net > gross) return toast.error("O valor líquido não pode ser maior que o bruto.");
     const payload = {
       date: toBrDate(saleForm.date), client: saleForm.client.trim(), phone: saleForm.phone.trim(), consultants: saleForm.consultants, product: saleForm.product,
-      status: saleForm.status, cbk: saleForm.cbk, gross, net, note: saleForm.note.trim(), setor: saleForm.setor,
+      status: saleForm.status, cbk: saleForm.cbk, gross, net, note: noteWithPayment(saleForm), setor: saleForm.setor,
     };
     const wasCbk = saleForm.id ? sales.find((sale) => sale.id === saleForm.id)?.cbk === true : false;
     try {
@@ -289,8 +308,18 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
                 <label>Setor<select value={saleForm.setor} onChange={(event) => setSaleForm({ ...saleForm, setor: event.target.value as Sector })}><option value="comercial">Comercial</option><option value="juridico">Jurídico</option></select></label>
                 <label>Produto<select value={PRODUCTS.includes(saleForm.product) ? saleForm.product : "__outro"} onChange={(event) => setSaleForm({ ...saleForm, product: event.target.value === "__outro" ? "" : event.target.value })}>{PRODUCTS.map((product) => <option key={product}>{product}</option>)}{!PRODUCTS.includes(saleForm.product) && <option value="__outro">{saleForm.product || "Outro produto"}</option>}</select></label>
                 <label>Status<select value={saleForm.status} onChange={(event) => setSaleForm({ ...saleForm, status: event.target.value as HubSale["status"] })}><option>Pendente</option><option>OK</option></select></label>
-                <label>Valor bruto (R$)<input required inputMode="decimal" value={saleForm.gross} onChange={(event) => setSaleForm({ ...saleForm, gross: event.target.value })} placeholder="1.500,00" /></label>
+                <label className="full-field">Pagamento<select value={saleForm.payment} onChange={(event) => setSaleForm(withPayment(saleForm, { payment: event.target.value }))}>
+                  <option value="">Informar o líquido manualmente</option>
+                  <option value="pix">PIX ou boleto (sem taxa)</option>
+                  {CARD_FEES.map((fee, index) => <option key={fee} value={String(index + 1)}>Cartão {index + 1}x · taxa {fee.toLocaleString("pt-BR")}%</option>)}
+                </select></label>
+                <label>Valor bruto (R$)<input required inputMode="decimal" value={saleForm.gross} onChange={(event) => setSaleForm(withPayment(saleForm, { gross: event.target.value }))} placeholder="1.500,00" /></label>
                 <label>Valor líquido (R$)<input inputMode="decimal" value={saleForm.net} onChange={(event) => setSaleForm({ ...saleForm, net: event.target.value })} placeholder="Igual ao bruto se vazio" /></label>
+                {saleForm.payment && saleForm.payment !== "pix" && Number.isFinite(parseMoney(saleForm.gross)) && (
+                  <small className="full-field sale-fee-hint">
+                    Taxa de {CARD_FEES[Number(saleForm.payment) - 1].toLocaleString("pt-BR")}% no cartão {saleForm.payment}x: − {hubMoney(parseMoney(saleForm.gross) - netAfterCardFee(parseMoney(saleForm.gross), Number(saleForm.payment)))}. Descontos como o da audiência: tire do líquido.
+                  </small>
+                )}
                 <div className="consultant-picker full-field">
                   <span>Consultor(es)</span>
                   <div>

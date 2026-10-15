@@ -23,6 +23,16 @@ export type HubRankingItem = { name: string; count: number; gross: number; net: 
 
 export const SECTOR_LABEL: Record<Sector, string> = { comercial: "Comercial", juridico: "Jurídico" };
 export const hubMoney = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** N1's card fee (%) by number of installments: index 0 = 1x ... index 9 = 10x. */
+export const CARD_FEES = [4.87, 6.3, 7.33, 8.37, 9.41, 13.14, 14.59, 16.04, 17.51, 18.94];
+
+/** What N1 receives from a card payment of `gross` in `installments`x (1 to 10), rounded to cents. */
+export function netAfterCardFee(gross: number, installments: number): number {
+  const fee = CARD_FEES[installments - 1];
+  if (fee === undefined) throw new RangeError(`Sem taxa para ${installments}x.`);
+  return Math.round(gross * (100 - fee)) / 100;
+}
 export const hubPercent = (value: number | null) => (value === null ? "—" : `${(value * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`);
 
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
