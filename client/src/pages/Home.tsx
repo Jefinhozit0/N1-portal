@@ -16,7 +16,7 @@ const ClientPortal = lazy(() => import("./ClientPortal").then((module) => ({ def
 const ChangePasswordScreen = lazy(() => import("./ClientPortal").then((module) => ({ default: module.ChangePasswordScreen })));
 import { toast } from "sonner";
 import { showAccessResult } from "@/lib/accessToast";
-import { matchesClientSearch } from "@/lib/clientSearch";
+import { matchesClientSearch, newestFirst } from "@/lib/clientSearch";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import type { Session } from "@supabase/supabase-js";
@@ -556,9 +556,8 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
     onError: (error) => toast.error(`Não foi possível cadastrar o cliente: ${error.message}`),
   });
   const remoteClientes = clientesQuery.data;
-  // Merge remote + fallback to local static data
   const clientList: Client[] = useMemo(() => {
-    return remoteClientes ? (remoteClientes as Record<string, unknown>[]).map(toClient) : [];
+    return remoteClientes ? newestFirst(remoteClientes as Record<string, unknown>[]).map(toClient) : [];
   }, [remoteClientes]);
 
   const filtered = useMemo(() => clientList.filter((client) => {
