@@ -3206,3 +3206,58 @@ tbody tr.empty-row:hover { background: transparent; }
 .sales-fit .sales-client { min-width: 170px; }
 .sales-fit .sales-client .hub-note { max-width: 240px; }
 .hub-toolbar-compact .hub-toolbar-fields { flex: 0 1 auto; }
+
+/* Sales HUB top: underlined tabs, filters without a box, numbers in one strip */
+.hub-dashboard .hub-tabs {
+  display: flex;
+  gap: 28px;
+  padding: 0;
+  margin: 0 0 18px;
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+}
+.hub-dashboard .hub-tabs button { flex: none; padding: 12px 2px; border-radius: 0; background: transparent; box-shadow: none; }
+.hub-dashboard .hub-tabs button.active { color: var(--text); background: transparent; box-shadow: inset 0 -2px 0 var(--gold); }
+.hub-dashboard .hub-tabs button.active svg { color: var(--gold); }
+.hub-toolbar { padding: 0; border: 0; background: transparent; box-shadow: none; align-items: center; margin-bottom: 18px; }
+.hub-toolbar .hub-toolbar-fields { align-items: center; gap: 10px; }
+.hub-toolbar .hub-toolbar-fields > div { min-width: 0; }
+.hub-toolbar .hub-search { flex: 1 1 240px; max-width: 360px; }
+.hub-toolbar .month-control input { width: 160px; }
+.hub-toolbar .month-control input, .hub-toolbar .month-control button, .hub-toolbar select, .hub-toolbar .hub-search > div { min-height: 36px; height: 36px; }
+.hub-toolbar .month-control button { width: 34px; }
+.hub-toolbar .hub-actions { gap: 6px; }
+.hub-toolbar .hub-actions button { min-height: 36px; padding: 0 11px; font-size: 13px; background: transparent; border-color: var(--border); }
+.hub-toolbar .hub-actions .hub-primary { background: var(--navy); border-color: transparent; padding: 0 14px; }
+.hub-toolbar .hub-actions .hub-icon-action { width: 36px; padding: 0; justify-content: center; }
+.hub-dashboard .hub-metrics, .hub-dashboard .control-metrics {
+  gap: 1px;
+  margin: 0 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--border);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+.hub-dashboard .hub-metric { min-height: 0; padding: 18px 20px; border: 0; border-radius: 0; box-shadow: none; }
+.hub-dashboard .hub-metric strong { margin: 6px 0 4px; font-size: 24px; }
+@media (max-width: 760px) {
+  .hub-dashboard .hub-tabs { gap: 18px; overflow-x: auto; }
+  .hub-toolbar .hub-toolbar-fields > div, .hub-toolbar .hub-search { flex: 1 1 100%; max-width: none; }
+  .hub-toolbar .month-control input { width: auto; }
+}
+@media (min-width: 1100px) {
+  .hub-toolbar { flex-wrap: nowrap; }
+  .hub-toolbar .hub-toolbar-fields { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; }
+  .hub-toolbar .hub-actions { flex: none; flex-wrap: nowrap; }
+}
+.hub-toolbar select { max-width: 190px; }
+.hub-toolbar .hub-search { min-width: 150px; }
+.hub-toolbar select { max-width: 210px; min-width: 170px; }
+@media (max-width: 760px) {
+  .hub-dashboard .hub-metrics, .hub-dashboard .control-metrics { grid-template-columns: repeat(2, 1fr); }
+  .hub-dashboard .hub-metric { padding: 14px 14px; }
+  .hub-dashboard .hub-metric strong { font-size: 18px; }
+  .hub-toolbar select { max-width: none; }
+}

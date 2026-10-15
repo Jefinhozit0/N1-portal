@@ -225,7 +225,7 @@ export default function SalesHubPage({ isAdmin, onChargeback }: { userName: stri
     <div className="hub-actions">
       <button type="button" onClick={exportCsv}><FileText size={14} /> CSV</button>
       <button type="button" onClick={exportPdf}><FileText size={14} /> PDF</button>
-      <button type="button" onClick={() => setConsultantsOpen(true)}><Users size={14} /> Consultores</button>
+      <button type="button" className="hub-icon-action" onClick={() => setConsultantsOpen(true)} aria-label="Consultores" title="Consultores"><Users size={15} /></button>
       <button type="button" className="hub-primary" onClick={openNewSale}><Plus size={15} /> Nova venda</button>
     </div>
   );
@@ -235,21 +235,21 @@ export default function SalesHubPage({ isAdmin, onChargeback }: { userName: stri
     <section className={`hub-toolbar ${withFilters ? "" : "hub-toolbar-compact"}`}>
       <div className="hub-toolbar-fields hub-filter-row">
         <div>
-          <label htmlFor="hub-month">Período</label>
+          <label htmlFor="hub-month" className="sr-only">Período</label>
           {monthControl}
         </div>
         {withFilters && (
           <>
             <div>
-              <label htmlFor="hub-consultant">Consultor</label>
+              <label htmlFor="hub-consultant" className="sr-only">Consultor</label>
               <select id="hub-consultant" value={consultant} onChange={(event) => setConsultant(event.target.value)}>
-                <option>Todos</option>
+                <option value="Todos">Consultor: todos</option>
                 {consultantOptions.map((name) => <option key={name}>{name}</option>)}
               </select>
             </div>
             <div className="hub-search">
-              <label htmlFor="hub-search">Buscar</label>
-              <div><Search size={15} /><input id="hub-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cliente, telefone, produto..." /></div>
+              <label htmlFor="hub-search" className="sr-only">Buscar</label>
+              <div><Search size={15} /><input id="hub-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar venda..." title="Cliente, telefone, produto ou observação" /></div>
             </div>
           </>
         )}
@@ -492,9 +492,8 @@ export default function SalesHubPage({ isAdmin, onChargeback }: { userName: stri
         {tabs}
         {toolbar(false)}
         <section className="control-dashboard">
-          <div className="control-title"><div><h2>Comercial e jurídico juntos</h2><p>Vendas, margem e exposição a chargebacks · {periodText}</p></div></div>
           <div className="control-metrics">
-            <HubMetric label="Bruto consolidado" amount={all.gross} format={hubMoney} detail={`${all.count} venda(s) · ticket médio ${all.ticket === null ? "—" : hubMoney(all.ticket)}`} tone="gold" />
+            <HubMetric label="Bruto consolidado" amount={all.gross} format={hubMoney} detail={`${all.count} vendas · ticket ${all.ticket === null ? "—" : hubMoney(all.ticket)}`} tone="gold" />
             <HubMetric label="Líquido" amount={all.net} format={hubMoney} detail={`Margem líquida ${hubPercent(all.netShare)}`} tone="green" />
             <HubMetric label="Chargebacks" amount={all.cbkNet} format={hubMoney} detail={`${all.cbkCount} caso(s) · taxa ${hubPercent(all.count ? all.cbkCount / all.count : null)}`} tone="red" />
             <HubMetric label="Resultado líquido final" amount={all.resultado} format={hubMoney} detail="Líquido − perda com CBK" tone="gold" />
@@ -538,9 +537,9 @@ export default function SalesHubPage({ isAdmin, onChargeback }: { userName: stri
       {tabs}
       {toolbar(true)}
       <div className="hub-metrics">
-        <HubMetric label="Vendas" value={loading ? "…" : undefined} amount={current.count} format={formatCount} detail={`${periodText} · ${hubPercent(sectorShare(bySector[sector === "todos" ? "todos" : sector].gross))} do bruto da empresa`} tone="blue" />
-        <HubMetric label="Valor bruto" amount={current.gross} format={hubMoney} detail="Total faturado" tone="green" />
-        <HubMetric label="Valor líquido" amount={current.net} format={hubMoney} detail={current.netShare === null ? "Sem vendas" : `${hubPercent(current.netShare)} do bruto`} tone="gold" />
+        <HubMetric label="Vendas" value={loading ? "…" : undefined} amount={current.count} format={formatCount} detail={`${hubPercent(sectorShare(bySector[sector === "todos" ? "todos" : sector].gross))} do bruto da empresa`} tone="blue" />
+        <HubMetric label="Bruto" amount={current.gross} format={hubMoney} detail={current.ticket === null ? "Sem vendas" : `Ticket médio ${hubMoney(current.ticket)}`} tone="green" />
+        <HubMetric label="Líquido" amount={current.net} format={hubMoney} detail={current.netShare === null ? "Sem vendas" : `${hubPercent(current.netShare)} do bruto`} tone="gold" />
         <HubMetric label="Chargebacks" amount={current.cbkCount} format={formatCount} detail={current.cbkCount ? `Perda de ${hubMoney(current.cbkNet)}` : "Nenhum chargeback no período"} tone="red" />
       </div>
       <section className="hub-panel ranking-panel">
