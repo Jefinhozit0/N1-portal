@@ -3168,3 +3168,41 @@ tbody tr.empty-row:hover { background: transparent; }
 .client-portal-side > :nth-child(2) { animation-delay: 60ms; }
 .client-portal-side > :nth-child(n+3) { animation-delay: 110ms; }
 .client-portal-layout > .client-portal-chat { animation-delay: 80ms; }
+
+/* Sales HUB: tabs on one line, filters and actions on one bar, tables that fit the page */
+.hub-dashboard .hub-tabs { grid-template-columns: repeat(4, 1fr); margin-top: 0; }
+.hub-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 20px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  margin: 0 0 16px;
+}
+.hub-toolbar .hub-toolbar-fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px; flex: 1 1 520px; }
+.hub-toolbar .hub-toolbar-fields > div { min-width: 160px; }
+.hub-toolbar .hub-search { flex: 1 1 220px; }
+.hub-toolbar .hub-actions { justify-content: flex-end; }
+.hub-filter-panel > .hub-actions { justify-content: flex-end; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.hub-heading-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hub-heading-actions .secondary-button { display: inline-flex; align-items: center; gap: 6px; }
+.control-title { padding-top: 0; }
+.sales-fit td { white-space: normal; vertical-align: middle; }
+.sales-fit .nowrap, .sales-fit .num { white-space: nowrap; }
+.sales-fit .num { text-align: right; font-variant-numeric: tabular-nums; }
+.sales-fit th.num .sales-sort { margin-left: auto; }
+.sales-fit .sales-client { min-width: 200px; }
+.sales-fit .sales-client .hub-note { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  .hub-dashboard .hub-tabs { grid-template-columns: repeat(2, 1fr); }
+  .hub-toolbar .hub-toolbar-fields > div { min-width: 0; flex: 1 1 100%; }
+}
+.sales-fit th, .sales-fit td { padding-left: 10px; padding-right: 10px; }
+.sales-fit .sales-client { min-width: 170px; }
+.sales-fit .sales-client .hub-note { max-width: 240px; }
+.hub-toolbar-compact .hub-toolbar-fields { flex: 0 1 auto; }

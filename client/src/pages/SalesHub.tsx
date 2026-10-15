@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
-import { Briefcase, FileText, LayoutDashboard, Pencil, Plus, Scale, Search, Table2, Trash2, Trophy, Users, X } from "lucide-react";
+import { Briefcase, ChevronRight, FileText, LayoutDashboard, Plus, Scale, Search, Table2, Trash2, Trophy, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import type { ChargebackDraft } from "@shared/chargebacks";
 import { trpc } from "@/lib/trpc";
@@ -11,7 +11,7 @@ import { CountUp } from "@/components/CountUp";
 import { SalesManager } from "./SalesManager";
 import {
   DAY_PERIODS, SECTOR_LABEL, WEEKDAYS, CARD_FEES, buildSalesHubCsv, capitalize, currentMonth, escapeHtml, filterSales, heatLevel, heatmap, hubMoney, hubPercent,
-  monthLabel, monthlyEvolution, netAfterCardFee, ranking as buildRanking, sectorOf, shiftMonth, totals, type HubSale, type Sector,
+  monthLabel, monthlyEvolution, netAfterCardFee, ranking as buildRanking, sectorOf, shiftMonth, sortSales, totals, type HubSale, type Sector,
 } from "./salesHubData";
 
 type Section = Sector | "control" | "vendas";
@@ -50,9 +50,22 @@ function withPayment(form: SaleForm, changes: Partial<SaleForm>): SaleForm {
   return { ...next, net: net.toFixed(2).replace(".", ",") };
 }
 
-export default function SalesHubPage({ userName, isAdmin, onChargeback }: { userName: string; isAdmin: boolean; onChargeback: (draft: ChargebackDraft) => void }) {
+/** How many of the latest sales the Comercial, Jurídico and N1 Control tabs show; the Vendas tab has all of them. */
+const RECENT_SALES = 10;
+
+export default function SalesHubPage({ isAdmin, onChargeback }: { userName: string; isAdmin: boolean; onChargeback: (draft: ChargebackDraft) => void }) {
   const utils = trpc.useUtils();
   const [section, setSection] = useState<Section>("comercial");
+  /** Sector the Vendas tab opens with when reached from "Ver todas" in a sector tab. */
+  const [salesSector, setSalesSector] = useState<Sector | "todos">("todos");
+  function openSection(next: Section) {
+    if (next === "vendas") setSalesSector("todos");
+    setSection(next);
+  }
+  function openAllSales() {
+    setSalesSector(section === "comercial" || section === "juridico" ? section : "todos");
+    setSection("vendas");
+  }
   const [month, setMonth] = useState(currentMonth());
   const [consultant, setConsultant] = useState("Todos");
   const [query, setQuery] = useState("");
@@ -208,79 +221,80 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
     </div>
   );
 
-  const filters = (
-    <section className="hub-filter-panel">
-      <div className="hub-filter-row">
+  const actions = (
+    <div className="hub-actions">
+      <button type="button" onClick={exportCsv}><FileText size={14} /> CSV</button>
+      <button type="button" onClick={exportPdf}><FileText size={14} /> PDF</button>
+      <button type="button" onClick={() => setConsultantsOpen(true)}><Users size={14} /> Consultores</button>
+      <button type="button" className="hub-primary" onClick={openNewSale}><Plus size={15} /> Nova venda</button>
+    </div>
+  );
+
+  /** Period, consultant and search, with the actions on the same bar. N1 Control only uses the period. */
+  const toolbar = (withFilters: boolean) => (
+    <section className={`hub-toolbar ${withFilters ? "" : "hub-toolbar-compact"}`}>
+      <div className="hub-toolbar-fields hub-filter-row">
         <div>
           <label htmlFor="hub-month">Período</label>
           {monthControl}
         </div>
-        <div>
-          <label htmlFor="hub-consultant">Consultor</label>
-          <select id="hub-consultant" value={consultant} onChange={(event) => setConsultant(event.target.value)}>
-            <option>Todos</option>
-            {consultantOptions.map((name) => <option key={name}>{name}</option>)}
-          </select>
-        </div>
-        <div className="hub-search">
-          <label htmlFor="hub-search">Buscar</label>
-          <div><Search size={15} /><input id="hub-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cliente, telefone, consultor, produto..." /></div>
-        </div>
-        <div className="hub-actions">
-          <button type="button" onClick={exportCsv}><FileText size={14} /> CSV</button>
-          <button type="button" onClick={exportPdf}><FileText size={14} /> PDF</button>
-          <button type="button" onClick={() => setConsultantsOpen(true)}><Users size={14} /> Consultores</button>
-          <button type="button" className="hub-primary" onClick={openNewSale}><Plus size={15} /> Nova venda</button>
-        </div>
+        {withFilters && (
+          <>
+            <div>
+              <label htmlFor="hub-consultant">Consultor</label>
+              <select id="hub-consultant" value={consultant} onChange={(event) => setConsultant(event.target.value)}>
+                <option>Todos</option>
+                {consultantOptions.map((name) => <option key={name}>{name}</option>)}
+              </select>
+            </div>
+            <div className="hub-search">
+              <label htmlFor="hub-search">Buscar</label>
+              <div><Search size={15} /><input id="hub-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cliente, telefone, produto..." /></div>
+            </div>
+          </>
+        )}
       </div>
-    </section>
-  );
-
-  const header = (
-    <section className="hub-hero-banner">
-      <span className="eyebrow">Centro consolidado de vendas</span>
-      <h2>Sales HUB</h2>
-      <p>Vendas consolidadas — comercial & jurídico em um só lugar.</p>
-      <div className="hub-user-badge"><Users size={20} /><strong>{userName.split(" ")[0]}</strong><small>{isAdmin ? "Administrador" : "Equipe N1"}</small></div>
+      {actions}
     </section>
   );
 
   const tabs = (
     <div className="hub-tabs" role="tablist" aria-label="Setores">
-      <button type="button" role="tab" aria-selected={section === "comercial"} className={section === "comercial" ? "active" : ""} onClick={() => setSection("comercial")}><Briefcase size={16} /> Comercial</button>
-      <button type="button" role="tab" aria-selected={section === "juridico"} className={section === "juridico" ? "active" : ""} onClick={() => setSection("juridico")}><Scale size={16} /> Jurídico</button>
-      <button type="button" role="tab" aria-selected={section === "vendas"} className={section === "vendas" ? "active" : ""} onClick={() => setSection("vendas")}><Table2 size={16} /> Vendas</button>
-      <button type="button" role="tab" aria-selected={section === "control"} className={section === "control" ? "active" : ""} onClick={() => setSection("control")}><LayoutDashboard size={16} /> N1 Control</button>
+      <button type="button" role="tab" aria-selected={section === "comercial"} className={section === "comercial" ? "active" : ""} onClick={() => openSection("comercial")}><Briefcase size={16} /> Comercial</button>
+      <button type="button" role="tab" aria-selected={section === "juridico"} className={section === "juridico" ? "active" : ""} onClick={() => openSection("juridico")}><Scale size={16} /> Jurídico</button>
+      <button type="button" role="tab" aria-selected={section === "vendas"} className={section === "vendas" ? "active" : ""} onClick={() => openSection("vendas")}><Table2 size={16} /> Vendas</button>
+      <button type="button" role="tab" aria-selected={section === "control"} className={section === "control" ? "active" : ""} onClick={() => openSection("control")}><LayoutDashboard size={16} /> N1 Control</button>
     </div>
   );
 
   const sectorShare = (value: number) => (bySector.todos.gross > 0 ? value / bySector.todos.gross : null);
 
+  /** The latest sales of the tab, compact; the full list with paging and filters is in the Vendas tab. */
+  const recent = useMemo(() => sortSales(filtered, "date", "desc").slice(0, RECENT_SALES), [filtered]);
   const salesTable = (
     <section className="hub-panel sales-table-panel">
       <div className="hub-panel-heading">
-        <div><h3>Vendas registradas</h3><p>{loading ? "Carregando..." : `${filtered.length} venda(s) · ${periodText}`}</p></div>
-        {(query || consultant !== "Todos") && <button type="button" className="text-button" onClick={() => { setQuery(""); setConsultant("Todos"); }}>Limpar filtros <X size={14} /></button>}
+        <div><h3>Últimas vendas</h3><p>{loading ? "Carregando..." : filtered.length > recent.length ? `${recent.length} mais recentes de ${filtered.length} · ${periodText}` : `${filtered.length} venda(s) · ${periodText}`}</p></div>
+        <div className="hub-heading-actions">
+          {(query || consultant !== "Todos") && <button type="button" className="text-button" onClick={() => { setQuery(""); setConsultant("Todos"); }}>Limpar filtros <X size={14} /></button>}
+          {filtered.length > 0 && <button type="button" className="secondary-button" onClick={openAllSales}>Ver todas na aba Vendas <ChevronRight size={15} /></button>}
+        </div>
       </div>
       <div className="table-wrap">
-        <table>
-          <thead><tr><th>Data</th>{section === "control" && <th>Setor</th>}<th>Cliente</th><th>Telefone</th><th>Consultor</th><th>Produto</th><th>Status</th><th>CBK</th><th>Bruto</th><th>Líquido</th><th><span className="sr-only">Ações</span></th></tr></thead>
+        <table className="sales-fit">
+          <thead><tr><th>{section === "control" ? "Data · setor" : "Data"}</th><th>Cliente</th><th>Consultor</th><th>Produto</th><th>Status</th><th className="num">Bruto</th><th className="num">Líquido</th><th><span className="sr-only">Ações</span></th></tr></thead>
           <tbody>
-            {!loading && filtered.length === 0 && <tr><td colSpan={section === "control" ? 11 : 10} className="hub-empty-row">Nenhuma venda em {periodText}{consultant !== "Todos" ? ` para ${consultant}` : ""}. Use "Nova venda" para registrar.</td></tr>}
-            {filtered.map((sale) => (
-              <tr key={sale.id}>
-                <td>{sale.date}</td>
-                {section === "control" && <td>{SECTOR_LABEL[sectorOf(sale)]}</td>}
-                <td><strong>{sale.client}</strong>{sale.note && <small className="hub-note">{sale.note}</small>}</td>
-                <td>{sale.phone || "—"}</td>
+            {!loading && filtered.length === 0 && <tr><td colSpan={8} className="hub-empty-row">Nenhuma venda em {periodText}{consultant !== "Todos" ? ` para ${consultant}` : ""}. Use "Nova venda" para registrar.</td></tr>}
+            {recent.map((sale) => (
+              <tr key={sale.id} onClick={() => openEditSale(sale)} title="Clique para editar">
+                <td className="nowrap">{sale.date}{section === "control" && <small className="hub-note">{SECTOR_LABEL[sectorOf(sale)]}</small>}</td>
+                <td className="sales-client"><strong>{sale.client}</strong>{(sale.phone || sale.note) && <small className="hub-note" title={sale.note || undefined}>{[sale.phone, sale.note].filter(Boolean).join(" · ")}</small>}</td>
                 <td>{sale.consultants.join(", ") || "—"}</td>
                 <td>{sale.product || "—"}</td>
-                <td><StatusPill tone={sale.status === "OK" ? "green" : "yellow"}>{sale.status}</StatusPill></td>
-                <td>{sale.cbk ? "sim" : "não"}</td>
-                <td>{hubMoney(sale.gross)}</td>
-                <td>{hubMoney(sale.net)}</td>
-                <td className="hub-row-actions">
-                  <button type="button" className="icon-button" onClick={() => openEditSale(sale)} aria-label={`Editar venda de ${sale.client}`} title="Editar venda"><Pencil size={15} /></button>
+                <td className="nowrap"><StatusPill tone={sale.status === "OK" ? "green" : "yellow"}>{sale.status}</StatusPill>{sale.cbk && <span className="sales-cbk-tag">CBK</span>}</td>
+                <td className="num">{hubMoney(sale.gross)}</td>
+                <td className="num">{hubMoney(sale.net)}</td>
+                <td className="hub-row-actions" onClick={(event) => event.stopPropagation()}>
                   {isAdmin && <button type="button" className="icon-button hub-delete" onClick={() => setSaleToDelete(sale)} aria-label={`Apagar venda de ${sale.client}`} title="Apagar venda"><Trash2 size={15} /></button>}
                 </td>
               </tr>
@@ -449,9 +463,11 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
   if (section === "vendas") {
     return (
       <div className="hub-dashboard">
-        {header}
         {tabs}
         <SalesManager
+          key={salesSector}
+          initialSector={salesSector}
+          actions={actions}
           sales={sales}
           loading={loading}
           consultantOptions={consultantOptions}
@@ -473,12 +489,12 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
     const all = bySector.todos;
     return (
       <div className="hub-dashboard">
-        {header}
         {tabs}
+        {toolbar(false)}
         <section className="control-dashboard">
-          <div className="control-title"><div><span className="eyebrow eyebrow-muted">N1 Control</span><h2>Inteligência consolidada</h2><p>Vendas, margem e exposição a chargebacks · {periodText}</p></div></div>
+          <div className="control-title"><div><h2>Comercial e jurídico juntos</h2><p>Vendas, margem e exposição a chargebacks · {periodText}</p></div></div>
           <div className="control-metrics">
-            <HubMetric label="Bruto consolidado" amount={all.gross} format={hubMoney} detail={`${all.count} venda(s)`} tone="gold" />
+            <HubMetric label="Bruto consolidado" amount={all.gross} format={hubMoney} detail={`${all.count} venda(s) · ticket médio ${all.ticket === null ? "—" : hubMoney(all.ticket)}`} tone="gold" />
             <HubMetric label="Líquido" amount={all.net} format={hubMoney} detail={`Margem líquida ${hubPercent(all.netShare)}`} tone="green" />
             <HubMetric label="Chargebacks" amount={all.cbkNet} format={hubMoney} detail={`${all.cbkCount} caso(s) · taxa ${hubPercent(all.count ? all.cbkCount / all.count : null)}`} tone="red" />
             <HubMetric label="Resultado líquido final" amount={all.resultado} format={hubMoney} detail="Líquido − perda com CBK" tone="gold" />
@@ -509,17 +525,7 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
               );
             })}
           </div>
-          <section className="control-panel">
-            <h3>Resumo</h3>
-            <div className="smart-summary">
-              <span>Ticket médio geral <b>{all.ticket === null ? "—" : hubMoney(all.ticket)}</b></span>
-              <span>Vendas com CBK <b>{hubPercent(all.count ? all.cbkCount / all.count : null)}</b></span>
-              <span>Perda líquida com CBK <b>{hubMoney(all.cbkNet)}</b></span>
-              <span>Resultado líquido final <b>{hubMoney(all.resultado)}</b></span>
-            </div>
-          </section>
         </section>
-        {filters}
         <section className="hub-analytics">{evolutionChart}{heatPanel}</section>
         {salesTable}
         {dialogs}
@@ -529,29 +535,14 @@ export default function SalesHubPage({ userName, isAdmin, onChargeback }: { user
 
   return (
     <div className="hub-dashboard">
-      {header}
-      <section className="hub-summary">
-        <div><h2>Dashboard executivo</h2><p>Comercial × Jurídico — {periodText}</p></div>
-        <div className="summary-totals">Total bruto: <b>{hubMoney(bySector.todos.gross)}</b> &nbsp; Líquido: <b>{hubMoney(bySector.todos.net)}</b> &nbsp; CBKs: <b>{bySector.todos.cbkCount}</b></div>
-        <div className="sector-overview">
-          {(["comercial", "juridico"] as const).map((key) => (
-            <div key={key}>
-              <span>{SECTOR_LABEL[key]}</span>
-              <b>{bySector[key].count}</b>
-              <strong>{bySector[key].count === 0 ? "Sem vendas no período" : `${hubPercent(sectorShare(bySector[key].gross))} do bruto`}</strong>
-              <i style={{ width: `${(sectorShare(bySector[key].gross) ?? 0) * 100}%` }} />
-            </div>
-          ))}
-        </div>
-      </section>
       {tabs}
+      {toolbar(true)}
       <div className="hub-metrics">
-        <HubMetric label="Vendas" value={loading ? "…" : undefined} amount={current.count} format={formatCount} detail={periodText} tone="blue" />
+        <HubMetric label="Vendas" value={loading ? "…" : undefined} amount={current.count} format={formatCount} detail={`${periodText} · ${hubPercent(sectorShare(bySector[sector === "todos" ? "todos" : sector].gross))} do bruto da empresa`} tone="blue" />
         <HubMetric label="Valor bruto" amount={current.gross} format={hubMoney} detail="Total faturado" tone="green" />
         <HubMetric label="Valor líquido" amount={current.net} format={hubMoney} detail={current.netShare === null ? "Sem vendas" : `${hubPercent(current.netShare)} do bruto`} tone="gold" />
         <HubMetric label="Chargebacks" amount={current.cbkCount} format={formatCount} detail={current.cbkCount ? `Perda de ${hubMoney(current.cbkNet)}` : "Nenhum chargeback no período"} tone="red" />
       </div>
-      {filters}
       <section className="hub-panel ranking-panel">
         <div className="hub-panel-heading">
           <div>
