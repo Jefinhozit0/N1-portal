@@ -1,3 +1,12 @@
+/** Client list order: newest registration first (imported clients keep their original date), then highest id. */
+export function newestFirst<T extends { created_at?: unknown; id?: unknown }>(rows: T[]): T[] {
+  const time = (row: T) => {
+    const parsed = typeof row.created_at === "string" ? Date.parse(row.created_at) : NaN;
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  return [...rows].sort((a, b) => time(b) - time(a) || Number(b.id ?? 0) - Number(a.id ?? 0));
+}
+
 type SearchableClient = { name: string; type?: string; email?: string; phone?: string };
 
 const digitsOf = (value: string) => value.replace(/\D/g, "");
