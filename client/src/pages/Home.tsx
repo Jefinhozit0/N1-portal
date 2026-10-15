@@ -16,6 +16,7 @@ const ClientPortal = lazy(() => import("./ClientPortal").then((module) => ({ def
 const ChangePasswordScreen = lazy(() => import("./ClientPortal").then((module) => ({ default: module.ChangePasswordScreen })));
 import { toast } from "sonner";
 import { showAccessResult } from "@/lib/accessToast";
+import { matchesClientSearch } from "@/lib/clientSearch";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import type { Session } from "@supabase/supabase-js";
@@ -564,9 +565,9 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
     if (listFilter) {
       // Same records the dashboard counted (ids computed on the server)
       if (!filterIds || client.id === undefined || !filterIds.includes(client.id)) return false;
-      return `${client.name} ${client.type} ${client.email ?? ""} ${client.phone ?? ""}`.toLowerCase().includes(query.toLowerCase());
+      return matchesClientSearch(client, query);
     }
-    const matchesQuery = `${client.name} ${client.type} ${client.email ?? ""} ${client.phone ?? ""}`.toLowerCase().includes(query.toLowerCase());
+    const matchesQuery = matchesClientSearch(client, query);
     const matchesStatus = statusFilter === "all" || (statusFilter === "attention" ? client.tone === "red" : client.status !== "Concluído" && client.tone !== "red");
     return matchesQuery && matchesStatus;
   }), [clientList, query, statusFilter, listFilter, filterIds]);
@@ -596,7 +597,7 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
       <div className="page-actions">
         <div className="search-field">
           <Search size={17} />
-          <input placeholder="Buscar por nome ou tipo de processo" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input placeholder="Buscar por nome, telefone ou tipo de processo" value={query} onChange={(event) => setQuery(event.target.value)} />
         </div>
         <button className="primary-button" onClick={() => setRegistrationOpen(true)}><Users size={16} /> Cadastrar clientes</button>
       </div>
