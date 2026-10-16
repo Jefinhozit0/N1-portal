@@ -109,4 +109,25 @@ describe("sendClientAccessEmail", () => {
     expect(message.text).not.toMatch(/senha provisória/i);
     expect(message.html).not.toContain("<Ribeiro>");
   });
+
+  it("presents the new portal to a client from the old system", async () => {
+    createTransportMock.mockReturnValue({ sendMail: sendMailMock });
+
+    await sendClientAccessEmail("cliente@example.com", {
+      name: "Joana Ribeiro",
+      link: "https://portal.example.com/a/K7p2XqM4bN9w",
+      migrated: true,
+    }, {
+      resendApiKey: "",
+      emailFrom: "",
+      gmailUser: "owner@gmail.com",
+      gmailAppPassword: "FAKETESTONLYXXXX",
+    });
+
+    const message = sendMailMock.mock.calls.at(-1)![0];
+    expect(message.subject).toContain("novo portal");
+    expect(message.text).toContain("sistema anterior");
+    expect(message.text).toContain("https://portal.example.com/a/K7p2XqM4bN9w");
+    expect(message.html).toContain("Criar minha senha");
+  });
 });

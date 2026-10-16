@@ -55,3 +55,6 @@ export function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
+
+/** Tag on clients brought in from the old system (scripts/importar-clientes.ts): their access message invites them to switch. */
+export const OLD_SYSTEM_TAG = "Sistema antigo";

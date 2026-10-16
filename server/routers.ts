@@ -466,12 +466,12 @@ export const appRouter = router({
     reenviarAcesso: staffProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const { data, error } = await supabase.from("clientes").select("id, name, email, phone").eq("id", input.id).single();
+        const { data, error } = await supabase.from("clientes").select("id, name, email, phone, tags").eq("id", input.id).single();
         if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
         if (!data.email) throw new TRPCError({ code: "BAD_REQUEST", message: "Cadastre um e-mail para este cliente primeiro." });
         // A new link replaces the previous one, which stops working.
         await registrarAcao(ctx.staffUser.email, "Reenviou acesso ao portal", data.name, data.id);
-        return provisionClientAccess({ id: data.id, name: data.name, email: data.email, phone: data.phone }, await getPortalUrl(ctx.req));
+        return provisionClientAccess({ id: data.id, name: data.name, email: data.email, phone: data.phone, tags: data.tags }, await getPortalUrl(ctx.req));
       }),
 
     /** Update a client */

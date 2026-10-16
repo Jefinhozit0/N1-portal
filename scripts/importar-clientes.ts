@@ -13,7 +13,7 @@
 import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
-import { toneForStatus } from "../shared/processo";
+import { OLD_SYSTEM_TAG, toneForStatus } from "../shared/processo";
 
 type OldClient = {
   name: string;
@@ -27,7 +27,7 @@ type OldClient = {
   atualizado_em: string;
 };
 
-const TAG = "Sistema antigo";
+const TAG = OLD_SYSTEM_TAG;
 /** Old system's status -> the portal's equivalent. Others keep their name. */
 const STATUS_MAP: Record<string, string> = {
   "Tratativa suspensa": "Suspenso",

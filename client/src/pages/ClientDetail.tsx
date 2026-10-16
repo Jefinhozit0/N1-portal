@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, FileText, Phone, Mail, Upload, Trash2, Sparkles, AlertTriangle, ChevronDown, Clock, Plus, Download, RefreshCw } from "lucide-react";
-import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, caseSummary, formatFileSize } from "@shared/processo";
+import { MAX_DOCUMENT_BYTES, OLD_SYSTEM_TAG, PROCESS_STATUSES, caseSummary, formatFileSize } from "@shared/processo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,6 +84,7 @@ export default function ClientDetail({ client, onBack, isAdmin }: ClientDetailPr
   const [tags, setTags] = useState<string[]>(client.tags ?? []);
   const [customTag, setCustomTag] = useState("");
   const savedTags: string[] = Array.isArray(cliente?.tags) ? (cliente.tags as string[]) : client.tags ?? [];
+  const fromOldSystem = savedTags.includes(OLD_SYSTEM_TAG);
   const salvarTags = trpc.portal.salvarTags.useMutation({
     onSuccess: (result) => {
       toast.success("Tags salvas.");
@@ -246,8 +247,14 @@ export default function ClientDetail({ client, onBack, isAdmin }: ClientDetailPr
                 {cliente?.email || client.email || "Sem e-mail"}
               </span>
               {client.id !== undefined && client.email && (
-                <button type="button" className="secondary-button" disabled={reenviarAcesso.isPending} onClick={() => reenviarAcesso.mutate({ id: client.id! })}>
-                  {reenviarAcesso.isPending ? "Enviando..." : "Reenviar acesso ao portal"}
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={reenviarAcesso.isPending}
+                  onClick={() => reenviarAcesso.mutate({ id: client.id! })}
+                  title={fromOldSystem ? "Veio do sistema antigo: a mensagem apresenta o novo portal e convida o cliente a migrar." : undefined}
+                >
+                  {reenviarAcesso.isPending ? "Enviando..." : fromOldSystem ? "Enviar convite para o novo portal" : "Reenviar acesso ao portal"}
                 </button>
               )}
             </div>

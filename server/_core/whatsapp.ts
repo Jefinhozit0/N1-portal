@@ -88,9 +88,59 @@ export function isWhatsAppEnabled(env: Pick<typeof ENV, "whatsappProvider"> & Wh
   return false;
 }
 
-/** Sends the first-access link through whichever WhatsApp provider is configured. */
-export async function sendAccessMessage(phone: string, params: { firstName: string; link: string; reminder?: boolean }) {
-  if (ENV.whatsappProvider === "web") return sendWhatsAppWebText(phone, params.reminder ? accessReminderText(params) : accessMessageText(params));
+/**
+ * First access for a client who came from the old system: explains the new portal and why it is
+ * worth switching. Their case is already there, so all that is left is creating the password.
+ */
+export function migrationMessageText(params: { firstName: string; link: string }) {
+  return [
+    `Olá, ${params.firstName}! 👋 Aqui é da *N1 Soluções*.`,
+    "",
+    "Temos uma novidade: o acompanhamento do seu processo agora é feito pelo nosso *novo portal*, mais simples e completo que o sistema anterior. 🚀",
+    "",
+    "Seu caso já está lá, com o andamento e o histórico. Você só precisa criar sua senha. No novo portal você:",
+    "",
+    "✅ Vê o andamento e cada atualização do seu caso",
+    "🔔 Recebe aviso no celular quando houver novidade",
+    "📄 Acessa os documentos do seu processo",
+    "💬 Fala com a nossa equipe pelo chat, sem precisar ligar",
+    "",
+    "Toque no link e crie sua senha. Leva menos de 1 minuto:",
+    "",
+    params.link,
+    "",
+    "⏳ O link vale por 7 dias e só pode ser usado uma vez.",
+    "Ficou com alguma dúvida? É só responder esta mensagem. 😉",
+  ].join("\n");
+}
+
+/** Reminder for a client from the old system who has not created the password yet. */
+export function migrationReminderText(params: { firstName: string; link: string }) {
+  return [
+    `Oi, ${params.firstName}! 😊 Aqui é da *N1 Soluções*.`,
+    "",
+    "Seu processo já está no nosso novo portal, esperando por você. Por lá você vê cada atualização, recebe aviso quando algo muda e fala com a equipe sem precisar ligar.",
+    "",
+    "É rapidinho: toque no link, crie sua senha e pronto.",
+    "",
+    params.link,
+    "",
+    "⏳ Este link substitui o anterior e vale por 7 dias.",
+    "Qualquer dúvida, é só responder esta mensagem.",
+  ].join("\n");
+}
+
+function accessText(params: { firstName: string; link: string; reminder?: boolean; migrated?: boolean }) {
+  if (params.migrated) return params.reminder ? migrationReminderText(params) : migrationMessageText(params);
+  return params.reminder ? accessReminderText(params) : accessMessageText(params);
+}
+
+/**
+ * Sends the first-access link through whichever WhatsApp provider is configured. The official API
+ * only sends the approved template, so the old-system version only goes out over the unofficial one.
+ */
+export async function sendAccessMessage(phone: string, params: { firstName: string; link: string; reminder?: boolean; migrated?: boolean }) {
+  if (ENV.whatsappProvider === "web") return sendWhatsAppWebText(phone, accessText(params));
   return sendAccessWhatsApp(phone, params);
 }
 
