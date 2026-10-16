@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Bell, BellOff, CheckCircle2, Download, Share, Smartphone, SquarePlus, X } from "lucide-react";
 import { isInstalledApp, isIosSafari, useInstallPrompt } from "@/lib/installPrompt";
-import { currentPushState, pushSupported, subscribeToPush, type PushState } from "@/lib/pushNotifications";
+import { pushSupported } from "@/lib/pushNotifications";
+import { usePushDevice } from "@/hooks/usePushDevice";
 import { trpc } from "@/lib/trpc";
 
 const DISMISSED_KEY = "n1-install-card-dismissed";
@@ -18,47 +19,12 @@ function wasDismissed() {
 export function AppSetupCard() {
   const { canPrompt, installedNow, install } = useInstallPrompt();
   const [dismissed, setDismissed] = useState(wasDismissed);
-  const [push, setPush] = useState<PushState | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const chave = trpc.cliente.chaveNotificacoes.useQuery(undefined, { retry: false, enabled: pushSupported(), staleTime: Infinity });
   const ativar = trpc.cliente.ativarNotificacoes.useMutation();
-  const synced = useRef(false);
+  const { state: push, busy, error: message, enable: enableNotifications } = usePushDevice(chave.data?.publicKey, ativar.mutateAsync);
 
   const installed = isInstalledApp();
   const ios = isIosSafari();
-
-  useEffect(() => { void currentPushState().then(setPush); }, []);
-
-  // Notices already on: send the device again once per visit, so the server keeps it even if its
-  // copy was lost (or the keys changed and the browser had to subscribe anew).
-  useEffect(() => {
-    if (push !== "on" || synced.current || !chave.data) return;
-    synced.current = true;
-    void subscribeToPush(chave.data.publicKey)
-      .then((subscription) => subscription && ativar.mutateAsync({ ...subscription, instalado: installed }))
-      .catch(() => undefined);
-  }, [push, chave.data]);
-
-  async function enableNotifications() {
-    if (!chave.data) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const subscription = await subscribeToPush(chave.data.publicKey);
-      if (!subscription) {
-        setPush(await currentPushState());
-        return;
-      }
-      await ativar.mutateAsync({ ...subscription, instalado: installed });
-      setPush("on");
-    } catch {
-      // The browser's own errors come in English and mean nothing to the client.
-      setMessage("Não foi possível ativar as notificações agora. Tente novamente em alguns minutos.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   // iPhone/iPad: notifications only exist inside the installed app.
   const installStep = installed || installedNow ? "done" : canPrompt ? "button" : ios ? "ios" : null;

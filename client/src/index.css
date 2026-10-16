@@ -821,6 +821,11 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
 .power-banner-soft > svg { color: var(--amber); }
 .power-banner strong { display: block; font-size: 14px; font-weight: 600; }
 .power-banner p { margin: 2px 0 0; color: var(--text-soft); font-size: 13px; }
+.staff-push-banner { border-color: var(--gold-line); background: var(--gold-soft); }
+.staff-push-banner > svg { color: var(--gold); }
+.staff-push-banner > div { flex: 1; min-width: 0; }
+.staff-push-banner > .primary-button { flex: none; }
+@media (max-width: 640px) { .staff-push-banner { flex-wrap: wrap; margin: 12px 16px 0; } }
 @media (max-width: 720px) { .power-banner { margin: 12px 16px 0; } }
 .alert-banner {
   min-height: 64px;

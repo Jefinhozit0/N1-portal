@@ -2,7 +2,7 @@ import { parseTicketMessage } from "@shared/tickets";
 import { sendNoticeEmail } from "./email";
 import { ENV } from "./env";
 import { getPublicUrl } from "./publicUrl";
-import { sendPushToClient, type PushMessage } from "./push";
+import { sendPushToClient, sendPushToStaff, type PushMessage } from "./push";
 import { supabase } from "./supabase";
 import { canSendFreeText, normalizeBrazilPhone, sendFreeText } from "./whatsapp";
 
@@ -10,7 +10,7 @@ import { canSendFreeText, normalizeBrazilPhone, sendFreeText } from "./whatsapp"
  * Automatic notices.
  * - Client: app notification (see push.ts), WhatsApp and e-mail when the team replies in the chat,
  *   changes the status or attaches a document, so the client comes back to the portal.
- * - Team: e-mail (and WhatsApp, if TEAM_NOTIFY_WHATSAPP is set) when a client writes.
+ * - Team: app notification, e-mail (and WhatsApp, if TEAM_NOTIFY_WHATSAPP is set) when a client writes.
  * Each kind of notice has a minimum interval per client, so a burst of messages or uploads turns
  * into a single notice instead of spam (which would also put the WhatsApp number at risk).
  * Nothing here ever fails the action that triggered it.
@@ -110,8 +110,26 @@ export function notifyTeam(subject: string, paragraphs: string[], whatsappText: 
   })().catch((error) => console.warn("[notificacoes] Team notice failed:", error));
 }
 
+/** The team's app notification about a client's message; tapping it opens Atendimento. */
+export function teamPushText(clientId: number, clientName: string, storedText: string): PushMessage {
+  const ticket = parseTicketMessage(storedText);
+  const body = ticket ? ticket.body : storedText;
+  return {
+    title: ticket ? `Novo ticket de ${clientName}: ${ticket.topic}` : `Nova mensagem de ${clientName}`,
+    body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
+    url: "/?view=atendimento",
+    // One notice per client: a new message replaces the previous one instead of piling up.
+    tag: `cliente-${clientId}`,
+  };
+}
+
 /** Tells the team a client wrote in the portal. Runs in the background; call it without await. */
 export function notifyTeamNewMessage(clientId: number, clientName: string, storedText: string) {
+  // App notification on the phones of the team members who turned it on: every message, a few seconds apart at most.
+  if (claimSlot(`team-push:${clientId}`, PUSH_INTERVAL_MS)) {
+    void sendPushToStaff(ENV.staffEmails, teamPushText(clientId, clientName, storedText))
+      .catch((error) => console.warn("[notificacoes] Team app notice failed:", error instanceof Error ? error.message : error));
+  }
   if (!claimSlot(`team:${clientId}`, TEAM_INTERVAL_MS)) return;
   void (async () => {
     const ticket = parseTicketMessage(storedText);

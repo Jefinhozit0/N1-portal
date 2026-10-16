@@ -129,6 +129,13 @@ const clientWithTermsProcedure = clientProcedure.use(({ ctx, next }) => {
   return next();
 });
 
+/** A device turning on the app notifications (PushSubscription from the browser). */
+const pushSubscriptionInput = z.object({
+  endpoint: z.string().url().max(1000),
+  keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+  instalado: z.boolean(),
+});
+
 /** "Hoje, 09:42", "Ontem, 16:18" or "26 set, 11:05", for the "Atualização" column. */
 function formatUpdatedLabel(iso: string) {
   const date = new Date(iso);
@@ -404,6 +411,23 @@ export const appRouter = router({
 
     /** Who accepted the portal terms, who is still pending and why, client by client */
     termos: staffProcedure.query(() => computeTermsReport()),
+
+    /** Key the browser needs to turn on, on this device, the notice of new messages from clients. */
+    chaveNotificacoes: staffProcedure.query(() => ({ publicKey: getPushPublicKey() })),
+
+    /** Keeps this team member's device; also called again on each visit to stay in sync. */
+    ativarNotificacoes: staffProcedure
+      .input(pushSubscriptionInput)
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.staffUser.email) throw new TRPCError({ code: "BAD_REQUEST", message: "Sua conta não tem e-mail para receber as notificações." });
+        try {
+          await savePushSubscription({ staffEmail: ctx.staffUser.email }, input, String(ctx.req.headers["user-agent"] ?? ""), input.instalado);
+        } catch (error) {
+          console.warn("[push] Could not save team device:", error instanceof Error ? error.message : error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error && /migrations/.test(error.message) ? error.message : "Não foi possível ativar as notificações agora. Tente novamente mais tarde." });
+        }
+        return { active: true } as const;
+      }),
     /** Whether the notebook running the portal is plugged in (null when unknown) */
     energia: staffProcedure.query(async () => {
       const state = await getPowerState();
@@ -979,14 +1003,10 @@ export const appRouter = router({
 
     /** Keeps the device that turned the notices on; also called again on each visit to stay in sync. */
     ativarNotificacoes: clientWithTermsProcedure
-      .input(z.object({
-        endpoint: z.string().url().max(1000),
-        keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
-        instalado: z.boolean(),
-      }))
+      .input(pushSubscriptionInput)
       .mutation(async ({ ctx, input }) => {
         try {
-          await savePushSubscription(ctx.clienteId, input, String(ctx.req.headers["user-agent"] ?? ""), input.instalado);
+          await savePushSubscription({ clientId: ctx.clienteId }, input, String(ctx.req.headers["user-agent"] ?? ""), input.instalado);
         } catch (error) {
           console.warn("[push] Could not save device:", error instanceof Error ? error.message : error);
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível ativar as notificações agora. Tente novamente mais tarde." });
