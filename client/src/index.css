@@ -3281,3 +3281,5 @@ tbody tr.empty-row:hover { background: transparent; }
   .hub-dashboard .hub-metric strong { font-size: 18px; }
   .hub-toolbar select { max-width: none; }
 }
+
+.table-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--border-subtle); color: var(--muted); font-size: 13.5px; }

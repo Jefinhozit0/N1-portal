@@ -542,6 +542,9 @@ export function ListFilterBar({ label, count, noun, onClear }: { label: string; 
   </div>;
 }
 
+/** Rows drawn at once in the client portfolio; "Mostrar mais" adds another batch. */
+const CLIENTS_PER_PAGE = 50;
+
 function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, onClearFilter }: { setView: (view: View) => void; selectedClient: Client | null; setSelectedClient: (client: Client | null) => void; listFilter: ClientListFilter | null; onClearFilter: () => void }) {
   const dashboardQuery = trpc.portal.dashboard.useQuery(undefined, { retry: false, enabled: listFilter !== null });
   const filterIds = listFilter ? dashboardQuery.data?.listas.clientes[listFilter] : undefined;
@@ -574,6 +577,10 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
     const matchesStatus = statusFilter === "all" || (statusFilter === "attention" ? client.tone === "red" : client.status !== "Concluído" && client.tone !== "red");
     return matchesQuery && matchesStatus;
   }), [clientList, query, statusFilter, listFilter, filterIds]);
+  // Only the first rows are drawn; search and filters still cover the whole portfolio.
+  const [visibleCount, setVisibleCount] = useState(CLIENTS_PER_PAGE);
+  useEffect(() => setVisibleCount(CLIENTS_PER_PAGE), [query, statusFilter, listFilter]);
+  const visible = filtered.slice(0, visibleCount);
   const activeCount = clientList.filter((client) => client.status !== "Concluído" && client.tone !== "red").length;
   const attentionCount = clientList.filter((client) => client.tone === "red").length;
 
@@ -606,18 +613,22 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
       </div>
       <section className="panel table-panel">
         <div className="panel-heading">
-          <div><h3>Carteira de clientes</h3><p>{filtered.length} clientes exibidos · {clientesQuery.isLoading ? "Carregando..." : remoteClientes && remoteClientes.length > 0 ? "dados do Supabase" : "dados de demonstração"}</p></div>
+          <div><h3>Carteira de clientes</h3><p>{visible.length < filtered.length ? `${visible.length} de ${filtered.length}` : filtered.length} clientes exibidos ·{clientesQuery.isLoading ? "Carregando..." : remoteClientes && remoteClientes.length > 0 ? "dados do Supabase" : "dados de demonstração"}</p></div>
           <div className="filter-buttons"><button className={statusFilter === "all" && !listFilter ? "filter-active" : ""} onClick={() => { onClearFilter(); setStatusFilter("all"); }}>Todos <b>{clientList.length}</b></button><button className={statusFilter === "active" && !listFilter ? "filter-active" : ""} onClick={() => { onClearFilter(); setStatusFilter("active"); }}>Em andamento <b>{activeCount}</b></button><button className={statusFilter === "attention" && !listFilter ? "filter-active" : ""} onClick={() => { onClearFilter(); setStatusFilter("attention"); }}>Atenção <b>{attentionCount}</b></button></div>
         </div>
         {listFilter && <ListFilterBar label={CLIENT_LIST_FILTERS[listFilter]} count={filterIds ? filtered.length : undefined} noun="cliente(s)" onClear={onClearFilter} />}
         <div className="table-wrap">
           <table>
             <thead><tr><th>Nome</th><th>CPF</th><th>Status</th><th>Tags</th><th>Atualização</th><th /></tr></thead>
-            <tbody>{filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{listFilter && !filterIds ? "Carregando..." : listFilter ? "Nenhum cliente nesta situação. Tudo em dia!" : "Nenhum cliente encontrado."}</td></tr>}{filtered.map((client) => <tr key={client.name} onClick={() => { setSelectedClient(client); setView("client-detail"); }}><td><div className="table-person"><span className="avatar avatar-gradient">{client.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{client.name}</strong></div></td><td>{client.cpf}</td><td><StatusPill tone={client.tone}>{client.status}</StatusPill></td><td><div className="tags-container">{client.tags && client.tags.length > 0 ? client.tags.map((tag) => <span key={tag} className="client-tag">{tag}</span>) : <span className="no-tags">-</span>}</div></td><td className="muted-cell">{client.updated}</td><td><button className="row-more icon-button" aria-label="Abrir cliente"><ChevronRight size={17} /></button></td></tr>)}</tbody>
+            <tbody>{filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{listFilter && !filterIds ? "Carregando..." : listFilter ? "Nenhum cliente nesta situação. Tudo em dia!" : "Nenhum cliente encontrado."}</td></tr>}{visible.map((client) => <tr key={client.name} onClick={() => { setSelectedClient(client); setView("client-detail"); }}><td><div className="table-person"><span className="avatar avatar-gradient">{client.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{client.name}</strong></div></td><td>{client.cpf}</td><td><StatusPill tone={client.tone}>{client.status}</StatusPill></td><td><div className="tags-container">{client.tags && client.tags.length > 0 ? client.tags.map((tag) => <span key={tag} className="client-tag">{tag}</span>) : <span className="no-tags">-</span>}</div></td><td className="muted-cell">{client.updated}</td><td><button className="row-more icon-button" aria-label="Abrir cliente"><ChevronRight size={17} /></button></td></tr>)}</tbody>
           </table>
         </div>
+        {visible.length < filtered.length && <div className="table-more">
+          <span>Mostrando {visible.length} de {filtered.length}. Use a busca para achar um cliente específico.</span>
+          <button type="button" className="text-button" onClick={() => setVisibleCount((count) => count + CLIENTS_PER_PAGE)}>Mostrar mais {Math.min(CLIENTS_PER_PAGE, filtered.length - visible.length)}</button>
+        </div>}
       </section>
-      {registrationOpen && <div className="hub-modal-backdrop" onClick={() => setRegistrationOpen(false)}>
+      {registrationOpen &&<div className="hub-modal-backdrop" onClick={() => setRegistrationOpen(false)}>
         <section className="hub-modal" role="dialog" aria-modal="true" aria-labelledby="client-registration-title" onClick={(event) => event.stopPropagation()}>
           <button type="button" className="drawer-close icon-button" onClick={() => setRegistrationOpen(false)} aria-label="Fechar cadastro"><X size={18} /></button>
           <span className="eyebrow saleshub-eyebrow">Carteira de clientes</span>
