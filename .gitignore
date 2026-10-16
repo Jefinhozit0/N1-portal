@@ -119,6 +119,9 @@ client/public/__manus__/version.json
 # Sessão do WhatsApp (vale como estar logado no número da empresa)
 .whatsapp-auth/
 
+# Chaves das notificações do aplicativo (quem tem a chave privada pode mandar avisos aos clientes)
+.push-keys.json
+
 # Backups diários (podem ter dados de clientes), registros do servidor e estado de energia salvo pelos scripts
 backups/
 logs/

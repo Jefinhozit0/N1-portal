@@ -23,6 +23,9 @@ export const ENV = {
   teamNotifyWhatsApp: (process.env.TEAM_NOTIFY_WHATSAPP ?? "").split(/[,;]+/).map((phone) => phone.trim()).filter(Boolean),
   /** "off" stops the WhatsApp messages to clients about replies, status changes and documents. */
   notifyClients: (process.env.NOTIFY_CLIENTS ?? "on").toLowerCase() !== "off",
+  /** Key pair of the app notifications (Web Push). Empty: created once and kept in .push-keys.json. */
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "",
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
   /** Where the daily backup goes. A Google Drive / OneDrive synced folder keeps a copy off the notebook. */
   backupDir: process.env.BACKUP_DIR || "backups",
   /** cloudflared metrics address, used to find the tunnel's current address when APP_URL=auto. */

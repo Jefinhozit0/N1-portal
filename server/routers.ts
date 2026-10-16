@@ -9,7 +9,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { checkCode, codeErrorMessage, createVerificationCode, discardVerificationCode } from "./_core/verificationCodes";
 import { supabase } from "./_core/supabase";
 import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId, provisionClientAccess, removeClientLogins } from "./_core/clientAccess";
-import { TERMS_VERSION } from "@shared/termos";
+import { TERMS_VERSION, isValidTermsVersion } from "@shared/termos";
 import { computeDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
 import { computeSupabaseUsage } from "./_core/usoSupabase";
@@ -19,6 +19,7 @@ import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
 import { notifyClient, notifyTeamNewMessage } from "./_core/notificacoes";
+import { getPushPublicKey, savePushSubscription } from "./_core/push";
 import { getWhatsAppWebInfo, logoutWhatsAppWeb } from "./_core/whatsappWeb";
 import { backupJob, jobState } from "./_core/tarefas";
 import QRCode from "qrcode";
@@ -118,7 +119,7 @@ const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
 });
 
 const hasAcceptedTerms = (user: { app_metadata?: Record<string, unknown> }) =>
-  (user.app_metadata?.terms as { version?: string } | undefined)?.version === TERMS_VERSION;
+  isValidTermsVersion((user.app_metadata?.terms as { version?: string } | undefined)?.version);
 
 /** The process and the chat only open after the current version of the terms was accepted. */
 const clientWithTermsProcedure = clientProcedure.use(({ ctx, next }) => {
@@ -126,6 +127,13 @@ const clientWithTermsProcedure = clientProcedure.use(({ ctx, next }) => {
     throw new TRPCError({ code: "FORBIDDEN", message: "Aceite os termos de uso para continuar." });
   }
   return next();
+});
+
+/** A device turning on the app notifications (PushSubscription from the browser). */
+const pushSubscriptionInput = z.object({
+  endpoint: z.string().url().max(1000),
+  keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+  instalado: z.boolean(),
 });
 
 /** "Hoje, 09:42", "Ontem, 16:18" or "26 set, 11:05", for the "Atualização" column. */
@@ -403,6 +411,23 @@ export const appRouter = router({
 
     /** Who accepted the portal terms, who is still pending and why, client by client */
     termos: staffProcedure.query(() => computeTermsReport()),
+
+    /** Key the browser needs to turn on, on this device, the notice of new messages from clients. */
+    chaveNotificacoes: staffProcedure.query(() => ({ publicKey: getPushPublicKey() })),
+
+    /** Keeps this team member's device; also called again on each visit to stay in sync. */
+    ativarNotificacoes: staffProcedure
+      .input(pushSubscriptionInput)
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.staffUser.email) throw new TRPCError({ code: "BAD_REQUEST", message: "Sua conta não tem e-mail para receber as notificações." });
+        try {
+          await savePushSubscription({ staffEmail: ctx.staffUser.email }, input, String(ctx.req.headers["user-agent"] ?? ""), input.instalado);
+        } catch (error) {
+          console.warn("[push] Could not save team device:", error instanceof Error ? error.message : error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error && /migrations/.test(error.message) ? error.message : "Não foi possível ativar as notificações agora. Tente novamente mais tarde." });
+        }
+        return { active: true } as const;
+      }),
     /** Whether the notebook running the portal is plugged in (null when unknown) */
     energia: staffProcedure.query(async () => {
       const state = await getPowerState();
@@ -971,6 +996,22 @@ export const appRouter = router({
         });
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível registrar o aceite. Tente novamente." });
         return { accepted: true } as const;
+      }),
+
+    /** Key the browser needs to turn on the app notifications on this device. */
+    chaveNotificacoes: clientWithTermsProcedure.query(() => ({ publicKey: getPushPublicKey() })),
+
+    /** Keeps the device that turned the notices on; also called again on each visit to stay in sync. */
+    ativarNotificacoes: clientWithTermsProcedure
+      .input(pushSubscriptionInput)
+      .mutation(async ({ ctx, input }) => {
+        try {
+          await savePushSubscription({ clientId: ctx.clienteId }, input, String(ctx.req.headers["user-agent"] ?? ""), input.instalado);
+        } catch (error) {
+          console.warn("[push] Could not save device:", error instanceof Error ? error.message : error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível ativar as notificações agora. Tente novamente mais tarde." });
+        }
+        return { active: true } as const;
       }),
 
     meuProcesso: clientWithTermsProcedure.query(async ({ ctx }) => {

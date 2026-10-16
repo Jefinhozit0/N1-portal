@@ -1,5 +1,6 @@
-// Service worker of the N1 portal. Its only job: when the server cannot be reached (the notebook
+// Service worker of the N1 portal. When the server cannot be reached (the notebook
 // that runs it is off or asleep), show the "em manutenção" page instead of the browser's error.
+// It also shows the app notifications (end of the file).
 // It never caches the portal itself, so a new deploy is always picked up.
 
 const CACHE = "n1-manutencao-v1";
@@ -52,4 +53,38 @@ self.addEventListener("fetch", (event) => {
   if (url.origin === self.location.origin && url.pathname === LOGO) {
     event.respondWith(fetch(request).catch(() => caches.match(LOGO)));
   }
+});
+
+// App notifications (sent by server/_core/push.ts): reply from the team, status change, new document.
+self.addEventListener("push", (event) => {
+  let message = {};
+  try { message = event.data ? event.data.json() : {}; } catch { message = { body: event.data ? event.data.text() : "" }; }
+  event.waitUntil(self.registration.showNotification(message.title || "N1 Soluções", {
+    body: message.body || "Há uma novidade no seu processo.",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    lang: "pt-BR",
+    // Same kind replaces the previous notice instead of piling up.
+    tag: message.tag || "n1",
+    renotify: true,
+    data: { url: message.url || "/" },
+  }));
+});
+
+// Tapping the notice brings the portal to the front (an open window if there is one) on the right screen.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/", self.location.origin);
+  // Only ever opens the portal itself.
+  const url = target.origin === self.location.origin ? target.href : self.location.origin + "/";
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
+    if (open) {
+      await open.focus();
+      if ("navigate" in open) return open.navigate(url).catch(() => undefined);
+      return undefined;
+    }
+    return self.clients.openWindow(url);
+  })());
 });

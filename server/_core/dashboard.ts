@@ -1,6 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import { DASHBOARD_RULES, type ChargebackListFilter, type ClientListFilter } from "@shared/dashboard";
-import { TERMS_VERSION } from "@shared/termos";
+import { isValidTermsVersion } from "@shared/termos";
 import { parseTicketMessage } from "@shared/tickets";
 import { supabase } from "./supabase";
 
@@ -114,7 +114,7 @@ export async function computeDashboard(now = Date.now()) {
   // Only logins of clients that still exist: a client removed straight in the database leaves its login behind.
   const existingClientIds = new Set(clientes.map((c) => c.id as number));
   const accounts = users.filter((u) => u.app_metadata?.role === "client" && existingClientIds.has(u.app_metadata?.cliente_id as number));
-  const aceitos = accounts.filter((u) => (u.app_metadata?.terms as { version?: string } | undefined)?.version === TERMS_VERSION).length;
+  const aceitos = accounts.filter((u) => isValidTermsVersion((u.app_metadata?.terms as { version?: string } | undefined)?.version)).length;
   const ativos30d = accounts.filter((u) => (time(u.last_sign_in_at) ?? 0) >= now - DASHBOARD_RULES.recentLoginDays * DAY).length;
 
   // ── Chargebacks ───────────────────────────────────────────

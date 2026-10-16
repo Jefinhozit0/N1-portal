@@ -25,6 +25,9 @@ import { N1Logo } from "@/components/N1Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CountUp } from "@/components/CountUp";
 import { useArrivedIds } from "@/hooks/useArrivedIds";
+import { usePushDevice } from "@/hooks/usePushDevice";
+import { isInstalledApp, isIosSafari } from "@/lib/installPrompt";
+import { pushSupported } from "@/lib/pushNotifications";
 import { playEnter } from "@/lib/motion";
 import { supabase } from "@/lib/supabase";
 import {
@@ -33,6 +36,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  BellRing,
   CheckCheck,
   CheckCircle2,
   ChevronRight,
@@ -801,6 +805,34 @@ function PowerBanner() {
     : "Por enquanto tudo funciona para a equipe e para os clientes. Não feche a tampa nem deixe o notebook parado: se ele dormir, o portal sai do ar."}</p></div></div>;
 }
 
+const STAFF_PUSH_DISMISSED_KEY = "n1-staff-push-dismissed";
+
+/** Offers this team member a notice on the phone or computer whenever a client writes in the portal. */
+function StaffPushBanner() {
+  const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(STAFF_PUSH_DISMISSED_KEY) === "1"; } catch { return false; } });
+  const chave = trpc.portal.chaveNotificacoes.useQuery(undefined, { retry: false, enabled: pushSupported(), staleTime: Infinity });
+  const ativar = trpc.portal.ativarNotificacoes.useMutation();
+  const push = usePushDevice(chave.data?.publicKey, ativar.mutateAsync);
+  // On iPhone the notices only exist in the app added to the home screen.
+  const iosBrowser = !push.supported && isIosSafari() && !isInstalledApp();
+  if (dismissed || push.state === null || push.state === "on" || (push.state === "unsupported" && !iosBrowser)) return null;
+  function dismiss() {
+    setDismissed(true);
+    try { localStorage.setItem(STAFF_PUSH_DISMISSED_KEY, "1"); } catch { /* only a convenience */ }
+  }
+  return <div className="power-banner staff-push-banner" role="status"><BellRing size={18} /><div>
+    <strong>Receba um aviso quando um cliente mandar mensagem</strong>
+    <p>{iosBrowser
+      ? "No iPhone, toque em Compartilhar → Adicionar à Tela de Início e abra o portal pelo ícone; o botão para ativar aparece lá."
+      : push.state === "denied"
+        ? "As notificações do portal estão bloqueadas neste aparelho. Libere nas configurações do navegador ou do celular."
+        : "A notificação chega neste aparelho mesmo com o portal fechado, e abre o Atendimento."}</p>
+    {push.error && <p className="form-message">{push.error}</p>}
+  </div>
+  {push.state === "off" && <button type="button" className="primary-button" disabled={push.busy || !chave.data} onClick={() => void push.enable()}>{push.busy ? "Ativando..." : "Ativar notificações"}</button>}
+  <button type="button" className="icon-button" aria-label="Fechar" onClick={dismiss}><X size={16} /></button></div>;
+}
+
 /** Shimmering placeholder rows while a panel loads. */
 function LoadingRows() { return <div className="skeleton-list" role="status" aria-label="Carregando..."><i /><i /><i /></div>; }
 
@@ -808,7 +840,8 @@ function MoreIcon() { return <span className="more-icon"><i /><i /><i /></span>;
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [view, setView] = useState<View>("dashboard");
+  // A tap on the notice of a client's message opens Atendimento (?view=atendimento, see sw.js).
+  const [view, setView] = useState<View>(() => new URLSearchParams(window.location.search).get("view") === "atendimento" ? "atendimento" : "dashboard");
   // Filter chosen on the dashboard; opening a page from the menu clears it.
   const [listFilter, setListFilter] = useState<ListFilter | null>(null);
   function navigate(next: View, filter?: ListFilter) {
@@ -912,6 +945,7 @@ export default function Home() {
       <main className={`main-area ${collapsed ? "main-area-wide" : ""}`}>
         <Topbar view={view} onMenu={() => setMobileMenu(true)} onSearch={() => navigate("clientes")} onNotifications={() => navigate("atendimento")} onWhatsApp={() => navigate(isAdmin ? "admin" : "atendimento")} userName={userName} />
         <PowerBanner />
+        <StaffPushBanner />
         {view === "dashboard" && <Dashboard navigate={navigate} userName={userName} />}
         {view === "clientes" && <ClientsPage setView={setView} selectedClient={selectedClient} setSelectedClient={setSelectedClient} listFilter={clientFilter} onClearFilter={() => setListFilter(null)} />}
         {view === "client-detail" && selectedClient && <Suspense fallback={<div className="page-content"><LoadingRows /></div>}><ClientDetail client={selectedClient} onBack={() => setView("clientes")} isAdmin={isAdmin} /></Suspense>}
