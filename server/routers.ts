@@ -19,6 +19,7 @@ import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
 import { notifyClient, notifyTeamNewMessage } from "./_core/notificacoes";
+import { getPushPublicKey, savePushSubscription } from "./_core/push";
 import { getWhatsAppWebInfo, logoutWhatsAppWeb } from "./_core/whatsappWeb";
 import { backupJob, jobState } from "./_core/tarefas";
 import QRCode from "qrcode";
@@ -971,6 +972,26 @@ export const appRouter = router({
         });
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível registrar o aceite. Tente novamente." });
         return { accepted: true } as const;
+      }),
+
+    /** Key the browser needs to turn on the app notifications on this device. */
+    chaveNotificacoes: clientWithTermsProcedure.query(() => ({ publicKey: getPushPublicKey() })),
+
+    /** Keeps the device that turned the notices on; also called again on each visit to stay in sync. */
+    ativarNotificacoes: clientWithTermsProcedure
+      .input(z.object({
+        endpoint: z.string().url().max(1000),
+        keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+        instalado: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          await savePushSubscription(ctx.clienteId, input, String(ctx.req.headers["user-agent"] ?? ""), input.instalado);
+        } catch (error) {
+          console.warn("[push] Could not save device:", error instanceof Error ? error.message : error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível ativar as notificações agora. Tente novamente mais tarde." });
+        }
+        return { active: true } as const;
       }),
 
     meuProcesso: clientWithTermsProcedure.query(async ({ ctx }) => {

@@ -2657,6 +2657,7 @@ a.primary-button { text-decoration: none; }
 .client-terms-text p { margin: 0 0 6px; color: var(--text-soft); font-size: 14px; line-height: 1.6; }
 .client-terms-agree { display: flex; align-items: flex-start; gap: 10px; color: var(--text); font-size: 15px; line-height: 1.45; cursor: pointer; }
 .client-terms-agree input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--navy); }
+.client-terms-app-hint { margin: 8px 0 0 28px; font-size: 13.5px; }
 .client-terms-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
 /* Dashboard states */
@@ -2937,6 +2938,13 @@ tbody tr.empty-row:hover { background: transparent; }
 .install-app-close { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; }
 .install-app-button { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; }
 .install-inline-icon { vertical-align: -2px; }
+.app-setup-steps { display: grid; gap: 12px; margin: 14px 0 0; padding: 0; list-style: none; }
+.app-setup-steps li { padding: 12px 14px; border: 1px solid var(--gold-line); border-radius: 10px; background: var(--surface); }
+.app-setup-steps li > strong { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14.5px; font-weight: 600; }
+.app-setup-steps li > p { margin-top: 6px; }
+.app-setup-steps .install-app-button { margin-top: 10px; }
+.app-setup-number { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--surface); background: var(--gold); font-size: 12px; font-weight: 700; }
+.app-setup-done > strong { color: var(--green) !important; }
 .client-portal-block h2 { margin: 0 0 12px; color: var(--text); font-size: 17px; font-weight: 600; }
 .client-portal-block h2 > svg { margin-right: 6px; color: var(--link); vertical-align: -2px; }
 .client-portal-summary { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.6; }

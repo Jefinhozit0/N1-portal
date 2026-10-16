@@ -70,6 +70,7 @@ export default function TermosPage({ onOpenClient }: { onOpenClient: (row: Recor
     { label: "Receberam login", value: t.withLogin },
     { label: "Criaram a senha", value: passwordCreated },
     { label: "Aceitaram os termos", value: t.accepted },
+    { label: "Ativaram as notificações do app", value: t.withNotifications },
   ] : [];
   const maxWeek = Math.max(1, ...(report?.weeks ?? []).map((week) => week.accepted));
   const reasons: Situation[] = ["primeiro-acesso", "link-expirado", "sem-aceite", "versao-antiga", "sem-login"];
@@ -146,9 +147,9 @@ export default function TermosPage({ onOpenClient }: { onOpenClient: (row: Recor
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Cliente</th><th>Situação</th><th>Login enviado</th><th>Último acesso</th><th>Aceite</th><th /></tr></thead>
+          <thead><tr><th>Cliente</th><th>Situação</th><th>Login enviado</th><th>Último acesso</th><th>Aceite</th><th>Notificações</th><th /></tr></thead>
           <tbody>
-            {report && visible.length === 0 && <tr className="empty-row"><td colSpan={6}>{filter === "pendentes" ? "Nenhum cliente pendente. Tudo em dia!" : "Nenhum cliente nesta situação."}</td></tr>}
+            {report && visible.length === 0 && <tr className="empty-row"><td colSpan={7}>{filter === "pendentes" ? "Nenhum cliente pendente. Tudo em dia!" : "Nenhum cliente nesta situação."}</td></tr>}
             {visible.map((row) => {
               const info = SITUATIONS[row.situation];
               const waiting = daysSince(row.linkSentAt ?? row.loginCreatedAt);
@@ -159,6 +160,7 @@ export default function TermosPage({ onOpenClient }: { onOpenClient: (row: Recor
                 <td>{formatDate(row.linkSentAt ?? row.loginCreatedAt)}{(row.situation === "primeiro-acesso" || row.situation === "link-expirado") && waiting !== null && <small className="terms-sub">há {waiting} dia(s){row.reminded ? " · lembrete enviado" : ""}</small>}</td>
                 <td>{row.lastSignInAt ? formatDate(row.lastSignInAt) : "Nunca entrou"}</td>
                 <td>{row.acceptedAt ? <>{formatDateTime(row.acceptedAt)}<small className="terms-sub">{[row.acceptedDevice, row.acceptedIp && `IP ${row.acceptedIp}`, row.situation === "versao-antiga" && `versão ${row.acceptedVersion}`].filter(Boolean).join(" · ") || "—"}</small></> : "—"}</td>
+                <td>{row.notificationDevices > 0 ? <><StatusPill tone="green">Ativas</StatusPill><small className="terms-sub">{row.notificationDevices === 1 ? "1 aparelho" : `${row.notificationDevices} aparelhos`}{row.appInstalled ? " · app instalado" : ""}</small></> : "—"}</td>
                 <td>{canResend && <button type="button" className="secondary-button terms-resend" disabled={reenviarAcesso.isPending} onClick={(event) => { event.stopPropagation(); reenviarAcesso.mutate({ id: row.id }); }}><Send size={14} /> {row.situation === "sem-login" ? "Enviar acesso" : "Reenviar"}</button>}</td>
               </tr>;
             })}

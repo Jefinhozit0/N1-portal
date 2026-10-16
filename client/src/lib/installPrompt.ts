@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 let deferred: InstallPromptEvent | null = null;
+// Installed during this visit: the page itself stays in the browser tab, so display-mode does not tell.
+let installedNow = false;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((listener) => listener());
 
@@ -20,6 +22,7 @@ if (typeof window !== "undefined") {
   });
   window.addEventListener("appinstalled", () => {
     deferred = null;
+    installedNow = true;
     notify();
   });
 }
@@ -44,6 +47,7 @@ export function useInstallPrompt() {
   }, []);
   return {
     canPrompt: deferred !== null,
+    installedNow,
     install: async () => {
       if (!deferred) return false;
       const event = deferred;

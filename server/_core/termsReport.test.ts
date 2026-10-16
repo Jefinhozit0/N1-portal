@@ -53,6 +53,15 @@ describe("buildTermsReport", () => {
     expect(report.weeks.reduce((sum, week) => sum + week.accepted, 0)).toBe(1);
   });
 
+  it("shows who has the app notifications on", () => {
+    const withPush = buildTermsReport(clientes, users, NOW, new Map([[1, { devices: 2, installed: true }]]));
+    const ana = withPush.clients.find((row) => row.id === 1)!;
+    expect(ana).toMatchObject({ notificationDevices: 2, appInstalled: true });
+    expect(withPush.clients.find((row) => row.id === 2)).toMatchObject({ notificationDevices: 0, appInstalled: false });
+    expect(withPush.totals.withNotifications).toBe(1);
+    expect(report.totals.withNotifications).toBe(0);
+  });
+
   it("names common devices", () => {
     expect(describeDevice("Mozilla/5.0 (Linux; Android 14) Chrome/120.0 Mobile Safari/537.36")).toBe("Android · Chrome");
     expect(describeDevice("Mozilla/5.0 (Windows NT 10.0; Win64) Chrome/120.0 Safari/537.36 Edg/120.0")).toBe("Windows · Edge");

@@ -8,9 +8,10 @@ import { TERMS_SECTIONS, TERMS_TITLE, TERMS_VERSION } from "@shared/termos";
 import { BOT_STEPS, TICKET_SENT_REPLY, greeting, type BotStepId, type ProcessInfo } from "./clientChatbot";
 import { N1Logo } from "@/components/N1Logo";
 import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
-import { InstallAppCard } from "@/components/InstallAppCard";
+import { AppSetupCard } from "@/components/AppSetupCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
+import { isIosSafari, isInstalledApp, useInstallPrompt } from "@/lib/installPrompt";
 import { trpc } from "@/lib/trpc";
 import { useArrivedIds } from "@/hooks/useArrivedIds";
 import { StatusPill } from "./Home";
@@ -65,6 +66,13 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
   const termosQuery = trpc.cliente.termos.useQuery(undefined, { retry: false });
   const termsAccepted = termosQuery.data?.accepted === true;
   const aceitarTermos = trpc.cliente.aceitarTermos.useMutation({ onSuccess: () => termosQuery.refetch() });
+  const installPrompt = useInstallPrompt();
+  function acceptTerms() {
+    // The terms include installing the app: the browser only offers it during a tap, so it opens
+    // right here. Notifications get their own tap next, on the card at the top of the portal.
+    if (installPrompt.canPrompt) void installPrompt.install();
+    aceitarTermos.mutate({ version: TERMS_VERSION });
+  }
   const [agreed, setAgreed] = useState(false);
   const processoQuery = trpc.cliente.meuProcesso.useQuery(undefined, { retry: false, enabled: termsAccepted, refetchInterval: 60_000 });
   const documentosQuery = trpc.cliente.documentos.useQuery(undefined, { retry: false, enabled: termsAccepted, refetchInterval: 60_000 });
@@ -80,7 +88,8 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
   const mensagensQuery = trpc.cliente.mensagens.useQuery(undefined, { retry: false, refetchInterval: 30_000, enabled: termsAccepted });
   const [draft, setDraft] = useState("");
   // On a phone the process and the chat are two tabs; on a computer both stay on screen.
-  const [tab, setTab] = useState<"processo" | "conversa">("processo");
+  // A tap on the notice of a reply opens the chat (?aba=conversa, see sw.js).
+  const [tab, setTab] = useState<"processo" | "conversa">(() => new URLSearchParams(window.location.search).get("aba") === "conversa" ? "conversa" : "processo");
   const enviarMensagem = trpc.cliente.enviarMensagem.useMutation({
     // Returning the refetch keeps the mutation pending until the new message is in the list,
     // so the "Enviando..." bubble is replaced without flicker.
@@ -205,10 +214,11 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
             <div className="client-terms-text" tabIndex={0} aria-label="Texto dos termos">
               {TERMS_SECTIONS.map((section) => <section key={section.title}><h2>{section.title}</h2><p>{section.text}</p></section>)}
             </div>
-            <label className="client-terms-agree"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} /> Li e aceito os termos de uso e o tratamento dos meus dados.</label>
+            <label className="client-terms-agree"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} /> Li e aceito os termos de uso, o tratamento dos meus dados e a instalação do app da N1 com notificações neste aparelho.</label>
+            {!isInstalledApp() && (installPrompt.canPrompt || isIosSafari()) && <p className="client-portal-muted client-terms-app-hint">{installPrompt.canPrompt ? "Ao continuar, o aparelho pergunta se pode instalar o app da N1." : "Ao continuar, mostramos como colocar o app da N1 na tela de início."}</p>}
             {aceitarTermos.error && <p className="form-message">{aceitarTermos.error.message}</p>}
             <div className="client-terms-actions">
-              <button className="primary-button" disabled={!agreed || aceitarTermos.isPending} onClick={() => aceitarTermos.mutate({ version: TERMS_VERSION })}>{aceitarTermos.isPending ? "Registrando..." : "Aceitar e continuar"}</button>
+              <button className="primary-button" disabled={!agreed || aceitarTermos.isPending} onClick={acceptTerms}>{aceitarTermos.isPending ? "Registrando..." : "Aceitar e continuar"}</button>
             </div>
           </section>
         )}
@@ -223,6 +233,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
           </section>
         )}
         {processo && <>
+          <AppSetupCard />
           <div className="client-portal-tabs" role="tablist" aria-label="Seções do portal">
             <button type="button" role="tab" aria-selected={tab === "processo"} onClick={() => setTab("processo")}><ClipboardList size={16} /> Meu processo</button>
             <button type="button" role="tab" aria-selected={tab === "conversa"} onClick={() => setTab("conversa")}><MessageCircle size={16} /> Conversa</button>
@@ -252,7 +263,6 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
             <button type="button" className="primary-button client-portal-to-chat" onClick={() => setTab("conversa")}><MessageCircle size={17} /> Falar com a equipe</button>
           </section>
 
-          <InstallAppCard />
 
           {documentosQuery.isSuccess && historicoQuery.isSuccess && (
             <section className="client-portal-card client-portal-block">

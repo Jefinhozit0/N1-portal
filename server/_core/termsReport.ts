@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { TERMS_VERSION } from "@shared/termos";
 import { listAllUsers } from "./dashboard";
+import { listPushDevices } from "./push";
 import { supabase } from "./supabase";
 
 const DAY = 86_400_000;
@@ -51,7 +52,8 @@ function weekStart(at: number) {
   return Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() - day) + 3 * 3_600_000;
 }
 
-export function buildTermsReport(clientes: ClienteRow[], users: User[], now = Date.now()) {
+/** pushDevices: devices with the app notifications on, per client (see push.ts). */
+export function buildTermsReport(clientes: ClienteRow[], users: User[], now = Date.now(), pushDevices = new Map<number, { devices: number; installed: boolean }>()) {
   // One login per client; if a client somehow has more, the most recently created one counts.
   const accountByClient = new Map<number, User>();
   for (const user of users) {
@@ -80,6 +82,8 @@ export function buildTermsReport(clientes: ClienteRow[], users: User[], now = Da
       acceptedVersion: terms?.version ?? null,
       acceptedIp: terms?.ip ?? null,
       acceptedDevice: describeDevice(terms?.user_agent),
+      notificationDevices: pushDevices.get(cliente.id)?.devices ?? 0,
+      appInstalled: pushDevices.get(cliente.id)?.installed === true,
     };
   });
 
@@ -121,6 +125,7 @@ export function buildTermsReport(clientes: ClienteRow[], users: User[], now = Da
       withoutEmail: rows.filter((row) => row.situation === "sem-login" && !row.email).length,
       acceptedLast7Days: acceptedRows.filter((row) => (time(row.acceptedAt) ?? 0) >= now - 7 * DAY).length,
       medianHoursToAccept: median(hoursToAccept),
+      withNotifications: rows.filter((row) => row.notificationDevices > 0).length,
     },
     weeks,
     // Pending clients first, the oldest invitation at the top; then the ones who accepted, newest first.
@@ -134,12 +139,13 @@ export function buildTermsReport(clientes: ClienteRow[], users: User[], now = Da
 }
 
 export async function computeTermsReport(now = Date.now()) {
-  const [clientesRes, users] = await Promise.all([
+  const [clientesRes, users, pushDevices] = await Promise.all([
     supabase.from("clientes").select("id, name, email, phone, status, created_at").limit(10000),
     listAllUsers(),
+    listPushDevices(),
   ]);
   if (clientesRes.error) throw new Error(clientesRes.error.message);
-  return buildTermsReport((clientesRes.data ?? []) as ClienteRow[], users, now);
+  return buildTermsReport((clientesRes.data ?? []) as ClienteRow[], users, now, pushDevices);
 }
 
 export type TermsReport = ReturnType<typeof buildTermsReport>;

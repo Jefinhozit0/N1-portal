@@ -34,6 +34,7 @@ Portal da **N1 Soluções** com duas áreas:
 - **Termos de uso** versionados. O processo e o chat só abrem depois do aceite, e o servidor também verifica isso.
 - **Meu processo** com status, progresso, documentos para baixar e histórico, e **chat** com a equipe, incluindo um assistente para dúvidas frequentes. A conversa fica salva.
 - **Avisos automáticos** por WhatsApp e e-mail quando a equipe responde, muda o status ou anexa um documento.
+- **Aplicativo com notificações:** os termos incluem instalar o portal como app. Ao aceitar, o Android e o computador oferecem a instalação na hora; no iPhone aparece o passo a passo (Compartilhar → Adicionar à Tela de Início). Depois o cliente ativa as notificações com um toque e passa a ser avisado no aparelho dos mesmos três eventos, mesmo com o app fechado. No iPhone as notificações só funcionam com o app instalado (iOS 16.4 ou mais novo). A tela Termos mostra quem está com elas ativas. Precisa da migração `20261016_notificacoes_app.sql`.
 
 ### Design (revisão de 08/10/2026)
 - Ponte entre os tokens da marca e os componentes shadcn/ui, que antes apareciam com fundo transparente.
@@ -86,6 +87,7 @@ Preencha o `.env`:
 | `ADMIN_EMAILS` | Administradores: podem apagar e veem a página Administração |
 | `TEAM_NOTIFY_EMAILS`, `TEAM_NOTIFY_WHATSAPP` | Quem recebe o aviso quando um cliente escreve (padrão: todos de `STAFF_EMAILS`, por e-mail) |
 | `NOTIFY_CLIENTS` | `off` desliga os avisos aos clientes |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Chaves das notificações do app. Vazio: criadas sozinhas em `.push-keys.json`. Não perca nem troque: todo aparelho teria que ativar de novo |
 | `BACKUP_DIR` | Pasta do backup diário (padrão `backups`). Uma pasta do Google Drive guarda cópia fora do notebook |
 | `BACKGROUND_JOBS` | `off` desliga backup e lembretes automáticos |
 | `PORT` | Porta do servidor (padrão 3000) |

@@ -2,13 +2,14 @@ import { parseTicketMessage } from "@shared/tickets";
 import { sendNoticeEmail } from "./email";
 import { ENV } from "./env";
 import { getPublicUrl } from "./publicUrl";
+import { sendPushToClient, type PushMessage } from "./push";
 import { supabase } from "./supabase";
 import { canSendFreeText, normalizeBrazilPhone, sendFreeText } from "./whatsapp";
 
 /**
  * Automatic notices.
- * - Client: WhatsApp and e-mail when the team replies in the chat, changes the status or attaches
- *   a document, so the client comes back to the portal.
+ * - Client: app notification (see push.ts), WhatsApp and e-mail when the team replies in the chat,
+ *   changes the status or attaches a document, so the client comes back to the portal.
  * - Team: e-mail (and WhatsApp, if TEAM_NOTIFY_WHATSAPP is set) when a client writes.
  * Each kind of notice has a minimum interval per client, so a burst of messages or uploads turns
  * into a single notice instead of spam (which would also put the WhatsApp number at risk).
@@ -22,6 +23,7 @@ const CLIENT_INTERVAL_MS: Record<ClientNoticeKind, number> = {
   status: 2 * 60_000,
   documento: 10 * 60_000,
 };
+const PUSH_INTERVAL_MS = 30_000;
 const TEAM_INTERVAL_MS = 10 * 60_000;
 const lastSent = new Map<string, number>();
 
@@ -52,9 +54,24 @@ function clientTexts(kind: ClientNoticeKind, firstName: string, detail: string |
   };
 }
 
+/**
+ * The app notification: short, and without the client's name (it shows on the lock screen).
+ * The address is relative, so it opens wherever the app was installed from.
+ */
+export function pushText(kind: ClientNoticeKind, detail?: string): PushMessage {
+  if (kind === "resposta") return { title: "Nova mensagem da N1", body: "A equipe respondeu sua mensagem. Toque para ver.", url: "/?aba=conversa", tag: "resposta" };
+  if (kind === "status") return { title: "Seu processo foi atualizado", body: detail ? `Situação atual: ${detail}.` : "Veja a situação atual no portal.", url: "/", tag: "status" };
+  return { title: "Novo documento no seu processo", body: detail ? `A N1 adicionou: ${detail}.` : "A N1 adicionou um documento ao seu processo.", url: "/", tag: "documento" };
+}
+
 /** Tells the client about a change. Runs in the background; call it without await. */
 export function notifyClient(clientId: number, kind: ClientNoticeKind, detail?: string) {
   if (!ENV.notifyClients) return;
+  // The app notification costs nothing and puts no number at risk, so it only skips repeats a few seconds apart.
+  if (claimSlot(`push:${clientId}:${kind}`, PUSH_INTERVAL_MS)) {
+    void sendPushToClient(clientId, pushText(kind, detail))
+      .catch((error) => console.warn(`[notificacoes] App notice to client #${clientId} failed:`, error instanceof Error ? error.message : error));
+  }
   if (!claimSlot(`client:${clientId}:${kind}`, CLIENT_INTERVAL_MS[kind])) return;
   void (async () => {
     const { data: cliente } = await supabase.from("clientes").select("name, email, phone").eq("id", clientId).maybeSingle();

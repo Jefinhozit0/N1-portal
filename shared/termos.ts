@@ -3,7 +3,7 @@
  * N1's legal team before going live. When the text changes, bump TERMS_VERSION so every
  * client is asked to accept the new version on their next visit.
  */
-export const TERMS_VERSION = "2026-10-v1";
+export const TERMS_VERSION = "2026-10-v2";
 
 export const TERMS_TITLE = "Termos de uso do portal e tratamento de dados";
 
@@ -25,7 +25,11 @@ export const TERMS_SECTIONS: { title: string; text: string }[] = [
     text: "Ao aceitar, você concorda em receber mensagens sobre o seu processo pelo WhatsApp, por e-mail e pelo portal, como avisos de andamento, pedidos de documentos e lembretes. Você pode pedir para não receber mensagens pelo WhatsApp a qualquer momento.",
   },
   {
-    title: "5. Atendimento",
+    title: "5. Aplicativo e notificações",
+    text: "Ao aceitar, você concorda em instalar o portal como aplicativo neste aparelho e em ativar as notificações dele, para ser avisado quando a equipe responder, quando o seu processo mudar de situação e quando um documento novo for adicionado. As notificações mostram um aviso curto, como a nova situação do processo ou o nome do documento, e abrem o portal ao serem tocadas. O aparelho pede a sua confirmação antes de instalar e antes de ativar os avisos, e você pode desativá-los a qualquer momento nas configurações do celular ou do navegador.",
+  },
+  {
+    title: "6. Atendimento",
     text: "O assistente virtual do portal responde dúvidas gerais com respostas pré-definidas e não substitui a orientação da equipe. Questões sobre valores, pagamentos ou estratégia do processo são tratadas diretamente com um atendente.",
   },
 ];
