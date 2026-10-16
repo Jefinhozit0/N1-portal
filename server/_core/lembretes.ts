@@ -40,7 +40,7 @@ export async function sendAccessReminders(): Promise<number> {
   const portalUrl = await getPublicUrl();
   let sent = 0;
   for (const { clienteId } of due) {
-    const { data: cliente } = await supabase.from("clientes").select("id, name, email, phone").eq("id", clienteId).maybeSingle();
+    const { data: cliente } = await supabase.from("clientes").select("id, name, email, phone, tags").eq("id", clienteId).maybeSingle();
     if (!cliente?.email) continue;
     const result = await provisionClientAccess(cliente, portalUrl, { reminder: true });
     if (result.email.sent || result.whatsapp.sent) {

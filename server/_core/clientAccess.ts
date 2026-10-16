@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import type { User } from "@supabase/supabase-js";
+import { OLD_SYSTEM_TAG } from "@shared/processo";
 import { sendClientAccessEmail } from "./email";
 import { supabase } from "./supabase";
 import { isWhatsAppEnabled, normalizeBrazilPhone, sendAccessMessage } from "./whatsapp";
@@ -80,12 +81,17 @@ export async function completeFirstAccess(user: User, password: string) {
   if (error) throw error;
 }
 
+export function isFromOldSystem(cliente: { tags?: string[] | null }) {
+  return Array.isArray(cliente.tags) && cliente.tags.includes(OLD_SYSTEM_TAG);
+}
+
 /**
  * Creates (or refreshes) the client's login and sends the first-access link by e-mail and by
- * WhatsApp from the corporate number. Never throws: each channel reports its own result.
+ * WhatsApp from the corporate number. Clients tagged as coming from the old system get a message
+ * that presents the new portal. Never throws: each channel reports its own result.
  */
 export async function provisionClientAccess(
-  cliente: { id: number; name: string; email?: string | null; phone?: string | null },
+  cliente: { id: number; name: string; email?: string | null; phone?: string | null; tags?: string[] | null },
   portalUrl: string,
   options: { reminder?: boolean } = {},
 ): Promise<ClientAccessResult> {
@@ -136,9 +142,10 @@ export async function provisionClientAccess(
   // Short link: /a/<token> leads to the first-access page (see registerShortLinks).
   const link = `${portalUrl.replace(/\/$/, "")}/a/${token}`;
   const firstName = cliente.name.trim().split(/\s+/)[0] || "cliente";
+  const migrated = isFromOldSystem(cliente);
 
   const [emailResult, whatsappResult] = await Promise.all([
-    sendClientAccessEmail(email, { name: cliente.name, link, reminder: options.reminder })
+    sendClientAccessEmail(email, { name: cliente.name, link, reminder: options.reminder, migrated })
       .then((): ChannelResult => ({ sent: true }))
       .catch((error): ChannelResult => {
         console.error("[ClientAccess] Access e-mail failed:", error);
@@ -149,7 +156,7 @@ export async function provisionClientAccess(
       const phone = normalizeBrazilPhone(cliente.phone);
       if (!phone) return { sent: false, reason: cliente.phone ? `Telefone "${cliente.phone}" inválido. Use DDD + número.` : "Cliente sem telefone cadastrado." };
       try {
-        await sendAccessMessage(phone, { firstName, link, reminder: options.reminder });
+        await sendAccessMessage(phone, { firstName, link, reminder: options.reminder, migrated });
         return { sent: true };
       } catch (error) {
         console.error("[ClientAccess] Access WhatsApp failed:", error);

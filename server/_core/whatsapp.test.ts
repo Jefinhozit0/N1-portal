@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { accessMessageText, isWhatsAppEnabled, normalizeBrazilPhone, sendAccessWhatsApp } from "./whatsapp";
+import { accessMessageText, isWhatsAppEnabled, migrationMessageText, migrationReminderText, normalizeBrazilPhone, sendAccessWhatsApp } from "./whatsapp";
 
 const config = {
   whatsappToken: "token",
@@ -60,5 +60,20 @@ describe("WhatsApp provider", () => {
     const text = accessMessageText({ firstName: "Joana", link: "https://portal/primeiro-acesso?u=a&t=b" });
     expect(text).toContain("Olá, Joana!");
     expect(text).toContain("https://portal/primeiro-acesso?u=a&t=b");
+  });
+});
+
+describe("Old-system clients", () => {
+  it("the access message presents the new portal and keeps the link", () => {
+    const text = migrationMessageText({ firstName: "Joana", link: "https://portal/a/K7p2XqM4bN9w" });
+    expect(text).toContain("Olá, Joana!");
+    expect(text).toContain("novo portal");
+    expect(text).toContain("https://portal/a/K7p2XqM4bN9w");
+  });
+
+  it("the reminder also talks about the new portal", () => {
+    const text = migrationReminderText({ firstName: "Joana", link: "https://portal/a/K7p2XqM4bN9w" });
+    expect(text).toContain("novo portal");
+    expect(text).toContain("substitui o anterior");
   });
 });
