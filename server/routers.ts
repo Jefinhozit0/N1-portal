@@ -9,7 +9,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { checkCode, codeErrorMessage, createVerificationCode, discardVerificationCode } from "./_core/verificationCodes";
 import { supabase } from "./_core/supabase";
 import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId, provisionClientAccess, removeClientLogins } from "./_core/clientAccess";
-import { TERMS_VERSION } from "@shared/termos";
+import { TERMS_VERSION, isValidTermsVersion } from "@shared/termos";
 import { computeDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
 import { computeSupabaseUsage } from "./_core/usoSupabase";
@@ -119,7 +119,7 @@ const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
 });
 
 const hasAcceptedTerms = (user: { app_metadata?: Record<string, unknown> }) =>
-  (user.app_metadata?.terms as { version?: string } | undefined)?.version === TERMS_VERSION;
+  isValidTermsVersion((user.app_metadata?.terms as { version?: string } | undefined)?.version);
 
 /** The process and the chat only open after the current version of the terms was accepted. */
 const clientWithTermsProcedure = clientProcedure.use(({ ctx, next }) => {

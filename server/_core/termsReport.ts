@@ -1,5 +1,5 @@
 import type { User } from "@supabase/supabase-js";
-import { TERMS_VERSION } from "@shared/termos";
+import { TERMS_VERSION, isValidTermsVersion } from "@shared/termos";
 import { listAllUsers } from "./dashboard";
 import { listPushDevices } from "./push";
 import { supabase } from "./supabase";
@@ -30,7 +30,7 @@ export function describeDevice(userAgent: string | undefined): string | null {
 function situationOf(account: User | undefined, now: number): TermsSituation {
   if (!account) return "sem-login";
   const terms = account.app_metadata?.terms as Terms | undefined;
-  if (terms?.version === TERMS_VERSION) return "aceito";
+  if (isValidTermsVersion(terms?.version)) return "aceito";
   if (terms?.version) return "versao-antiga";
   const firstAccess = account.app_metadata?.first_access as FirstAccess;
   // first_access is cleared once the client creates a password.

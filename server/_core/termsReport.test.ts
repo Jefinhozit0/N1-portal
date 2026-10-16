@@ -53,6 +53,12 @@ describe("buildTermsReport", () => {
     expect(report.weeks.reduce((sum, week) => sum + week.accepted, 0)).toBe(1);
   });
 
+  it("keeps counting acceptances of a version that is still valid (v1, before the app section)", () => {
+    const old = buildTermsReport([{ id: 7, name: "Gil", email: "gil@x.com" }], [login(7, { terms: { version: "2026-10-v1", accepted_at: daysAgo(2) } })], NOW);
+    expect(old.clients[0]).toMatchObject({ situation: "aceito", acceptedVersion: "2026-10-v1" });
+    expect(old.totals).toMatchObject({ accepted: 1, pending: 0, oldVersion: 0 });
+  });
+
   it("shows who has the app notifications on", () => {
     const withPush = buildTermsReport(clientes, users, NOW, new Map([[1, { devices: 2, installed: true }]]));
     const ana = withPush.clients.find((row) => row.id === 1)!;

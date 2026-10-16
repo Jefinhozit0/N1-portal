@@ -1,9 +1,21 @@
 /**
  * Terms the client accepts on first access. DRAFT: the text below must be reviewed by
  * N1's legal team before going live. When the text changes, bump TERMS_VERSION so every
- * client is asked to accept the new version on their next visit.
+ * client is asked to accept the new version on their next visit — unless the old version goes
+ * into STILL_VALID_VERSIONS, which keeps those acceptances counting.
  */
 export const TERMS_VERSION = "2026-10-v2";
+
+/**
+ * Earlier versions whose acceptance still counts. v2 only added the app and its notifications,
+ * which those clients are invited to turn on inside the portal, so they are not asked again.
+ */
+const STILL_VALID_VERSIONS = ["2026-10-v1"];
+
+/** Whether an acceptance of this version opens the portal and counts as accepted. */
+export function isValidTermsVersion(version: unknown) {
+  return version === TERMS_VERSION || STILL_VALID_VERSIONS.includes(version as string);
+}
 
 export const TERMS_TITLE = "Termos de uso do portal e tratamento de dados";
 
