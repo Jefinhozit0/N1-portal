@@ -3,6 +3,8 @@ import { AlertTriangle, DatabaseBackup, HardDrive, History, Link2, MessageCircle
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { usePagination } from "@/lib/pagination";
+import { Pager } from "@/components/Pager";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const when = (iso: string | null | undefined) =>
@@ -57,6 +59,7 @@ export default function AdminPage() {
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const auditoria = trpc.admin.auditoria.useQuery({ busca: buscaAplicada || undefined, limite: 200 }, { retry: false });
+  const auditPages = usePagination(auditoria.data?.entries ?? [], buscaAplicada);
   const uso = trpc.admin.usoSupabase.useQuery(undefined, { retry: false, refetchInterval: 10 * 60_000 });
   const [confirmLogout, setConfirmLogout] = useState(false);
   const desconectar = trpc.admin.desconectarWhatsApp.useMutation({
@@ -168,13 +171,14 @@ export default function AdminPage() {
             <table>
               <thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Detalhes</th></tr></thead>
               <tbody>
-                {auditoria.data.entries.map((entry) => (
+                {auditPages.visible.map((entry) => (
                   <tr key={entry.id}><td>{when(entry.created_at)}</td><td>{entry.autor}</td><td><strong>{entry.acao}</strong></td><td>{entry.detalhes ?? "—"}</td></tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        <Pager {...auditPages} noun="ações" />
       </section>
 
       <AlertDialog open={confirmLogout} onOpenChange={(open) => !desconectar.isPending && setConfirmLogout(open)}>

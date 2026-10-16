@@ -17,7 +17,10 @@ window.addEventListener("vite:preloadError", (event) => {
   if (reloadForNewVersion()) event.preventDefault();
 });
 
-const queryClient = new QueryClient();
+// Data read in the last 30 s is reused when switching pages or coming back to the tab, instead of
+// asking the database again. Saving something still refreshes the lists right away (invalidate),
+// and the screens that poll keep their own interval.
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

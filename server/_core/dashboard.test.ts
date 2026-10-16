@@ -33,8 +33,11 @@ const tables: Record<string, unknown[]> = {
   ],
 };
 
+const reads = vi.hoisted(() => ({ count: 0 }));
+
 vi.mock("./supabase", () => {
   const query = (table: string) => {
+    reads.count += 1;
     const result = { data: tables[table], error: null };
     const chain: Record<string, unknown> = {};
     for (const method of ["select", "order", "limit", "in"]) chain[method] = () => chain;
@@ -52,7 +55,7 @@ vi.mock("./supabase", () => {
   return { supabase: { from: query, auth: { admin: { listUsers: async () => ({ data: { users }, error: null }) } } } };
 });
 
-const { computeDashboard, parseDeadline, parseMoney } = await import("./dashboard");
+const { clearDashboardCache, computeDashboard, getDashboard, parseDeadline, parseMoney } = await import("./dashboard");
 
 describe("dashboard parsing", () => {
   it("reads money and deadline formats used in the tables", () => {
@@ -120,5 +123,22 @@ describe("computeDashboard", () => {
     } finally {
       delete bruno.conversa_respondida_em;
     }
+  });
+});
+
+describe("getDashboard", () => {
+  it("shares one reading of the tables until something is saved", async () => {
+    clearDashboardCache();
+    const before = reads.count;
+    const [first, second] = await Promise.all([getDashboard(), getDashboard()]);
+    expect(second).toBe(first);
+    const oneReading = reads.count - before;
+    expect(oneReading).toBeGreaterThan(0);
+    await getDashboard();
+    expect(reads.count - before).toBe(oneReading);
+
+    clearDashboardCache();
+    await getDashboard();
+    expect(reads.count - before).toBe(2 * oneReading);
   });
 });

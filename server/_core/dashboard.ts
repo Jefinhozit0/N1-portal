@@ -51,6 +51,28 @@ export async function listAllUsers(): Promise<User[]> {
 type Row = Record<string, unknown>;
 type Activity = { kind: "green" | "blue" | "yellow" | "purple"; icon: "check" | "file" | "alert" | "arrow" | "message" | "user"; title: string; detail: string; at: string };
 
+/**
+ * Every open team tab polls the dashboard, and each computation reads four whole tables plus the
+ * logins. One result is shared for CACHE_MS; any change saved through the portal clears it
+ * (see clearDashboardCache in routers.ts), so the numbers never lag behind an edit.
+ */
+const CACHE_MS = 30_000;
+let cached: { at: number; data: ReturnType<typeof computeDashboard> } | null = null;
+
+export function getDashboard() {
+  if (!cached || Date.now() - cached.at > CACHE_MS) {
+    const data = computeDashboard();
+    cached = { at: Date.now(), data };
+    // A failed read is not kept: the next call tries again.
+    data.catch(() => { if (cached?.data === data) cached = null; });
+  }
+  return cached.data;
+}
+
+export function clearDashboardCache() {
+  cached = null;
+}
+
 export async function computeDashboard(now = Date.now()) {
   const [clientesRes, chargebacksRes, vendasRes, mensagensRes, users] = await Promise.all([
     supabase.from("clientes").select("*").limit(10000),
