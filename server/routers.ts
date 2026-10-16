@@ -1,5 +1,6 @@
 import path from "node:path";
 import { COOKIE_NAME } from "@shared/const";
+import type { User } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -10,7 +11,7 @@ import { checkCode, codeErrorMessage, createVerificationCode, discardVerificatio
 import { supabase } from "./_core/supabase";
 import { completeFirstAccess, findFirstAccessUser, findUserByEmail, getClienteId, provisionClientAccess, removeClientLogins } from "./_core/clientAccess";
 import { TERMS_VERSION, isValidTermsVersion } from "@shared/termos";
-import { computeDashboard } from "./_core/dashboard";
+import { clearDashboardCache, getDashboard } from "./_core/dashboard";
 import { computeTermsReport } from "./_core/termsReport";
 import { computeSupabaseUsage } from "./_core/usoSupabase";
 import { chargebackErrorMessage, chargebackInput, chargebackRow, describeChanges, historyEntry } from "./_core/chargebacks";
@@ -51,12 +52,45 @@ const resetCodeKey = (email: string) => `reset:${email}`;
 const getPortalUrl = (req: TrpcContext["req"]) => getPublicUrl(req);
 
 /** The Supabase user behind the request's session token, or null when there is no valid session. */
-async function getSessionUser(ctx: TrpcContext) {
+/**
+ * A screen batches several queries into one request and each of them checks the session; polling
+ * repeats that every few seconds. One check per token is reused for SESSION_CACHE_MS. Mutations
+ * always check again and drop the entry afterwards, since some of them change the account itself
+ * (accepting the terms, for instance).
+ */
+const SESSION_CACHE_MS = 15_000;
+const sessionCache = new Map<string, { at: number; user: Promise<User | null> }>();
+
+const sessionToken = (ctx: TrpcContext) => {
   const token = ctx.req.headers["x-supabase-token"];
-  if (typeof token !== "string" || !token) return null;
-  const { data, error } = await supabase.auth.getUser(token);
-  return error ? null : data.user;
+  return typeof token === "string" && token ? token : null;
+};
+
+async function getSessionUser(ctx: TrpcContext, fresh = false) {
+  const token = sessionToken(ctx);
+  if (!token) return null;
+  const now = Date.now();
+  const hit = sessionCache.get(token);
+  if (!fresh && hit && now - hit.at < SESSION_CACHE_MS) return hit.user;
+  if (sessionCache.size > 1000) {
+    sessionCache.forEach((entry, key) => { if (now - entry.at >= SESSION_CACHE_MS) sessionCache.delete(key); });
+  }
+  const user = supabase.auth.getUser(token).then(({ data, error }) => (error ? null : data.user));
+  sessionCache.set(token, { at: now, user });
+  user.catch(() => sessionCache.delete(token));
+  return user;
 }
+
+/** After a change: the account may be different now, and the dashboard numbers are. */
+function afterMutation(ctx: TrpcContext) {
+  const token = sessionToken(ctx);
+  if (token) sessionCache.delete(token);
+  clearDashboardCache();
+}
+
+/** Clients that still exist, checked recently (a client removed in the database loses access within CLIENT_CHECK_MS). */
+const CLIENT_CHECK_MS = 15_000;
+const clientCheckedAt = new Map<number, number>();
 
 /**
  * Anyone can create an account on the login screen, so a login alone does not make someone
@@ -80,13 +114,15 @@ function isAdminUser(user: { email?: string; app_metadata?: Record<string, unkno
 }
 
 /** Procedures for the N1 team: every route with data from all clients goes through here. */
-const staffProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  const user = await getSessionUser(ctx);
+const staffProcedure = publicProcedure.use(async ({ ctx, next, type }) => {
+  const user = await getSessionUser(ctx, type === "mutation");
   if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Faça login para continuar." });
   if (!isStaffUser(user)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Sua conta ainda não foi liberada para a área da equipe." });
   }
-  return next({ ctx: { ...ctx, staffUser: user } });
+  const result = await next({ ctx: { ...ctx, staffUser: user } });
+  if (type === "mutation") afterMutation(ctx);
+  return result;
 });
 
 /** Only administrators: deleting clients, conversations, documents and sales, and the action log. */
@@ -98,8 +134,8 @@ const adminOnlyProcedure = staffProcedure.use(({ ctx, next }) => {
 });
 
 /** Procedures for a logged-in client: resolves which cliente row the Supabase session belongs to. */
-const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  const user = await getSessionUser(ctx);
+const clientProcedure = publicProcedure.use(async ({ ctx, next, type }) => {
+  const user = await getSessionUser(ctx, type === "mutation");
   if (!user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Faça login para continuar." });
   }
@@ -108,14 +144,22 @@ const clientProcedure = publicProcedure.use(async ({ ctx, next }) => {
     throw new TRPCError({ code: "FORBIDDEN", message: "Esta conta não está vinculada a um cliente." });
   }
   // A client removed straight in the database leaves its login behind: that login opens nothing.
-  const { data: cliente, error } = await supabase.from("clientes").select("id").eq("id", clienteId).maybeSingle();
-  if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível abrir o portal agora. Tente novamente." });
-  if (!cliente) throw new TRPCError({ code: "FORBIDDEN", message: "Este acesso foi encerrado. Fale com a equipe da N1." });
+  if (type === "mutation" || Date.now() - (clientCheckedAt.get(clienteId) ?? 0) >= CLIENT_CHECK_MS) {
+    const { data: cliente, error } = await supabase.from("clientes").select("id").eq("id", clienteId).maybeSingle();
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível abrir o portal agora. Tente novamente." });
+    if (!cliente) {
+      clientCheckedAt.delete(clienteId);
+      throw new TRPCError({ code: "FORBIDDEN", message: "Este acesso foi encerrado. Fale com a equipe da N1." });
+    }
+    clientCheckedAt.set(clienteId, Date.now());
+  }
   // The client screen turns into "em manutenção" on this error (see MaintenanceScreen).
   if (await isUnderMaintenance()) {
     throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: MAINTENANCE_MESSAGE });
   }
-  return next({ ctx: { ...ctx, clienteId, clienteUser: user } });
+  const result = await next({ ctx: { ...ctx, clienteId, clienteUser: user } });
+  if (type === "mutation") afterMutation(ctx);
+  return result;
 });
 
 const hasAcceptedTerms = (user: { app_metadata?: Record<string, unknown> }) =>
@@ -407,7 +451,7 @@ export const appRouter = router({
     }),
 
     /** Every number on the dashboard, computed from the real data */
-    dashboard: staffProcedure.query(() => computeDashboard()),
+    dashboard: staffProcedure.query(() => getDashboard()),
 
     /** Who accepted the portal terms, who is still pending and why, client by client */
     termos: staffProcedure.query(() => computeTermsReport()),
@@ -664,6 +708,7 @@ export const appRouter = router({
         // The login goes first: if anything fails after that, the client still can't get in.
         try {
           await removeClientLogins(input.id);
+          clientCheckedAt.delete(input.id);
           await removeClientFiles(input.id);
         } catch (error) {
           console.error("[portal.deleteCliente] Could not remove the portal login:", error);

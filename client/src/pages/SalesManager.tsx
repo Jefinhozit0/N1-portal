@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Pencil, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, CreditCard, Pencil, Search, Trash2, X } from "lucide-react";
+import { pageSlice } from "@/lib/pagination";
+import { Pager } from "@/components/Pager";
 import { StatusPill } from "./Home";
 import { SECTOR_LABEL, filterSales, hubMoney, monthLabel, sectorOf, sortSales, totals, type HubSale, type SaleSortKey, type Sector } from "./salesHubData";
-
-const PAGE_SIZE = 50;
 
 type Props = {
   sales: HubSale[];
@@ -42,9 +42,8 @@ export function SalesManager({ initialSector, actions, sales, loading, consultan
   }, [sales, month, sector, consultant, query, status, cbk, sort]);
   const sum = useMemo(() => totals(filtered), [filtered]);
   const pending = filtered.filter((sale) => sale.status === "Pendente").length;
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pages - 1);
-  const visible = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const pagination = pageSlice(filtered, page);
+  const visible = pagination.visible;
   const selected = sales.find((sale) => sale.id === selectedId) ?? null;
   const hasFilters = sector !== "todos" || status !== "todos" || cbk !== "todos" || consultant !== "Todos" || query !== "";
 
@@ -140,13 +139,7 @@ export function SalesManager({ initialSector, actions, sales, loading, consultan
             </tbody>
           </table>
         </div>
-        {pages > 1 && (
-          <div className="sales-pager">
-            <button type="button" className="icon-button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} aria-label="Página anterior"><ChevronLeft size={16} /></button>
-            <span>Página {currentPage + 1} de {pages} · vendas {currentPage * PAGE_SIZE + 1}–{Math.min(filtered.length, (currentPage + 1) * PAGE_SIZE)}</span>
-            <button type="button" className="icon-button" disabled={currentPage >= pages - 1} onClick={() => setPage(currentPage + 1)} aria-label="Próxima página"><ChevronRight size={16} /></button>
-          </div>
-        )}
+        <Pager {...pagination} setPage={setPage} noun="vendas" />
       </section>
 
       {selected && (

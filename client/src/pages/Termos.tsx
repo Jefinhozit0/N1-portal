@@ -3,6 +3,8 @@ import { CheckCircle2, ChevronRight, Clock3, FileCheck2, Search, Send, UserX, Us
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { showAccessResult } from "@/lib/accessToast";
+import { usePagination } from "@/lib/pagination";
+import { Pager } from "@/components/Pager";
 import { StatusPill } from "./Home";
 
 type Situation = "aceito" | "versao-antiga" | "sem-aceite" | "primeiro-acesso" | "link-expirado" | "sem-login";
@@ -51,6 +53,7 @@ export default function TermosPage({ onOpenClient }: { onOpenClient: (row: Recor
       return !term || row.name.toLowerCase().includes(term) || (row.email ?? "").toLowerCase().includes(term);
     });
   }, [report, filter, query]);
+  const pagination = usePagination(visible, `${filter}|${query}`);
 
   function openClient(id: number) {
     const row = (clientesQuery.data as Record<string, unknown>[] | undefined)?.find((item) => item.id === id);
@@ -150,7 +153,7 @@ export default function TermosPage({ onOpenClient }: { onOpenClient: (row: Recor
           <thead><tr><th>Cliente</th><th>Situação</th><th>Login enviado</th><th>Último acesso</th><th>Aceite</th><th>Notificações</th><th /></tr></thead>
           <tbody>
             {report && visible.length === 0 && <tr className="empty-row"><td colSpan={7}>{filter === "pendentes" ? "Nenhum cliente pendente. Tudo em dia!" : "Nenhum cliente nesta situação."}</td></tr>}
-            {visible.map((row) => {
+            {pagination.visible.map((row) => {
               const info = SITUATIONS[row.situation];
               const waiting = daysSince(row.linkSentAt ?? row.loginCreatedAt);
               const canResend = row.situation !== "aceito" && row.situation !== "versao-antiga" && Boolean(row.email);
@@ -167,6 +170,7 @@ export default function TermosPage({ onOpenClient }: { onOpenClient: (row: Recor
           </tbody>
         </table>
       </div>
+      <Pager {...pagination} noun="clientes" />
     </section>
   </div>;
 }

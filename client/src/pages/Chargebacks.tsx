@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ListFilterBar, StatusPill } from "./Home";
 import { hubMoney } from "./salesHubData";
+import { usePagination } from "@/lib/pagination";
+import { Pager } from "@/components/Pager";
 
 type Chargeback = {
   id: number; client: string; bank: string; amount: string; deadline: string; status: string; tone: string;
@@ -98,6 +100,7 @@ export default function ChargebacksPage({ listFilter, onClearFilter, isAdmin, dr
     const term = query.trim().toLowerCase();
     return !term || item.client.toLowerCase().includes(term) || item.bank.toLowerCase().includes(term);
   });
+  const pagination = usePagination(visible, `${query}|${statusFilter}|${listFilter}`);
   // Old rows may carry a status that is not on the list anymore; they still get a filter button.
   const statusOptions = Array.from(new Set([...CHARGEBACK_STATUSES.map((status) => status.label), ...chargebackList.map((item) => item.status).filter(Boolean)]));
 
@@ -187,7 +190,7 @@ export default function ChargebacksPage({ listFilter, onClearFilter, isAdmin, dr
         <thead><tr><th>Cliente</th><th>Instituição</th><th>Valor estimado</th><th>Prazo</th><th>Status</th><th /></tr></thead>
         <tbody>
           {visible.length === 0 && <tr className="empty-row"><td colSpan={6}>{chargebacksQuery.isLoading || (listFilter && !filterIds) ? "Carregando..." : chargebackList.length === 0 ? "Nenhum chargeback registrado. Use \"Novo chargeback\" para registrar o primeiro." : "Nenhum chargeback nesta situação."}</td></tr>}
-          {visible.map((item) => <tr key={item.id} onClick={() => setSelectedId(item.id)}>
+          {pagination.visible.map((item) => <tr key={item.id} onClick={() => setSelectedId(item.id)}>
             <td><div className="table-person"><span className="avatar avatar-gradient">{initials(item.client)}</span><strong>{item.client}</strong></div></td>
             <td>{item.bank || "—"}</td>
             <td><strong>{item.amount || "—"}</strong></td>
@@ -197,6 +200,7 @@ export default function ChargebacksPage({ listFilter, onClearFilter, isAdmin, dr
           </tr>)}
         </tbody>
       </table></div>
+      <Pager {...pagination} noun="chargebacks" />
     </section>
 
     {selected && <div className="detail-drawer cbk-drawer">
