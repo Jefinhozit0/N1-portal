@@ -10,11 +10,10 @@ $logs = Join-Path $root "logs"
 New-Item -ItemType Directory -Force $logs | Out-Null
 function Log($text) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $text" | Out-File -Append -Encoding utf8 (Join-Path $logs "inicio.log") }
 
-# Já está rodando (por exemplo, aberto à mão)? Então não faz nada: duas cópias brigariam pela sessão do WhatsApp.
-if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) {
-  Log "Portal já estava rodando na porta 3000. Nada a fazer."
-  exit 0
-}
+# Outro vigia já rodando (a tarefa também roda a cada 5 minutos)? Então não faz nada: dois brigariam pelo portal.
+$otherWatcher = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match "iniciar-portal\.ps1" } | Select-Object -First 1
+if ($otherWatcher) { exit 0 }
 
 # Com o Tailscale Funnel ligado na porta 3000 (endereço fixo, mantido pelo próprio serviço do Tailscale),
 # o túnel do Cloudflare não é usado. Sem ele, volta para o túnel temporário do Cloudflare.
@@ -44,6 +43,14 @@ $env:PORT = "3000"
 $tunnel = $null
 $portal = $null
 $tunnelDownSince = $null
+
+# Portal já rodando sem vigia (aberto à mão, ou o vigia anterior morreu)? Passa a vigiar esse mesmo,
+# em vez de abrir outro: duas cópias brigariam pela sessão do WhatsApp.
+$running = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($running) {
+  $portal = Get-Process -Id $running.OwningProcess -ErrorAction SilentlyContinue
+  Log "Portal já estava rodando (processo $($running.OwningProcess)). Vigiando esse."
+}
 Log $(if ($useTailscale) { "Iniciando portal (endereço fixo pelo Tailscale Funnel)." } else { "Iniciando portal e túnel." })
 
 # O cloudflared avisa em /ready se está ligado ao Cloudflare (200) ou não (503).

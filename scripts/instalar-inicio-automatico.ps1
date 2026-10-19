@@ -7,11 +7,14 @@ $ErrorActionPreference = "Stop"
 $script = Join-Path $PSScriptRoot "iniciar-portal.ps1"
 $state = Join-Path $PSScriptRoot "energia-anterior.json"
 
-# 1. Tarefa agendada: roda o iniciar-portal.ps1 escondido a cada logon deste usuário.
+# 1. Tarefa agendada: roda o iniciar-portal.ps1 escondido a cada logon deste usuário e, de novo, a
+#    cada 5 minutos. Enquanto o vigia estiver vivo, o Windows ignora as novas execuções; se ele morrer
+#    (já aconteceu depois de uma suspensão), outro assume o portal em até 5 minutos.
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
-Register-ScheduledTask -TaskName "N1 Portal" -Action $action -Trigger $trigger -Settings $settings -Description "Liga o portal N1 e o túnel do Cloudflare ao entrar no Windows." -Force | Out-Null
+$atLogon = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+$every5min = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "N1 Portal" -Action $action -Trigger @($atLogon, $every5min) -Settings $settings -Description "Liga o portal N1 ao entrar no Windows e o religa se o vigia parar." -Force | Out-Null
 Write-Output "Tarefa 'N1 Portal' criada: o portal liga sozinho no próximo logon."
 
 # 2. Energia (só na tomada): nunca suspender e não fazer nada ao fechar a tampa.
