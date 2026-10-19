@@ -20,6 +20,7 @@ import { ENV } from "./_core/env";
 import { getPublicUrl } from "./_core/publicUrl";
 import { listarAcoes, registrarAcao } from "./_core/auditoria";
 import { notifyClient, notifyTeamNewMessage } from "./_core/notificacoes";
+import { checkNewSales } from "./_core/vendasNovas";
 import { getPushPublicKey, savePushSubscription } from "./_core/push";
 import { getWhatsAppWebInfo, logoutWhatsAppWeb } from "./_core/whatsappWeb";
 import { backupJob, jobState } from "./_core/tarefas";
@@ -644,6 +645,8 @@ export const appRouter = router({
         const { data, error } = await insertOrUpdateSale(input);
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: saleErrorMessage(error.message) });
         await registrarAcao(ctx.staffUser.email, "Cadastrou venda", `${input.client} · ${input.product || "sem produto"} · bruto R$ ${input.gross.toFixed(2)}`);
+        // Administrators hear about it now instead of at the next minute check.
+        void checkNewSales();
         return data;
       }),
 

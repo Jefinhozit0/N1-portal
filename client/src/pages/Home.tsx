@@ -846,8 +846,11 @@ function MoreIcon() { return <span className="more-icon"><i /><i /><i /></span>;
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
-  // A tap on the notice of a client's message opens Atendimento (?view=atendimento, see sw.js).
-  const [view, setView] = useState<View>(() => new URLSearchParams(window.location.search).get("view") === "atendimento" ? "atendimento" : "dashboard");
+  // A tap on a notice opens its page (see sw.js): a client's message opens Atendimento, new sales open the Sales HUB.
+  const [view, setView] = useState<View>(() => {
+    const requested = new URLSearchParams(window.location.search).get("view");
+    return requested === "atendimento" || requested === "saleshub" ? requested : "dashboard";
+  });
   // Filter chosen on the dashboard; opening a page from the menu clears it.
   const [listFilter, setListFilter] = useState<ListFilter | null>(null);
   function navigate(next: View, filter?: ListFilter) {

@@ -3,12 +3,14 @@ import { registrarAcao } from "./auditoria";
 import { removeOrphanClientLogins } from "./clientAccess";
 import { sendAccessReminders } from "./lembretes";
 import { startPowerWatch } from "./energia";
+import { startNewSalesWatch } from "./vendasNovas";
 
 /**
  * Background jobs, checked every hour while the server runs:
  * - daily backup (the first check after midnight that finds no backup for the day makes one);
  * - reminders for clients who have not created their password;
  * - removing logins of clients that were deleted straight in the database.
+ * Apart from these, new sales are announced to the administrators every minute (vendasNovas.ts).
  * Each job runs one at a time and a failure is only logged.
  */
 
@@ -54,6 +56,7 @@ async function hourlyCheck() {
 
 export function startBackgroundJobs() {
   startPowerWatch();
+  startNewSalesWatch();
   // First check a minute after start, so it doesn't compete with the server warming up.
   setTimeout(() => void hourlyCheck(), 60_000);
   setInterval(() => void hourlyCheck(), HOUR);
