@@ -9,6 +9,49 @@ export function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/** Panels that rise in when scrolled into view. */
+const REVEAL_SELECTOR = ".page-content .panel, .hub-dashboard .panel";
+
+/**
+ * Makes panels that mount below the visible area rise in once they are scrolled into view.
+ * Panels already on screen are left alone, and nothing is hidden unless the observer that will
+ * show it again is in place. Call once at start-up.
+ */
+export function startScrollReveal() {
+  if (prefersReducedMotion() || typeof IntersectionObserver !== "function" || typeof MutationObserver !== "function") return;
+  const seen = new WeakSet<Element>();
+  const onView = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      onView.unobserve(entry.target);
+      entry.target.classList.remove("n1-reveal-wait");
+      entry.target.classList.add("n1-reveal-in");
+    }
+  }, { rootMargin: "0px 0px -8% 0px" });
+
+  const check = (panel: Element) => {
+    if (seen.has(panel)) return;
+    seen.add(panel);
+    const { top, height } = panel.getBoundingClientRect();
+    // Hidden tabs (no size) and panels that start on screen are not touched.
+    if (height === 0 || top < window.innerHeight) return;
+    panel.classList.add("n1-reveal-wait");
+    onView.observe(panel);
+  };
+
+  const scan = (root: ParentNode) => root.querySelectorAll(REVEAL_SELECTOR).forEach(check);
+  scan(document);
+  new MutationObserver((records) => {
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (node.matches(REVEAL_SELECTOR)) check(node);
+        scan(node);
+      });
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+}
+
 /**
  * Replays a short fade/slide on elements that stay mounted but change content
  * (e.g. the login card switching between "entrar", "criar login" and "redefinir senha").

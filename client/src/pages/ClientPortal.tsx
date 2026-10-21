@@ -16,6 +16,7 @@ const BOT_TYPING_MS = 700;
 import { N1Logo } from "@/components/N1Logo";
 import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
 import { AppSetupCard } from "@/components/AppSetupCard";
+import { CountUp } from "@/components/CountUp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
 import { isIosSafari, isInstalledApp, useInstallPrompt } from "@/lib/installPrompt";
@@ -303,7 +304,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
               <div><small>Última atualização</small><strong><Clock3 size={16} /> {processo.updated || "—"}</strong></div>
             </div>
             <div className="client-portal-progress">
-              <div><small>Progresso do caso</small><strong>{processo.progresso ?? 0}%</strong></div>
+              <div><small>Progresso do caso</small><strong><CountUp value={processo.progresso ?? 0} format={(n) => `${Math.round(n)}%`} /></strong></div>
               <div className="progress-bar-container" role="progressbar" aria-valuenow={processo.progresso ?? 0} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso do caso">
                 <div className="progress-bar-fill" style={{ width: `${processo.progresso ?? 0}%` }} />
               </div>
