@@ -8,7 +8,7 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import { reloadForNewVersion } from "./lib/staleVersion";
-import { startScrollReveal } from "./lib/motion";
+import { finishIntro, startScrollReveal } from "./lib/motion";
 // Captures the browser's "install app" offer as early as possible (see InstallAppCard).
 import "./lib/installPrompt";
 import "./index.css";
@@ -106,3 +106,6 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+// The opening screen in index.html lifts once the portal is on screen.
+finishIntro();
