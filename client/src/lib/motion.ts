@@ -9,6 +9,20 @@ export function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/** When the opening screen of index.html finishes its logo animation, counted from the page load. */
+const INTRO_MS = 1750;
+
+/**
+ * Lifts the opening screen (index.html) once the portal has drawn its first frame, but not before
+ * the logo animation is over. If this never runs, the screen leaves on its own after a few seconds.
+ */
+export function finishIntro() {
+  const intro = document.getElementById("n1-intro");
+  if (!intro) return;
+  const lift = () => intro.classList.add("n1-intro-done");
+  requestAnimationFrame(() => window.setTimeout(lift, Math.max(0, INTRO_MS - performance.now())));
+}
+
 /** Panels that rise in when scrolled into view. */
 const REVEAL_SELECTOR = ".page-content .panel, .hub-dashboard .panel";
 
