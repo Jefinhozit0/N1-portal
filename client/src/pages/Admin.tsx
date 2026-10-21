@@ -123,7 +123,7 @@ export default function AdminPage() {
         </section>
 
         <section className="panel admin-card admin-usage">
-          <div className="admin-card-head"><HardDrive size={18} /><h3>Uso do Supabase</h3>{uso.data && <span className="admin-usage-plan">Plano {uso.data.plano}</span>}</div>
+          <div className="admin-card-head"><HardDrive size={18} /><h3>Uso do Supabase</h3></div>
           {uso.isLoading && <p className="admin-muted">Calculando...</p>}
           {uso.error && <p className="form-message">Não foi possível calcular o uso agora: {uso.error.message}</p>}
           {uso.data && (
