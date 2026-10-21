@@ -2591,6 +2591,21 @@ tbody tr:hover { background: var(--surface-muted); }
   transition: background .15s ease, border-color .15s ease;
 }
 .client-bot-options button:hover { border-color: var(--focus-border); background: var(--navy-soft); }
+.client-bot-options button { display: inline-flex; align-items: center; gap: 7px; animation: n1-rise-sm 260ms var(--ease-out) backwards; }
+.client-bot-options button:nth-child(2) { animation-delay: 40ms; }
+.client-bot-options button:nth-child(3) { animation-delay: 80ms; }
+.client-bot-options button:nth-child(4) { animation-delay: 120ms; }
+.client-bot-options button:nth-child(5) { animation-delay: 160ms; }
+.client-bot-options button:nth-child(n+6) { animation-delay: 200ms; }
+.client-bot-options button svg { flex-shrink: 0; }
+/* Talking to a person stands out from the self-service answers */
+.client-bot-options .client-bot-option-team { border-color: var(--navy); color: var(--on-primary); background: var(--navy); }
+.client-bot-options .client-bot-option-team:hover { border-color: var(--navy); background: var(--navy); filter: brightness(1.12); }
+.client-typing-dots { display: inline-flex; gap: 4px; padding: 4px 0 2px; }
+.client-typing-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--link); opacity: .35; animation: client-typing 1s ease-in-out infinite; }
+.client-typing-dots i:nth-child(2) { animation-delay: .15s; }
+.client-typing-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes client-typing { 30% { opacity: 1; transform: translateY(-3px); } 60% { opacity: .35; transform: none; } }
 .client-ticket-bar {
   display: flex;
   align-items: center;

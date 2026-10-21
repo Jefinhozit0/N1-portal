@@ -1,11 +1,18 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bot, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, LockKeyhole, LogOut, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Bell, Bot, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, Headset, LayoutGrid, LockKeyhole, LogOut, MessageCircle, Send, Sparkles, Wallet, X, type LucideIcon } from "lucide-react";
 import { caseSummary, formatFileSize } from "@shared/processo";
 
 const formatDay = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replace(" de ", " ").replace(".", "");
 import type { TicketTopic } from "@shared/tickets";
 import { TERMS_SECTIONS, TERMS_TITLE, TERMS_VERSION } from "@shared/termos";
-import { BOT_STEPS, TICKET_SENT_REPLY, greeting, type BotStepId, type ProcessInfo } from "./clientChatbot";
+import { BOT_STEPS, GREETING_REPLY, LONG_QUESTION, THANKS_REPLY, TICKET_SENT_REPLY, WHILE_WAITING, greeting, readTypedMessage, type BotStepId, type ProcessInfo } from "./clientChatbot";
+
+/** Icon on each of the assistant's buttons. */
+const STEP_ICONS: Record<BotStepId, LucideIcon> = {
+  menu: LayoutGrid, andamento: ClipboardList, documentos: FileText, prazos: Clock3, pagamentos: Wallet, novidades: Bell, atendente: Headset,
+};
+/** How long the assistant shows "typing" before each reply. */
+const BOT_TYPING_MS = 700;
 import { N1Logo } from "@/components/N1Logo";
 import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
 import { AppSetupCard } from "@/components/AppSetupCard";
@@ -96,13 +103,17 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
     onSuccess: async (_data, variables) => {
       await mensagensQuery.refetch();
       if (variables.assunto) {
-        saveAssistant([{ from: "bot", text: TICKET_SENT_REPLY }]);
-        setBotOptions(["menu"]);
         setTicketOpen(false);
         setTopic("Outros assuntos");
+        const extra = followUp.current;
+        followUp.current = null;
+        botSays(TICKET_SENT_REPLY, () => (extra ? botSays(extra.text, () => setBotOptions(extra.options)) : setBotOptions(["menu"])));
       }
     },
-    onError: (_error, variables) => setDraft((current) => current || variables.text),
+    onError: (_error, variables) => {
+      followUp.current = null;
+      setDraft((current) => current || variables.text);
+    },
   });
   const chatBody = useRef<HTMLDivElement>(null);
 
@@ -113,6 +124,11 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
   const [botOptions, setBotOptions] = useState<BotStepId[]>(BOT_STEPS.menu.options);
   const [topic, setTopic] = useState<TicketTopic>("Outros assuntos");
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [botTyping, setBotTyping] = useState(false);
+  const typingTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(typingTimer.current), []);
+  // The assistant's answer shown after the "sent to the team" notice, when the client typed about a topic it knows.
+  const followUp = useRef<{ text: string; options: BotStepId[] } | null>(null);
   const botIdRef = useRef(0);
   const nextBotId = () => ++botIdRef.current;
   const registrarAssistente = trpc.cliente.registrarAssistente.useMutation();
@@ -132,7 +148,13 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
     type: processo?.type || "processo em definição",
     status: processo?.status || "Em andamento",
     updated: processo?.updated || "sem data registrada",
+    progress: processo?.progresso ?? 0,
+    documents: documentos,
+    lastEvent: historico[0] ?? null,
   };
+  // Once the team has answered, what the client types goes straight to them and the assistant stays quiet,
+  // until the client opens the assistant's options again.
+  const talkingToTeam = botTrail.length === 0 && messages.filter((message) => message.from !== "client").at(-1)?.from === "team";
 
   function saveAssistant(entries: { from: "bot" | "choice"; text: string }[]) {
     const shown = entries.map((entry) => ({ ...entry, id: nextBotId() }));
@@ -160,16 +182,46 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
     if (body) body.scrollTop = body.scrollHeight;
   }, [messages.length, pendingText, botTrail.length, tab]);
 
+  /** The assistant "types" for a moment, then its reply appears; `then` runs once it is on screen. */
+  function botSays(text: string, then?: () => void) {
+    setBotOptions([]);
+    setBotTyping(true);
+    window.clearTimeout(typingTimer.current);
+    typingTimer.current = window.setTimeout(() => {
+      setBotTyping(false);
+      saveAssistant([{ from: "bot", text }]);
+      then?.();
+    }, BOT_TYPING_MS);
+  }
+
   function chooseOption(stepId: BotStepId) {
     const step = BOT_STEPS[stepId];
     const nextTopic: TicketTopic = stepId === "menu" ? "Outros assuntos" : step.topic ?? topic;
-    saveAssistant([
-      { from: "choice", text: step.label },
-      { from: "bot", text: step.reply(processInfo, nextTopic) },
-    ]);
-    setBotOptions(step.options);
+    saveAssistant([{ from: "choice", text: step.label }]);
     setTopic(nextTopic);
     setTicketOpen(Boolean(step.opensTicket));
+    botSays(step.reply(processInfo, nextTopic), () => setBotOptions(step.options));
+  }
+
+  /**
+   * A message the client typed. Greetings and thanks are answered by the assistant only; anything else
+   * goes to the team as a ticket with the subject the assistant recognized, and when it has an answer
+   * for that subject it gives it while the team does not reply.
+   */
+  function handleTyped(text: string) {
+    const intent = readTypedMessage(text);
+    if (intent.kind === "saudacao" || intent.kind === "agradecimento") {
+      saveAssistant([{ from: "choice", text }]);
+      if (intent.kind === "saudacao") botSays(GREETING_REPLY(firstName), () => setBotOptions(BOT_STEPS.menu.options));
+      else botSays(THANKS_REPLY, () => setBotOptions(["menu"]));
+      return;
+    }
+    const step = intent.kind === "step" ? BOT_STEPS[intent.step] : null;
+    const assunto: TicketTopic = step?.topic ?? "Outros assuntos";
+    followUp.current = step && !step.opensTicket && text.length <= LONG_QUESTION
+      ? { text: `${WHILE_WAITING}\n\n${step.reply(processInfo, assunto)}`, options: step.options.filter((id) => id !== "atendente") }
+      : null;
+    enviarMensagem.mutate({ text, assunto });
   }
 
   function cancelTicket() {
@@ -182,7 +234,9 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
     event.preventDefault();
     const text = draft.trim();
     if (!text || enviarMensagem.isPending) return;
-    enviarMensagem.mutate({ text, assunto: ticketOpen ? topic : undefined });
+    if (ticketOpen) enviarMensagem.mutate({ text, assunto: topic });
+    else if (talkingToTeam) enviarMensagem.mutate({ text });
+    else handleTyped(text);
     setDraft("");
   }
 
@@ -333,9 +387,18 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
                 <div key={`local-${entry.id}`} className="client-bubble client-bubble-own client-bubble-choice client-bubble-new"><p>{entry.text}</p></div>
               ))}
               {pendingText && <div className="client-bubble client-bubble-own client-bubble-pending"><p>{pendingText}</p><small>Enviando...</small></div>}
-              {!enviarMensagem.isPending && botOptions.length > 0 && (
+              {botTyping && (
+                <div className="client-bubble client-bubble-team client-bubble-bot client-bubble-new" role="status" aria-label="O assistente está digitando">
+                  <span className="client-bubble-author"><Bot size={13} /> Assistente N1</span>
+                  <span className="client-typing-dots" aria-hidden="true"><i /><i /><i /></span>
+                </div>
+              )}
+              {!enviarMensagem.isPending && !botTyping && !talkingToTeam && botOptions.length > 0 && (
                 <div className="client-bot-options" role="group" aria-label="Opções do assistente">
-                  {botOptions.map((stepId) => <button key={stepId} type="button" onClick={() => chooseOption(stepId)}>{BOT_STEPS[stepId].label}</button>)}
+                  {botOptions.map((stepId) => {
+                    const Icon = STEP_ICONS[stepId];
+                    return <button key={stepId} type="button" className={stepId === "atendente" ? "client-bot-option-team" : undefined} onClick={() => chooseOption(stepId)}><Icon size={15} aria-hidden="true" /> {BOT_STEPS[stepId].label}</button>;
+                  })}
                 </div>
               )}
             </div>
@@ -347,6 +410,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
               </div>
             )}
             <form className="chat-composer" onSubmit={sendMessage}>
+              <button type="button" className="icon-button" onClick={() => chooseOption("menu")} disabled={botTyping || enviarMensagem.isPending} aria-label="Abrir as opções do assistente" title="Opções do assistente"><LayoutGrid size={17} /></button>
               <input aria-label="Mensagem para a equipe" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={ticketOpen ? `Escreva sua dúvida sobre "${topic}"...` : "Digite sua mensagem..."} maxLength={2000} />
               <button type="submit" className="send-button" aria-label="Enviar mensagem" disabled={enviarMensagem.isPending || !draft.trim()}><Send size={17} /></button>
             </form>
