@@ -13,13 +13,24 @@ export function prefersReducedMotion() {
 const INTRO_MS = 1750;
 
 /**
- * Lifts the opening screen (index.html) once the portal has drawn its first frame, but not before
- * the logo animation is over. If this never runs, the screen leaves on its own after a few seconds.
+ * Lifts the opening screen (index.html) once the logo animation is over and the portal has its
+ * first real screen up: while the loading screen (BrandLoader) is showing, it keeps waiting, so the
+ * curtain opens straight onto the login or the panel. If this never runs, the screen leaves on its
+ * own after a few seconds.
  */
 export function finishIntro() {
   const intro = document.getElementById("n1-intro");
   if (!intro) return;
-  const lift = () => intro.classList.add("n1-intro-done");
+  const loading = () => document.querySelector(".brand-loader") !== null;
+  const lift = () => {
+    if (!loading()) return intro.classList.add("n1-intro-done");
+    const watch = new MutationObserver(() => {
+      if (loading()) return;
+      watch.disconnect();
+      intro.classList.add("n1-intro-done");
+    });
+    watch.observe(document.getElementById("root") ?? document.body, { childList: true, subtree: true });
+  };
   requestAnimationFrame(() => window.setTimeout(lift, Math.max(0, INTRO_MS - performance.now())));
 }
 

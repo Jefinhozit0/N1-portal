@@ -5,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Suspense, lazy } from "react";
 import Home from "./pages/Home";
+import { BrandLoader } from "./components/BrandLoader";
 
 // Pages that only some visitors open are downloaded on demand.
 const FirstAccess = lazy(() => import("./pages/FirstAccess"));
@@ -12,7 +13,7 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 
 function Router() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<BrandLoader />}>
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/primeiro-acesso" component={FirstAccess} />
