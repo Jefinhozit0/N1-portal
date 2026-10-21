@@ -3230,6 +3230,26 @@ tbody tr.empty-row:hover { background: transparent; }
 .n1-reveal-wait { opacity: 0; transform: translateY(14px); }
 .n1-reveal-in { animation: n1-rise 480ms var(--ease-out) backwards; }
 
+/*
+ * Loading the portal (components/BrandLoader.tsx): the logo sits exactly where the opening screen
+ * of index.html leaves it, and a gold line runs underneath. The line only shows up if loading takes
+ * a moment, so quick loads are just the logo.
+ */
+.brand-loader { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: var(--brand-surface); }
+.brand-loader img { display: block; width: min(260px, 62vw); aspect-ratio: 1; }
+.brand-loader-bar {
+  position: absolute; top: calc(50% + min(260px, 62vw) * .36); left: 50%;
+  width: min(120px, 30vw); height: 2px; overflow: hidden; border-radius: 2px;
+  background: rgba(201, 173, 102, .16); transform: translateX(-50%);
+  animation: n1-fade 400ms ease-out 400ms backwards;
+}
+.brand-loader-bar i { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--brand-highlight), transparent); animation: brand-loader-run 1.1s ease-in-out infinite; }
+@keyframes brand-loader-run { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+  /* No running line: a still, dimmer bar says the same without movement */
+  .brand-loader-bar i { animation: none; width: 100%; opacity: .5; }
+}
+
 /* Client portal: cards rise in on open (and when a mobile tab is shown again) */
 .client-portal-side > .client-portal-card,
 .client-portal-layout > .client-portal-chat { animation: n1-rise var(--motion-slow) var(--ease-out) backwards; }

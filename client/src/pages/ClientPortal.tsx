@@ -14,6 +14,7 @@ const STEP_ICONS: Record<BotStepId, LucideIcon> = {
 /** How long the assistant shows "typing" before each reply. */
 const BOT_TYPING_MS = 700;
 import { N1Logo } from "@/components/N1Logo";
+import { BrandLoader } from "@/components/BrandLoader";
 import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
 import { AppSetupCard } from "@/components/AppSetupCard";
 import { CountUp } from "@/components/CountUp";
@@ -241,6 +242,8 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
     setDraft("");
   }
 
+  if (termosQuery.isLoading) return <BrandLoader />;
+
   return (
     <div className="client-portal">
       <header className="client-portal-header">
@@ -251,7 +254,6 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
       <main className={`client-portal-main ${processo ? "client-portal-main-wide" : ""}`}>
-        {termosQuery.isLoading && <section className="client-portal-card" aria-busy="true"><p className="client-portal-muted">Carregando...</p></section>}
         {termosQuery.error && (
           <section className="client-portal-card client-portal-problem">
             <AlertTriangle size={22} />

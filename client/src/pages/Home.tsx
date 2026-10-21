@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import type { Session } from "@supabase/supabase-js";
 import { trpc } from "@/lib/trpc";
 import { N1Logo } from "@/components/N1Logo";
+import { BrandLoader } from "@/components/BrandLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CountUp } from "@/components/CountUp";
 import { useArrivedIds } from "@/hooks/useArrivedIds";
@@ -846,6 +847,8 @@ function MoreIcon() { return <span className="more-icon"><i /><i /><i /></span>;
 
 export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
+  // Until the saved session has been read, it is not known whether to show the login or the portal.
+  const [sessionChecked, setSessionChecked] = useState(false);
   // A tap on a notice opens its page (see sw.js): a client's message opens Atendimento, new sales open the Sales HUB.
   const [view, setView] = useState<View>(() => {
     const requested = new URLSearchParams(window.location.search).get("view");
@@ -887,7 +890,7 @@ export default function Home() {
         applySession(data.session);
         setLoggedIn(true);
       }
-    });
+    }).finally(() => setSessionChecked(true));
   }, []);
 
   function handleLogin() {
@@ -912,16 +915,11 @@ export default function Home() {
     setMustChangePassword(false);
   }
 
+  if (!sessionChecked) return <BrandLoader />;
   if (!loggedIn) return <LoginScreen onLogin={handleLogin} />;
   if (mustChangePassword) return <ChangePasswordScreen onDone={() => setMustChangePassword(false)} onLogout={handleLogout} />;
   if (isClientUser) return <ClientPortal onLogout={handleLogout} />;
-  if (acessoQuery.isPending) {
-    return (
-      <main className="client-portal-center" aria-busy="true">
-        <div className="login-panel-inner"><N1Logo size="md" /><p className="login-subtitle">Carregando...</p></div>
-      </main>
-    );
-  }
+  if (acessoQuery.isPending) return <BrandLoader />;
   if (acessoQuery.data?.kind === "pending") {
     return (
       <main className="client-portal-center">
