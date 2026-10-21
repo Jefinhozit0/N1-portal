@@ -83,7 +83,7 @@
   --on-primary-check: #7ad3a8;
   --chart-1: #171614;
   --chart-2: #a58b4e;
-  --chart-3: var(--chart-3);
+  --chart-3: var(--green);
   --brand-highlight: #d0b56f;
   /* Dim layer behind modals and the mobile menu */
   --overlay: rgba(19, 19, 18, 0.5);
@@ -960,9 +960,18 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
+  position: relative;
   border-radius: 50%;
-  background: conic-gradient(var(--chart-1) 0 75%, var(--chart-2) 75% 92%, var(--chart-3) 92% 100%);
+  /* The empty track; the colored ring is drawn on top by ::before (see "Motion") */
+  background: var(--surface-sunken);
   transform: rotate(-23deg);
+}
+.donut::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--donut-fill, var(--surface-sunken));
 }
 .donut::after {
   content: '';
@@ -2591,12 +2600,7 @@ tbody tr:hover { background: var(--surface-muted); }
   transition: background .15s ease, border-color .15s ease;
 }
 .client-bot-options button:hover { border-color: var(--focus-border); background: var(--navy-soft); }
-.client-bot-options button { display: inline-flex; align-items: center; gap: 7px; animation: n1-rise-sm 260ms var(--ease-out) backwards; }
-.client-bot-options button:nth-child(2) { animation-delay: 40ms; }
-.client-bot-options button:nth-child(3) { animation-delay: 80ms; }
-.client-bot-options button:nth-child(4) { animation-delay: 120ms; }
-.client-bot-options button:nth-child(5) { animation-delay: 160ms; }
-.client-bot-options button:nth-child(n+6) { animation-delay: 200ms; }
+.client-bot-options button { display: inline-flex; align-items: center; gap: 7px; }
 .client-bot-options button svg { flex-shrink: 0; }
 /* Talking to a person stands out from the self-service answers */
 .client-bot-options .client-bot-option-team { border-color: var(--navy); color: var(--on-primary); background: var(--navy); }
@@ -3195,6 +3199,36 @@ tbody tr.empty-row:hover { background: transparent; }
 .client-bot-options button:nth-child(3) { animation-delay: 210ms; }
 .client-bot-options button:nth-child(4) { animation-delay: 255ms; }
 .client-bot-options button:nth-child(n+5) { animation-delay: 290ms; }
+
+/* Dashboard donut: the colored ring sweeps around its track, like a gauge filling up */
+@property --donut-sweep { syntax: '<angle>'; inherits: false; initial-value: 360deg; }
+@keyframes n1-donut-sweep { from { --donut-sweep: 0deg; } }
+.donut::before {
+  -webkit-mask: conic-gradient(#000 var(--donut-sweep), transparent 0);
+  mask: conic-gradient(#000 var(--donut-sweep), transparent 0);
+  animation: n1-donut-sweep 900ms var(--ease-out) 150ms backwards;
+}
+
+/* Lists come in one item after another */
+.deadline-row, .client-doc-list li, .client-history li, .admin-usage-top li, .activity-item {
+  animation: n1-rise-sm var(--motion-slow) var(--ease-out) backwards;
+}
+:is(.deadline-row, .client-doc-list li, .client-history li, .admin-usage-top li, .activity-item):nth-child(2) { animation-delay: 45ms; }
+:is(.deadline-row, .client-doc-list li, .client-history li, .admin-usage-top li, .activity-item):nth-child(3) { animation-delay: 90ms; }
+:is(.deadline-row, .client-doc-list li, .client-history li, .admin-usage-top li, .activity-item):nth-child(4) { animation-delay: 135ms; }
+:is(.deadline-row, .client-doc-list li, .client-history li, .admin-usage-top li, .activity-item):nth-child(5) { animation-delay: 180ms; }
+:is(.deadline-row, .client-doc-list li, .client-history li, .admin-usage-top li, .activity-item):nth-child(6) { animation-delay: 215ms; }
+:is(.deadline-row, .client-doc-list li, .client-history li, .admin-usage-top li, .activity-item):nth-child(n+7) { animation-delay: 250ms; }
+/* Each point of the client's timeline pops in with its entry */
+@keyframes n1-pop { from { transform: scale(0); } }
+.client-history li::before { animation: n1-pop 300ms var(--ease-out) backwards; animation-delay: inherit; }
+
+/*
+ * Panels further down the page rise in as they scroll into view, instead of animating off-screen
+ * on load (startScrollReveal in lib/motion.ts marks them). Panels already on screen stay put.
+ */
+.n1-reveal-wait { opacity: 0; transform: translateY(14px); }
+.n1-reveal-in { animation: n1-rise 480ms var(--ease-out) backwards; }
 
 /* Client portal: cards rise in on open (and when a mobile tab is shown again) */
 .client-portal-side > .client-portal-card,

@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FormEvent, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { hubMoney } from "./salesHubData";
 
 // The Sales HUB is only downloaded when someone opens it, so the portal opens faster.
@@ -467,7 +467,7 @@ function Dashboard({ navigate, userName }: { navigate: (view: View, filter?: Lis
     <div className="dashboard-columns">
       <section className="panel">
         <div className="panel-heading"><div><h3>Carteira de clientes</h3><p>Situação dos processos</p></div><button className="text-button" onClick={() => setView("clientes")}>Ver <ChevronRight size={15} /></button></div>
-        <div className="donut-wrap"><div className="donut" style={{ background: donutBackground }}><div className="donut-center"><strong>{processos ? formatInt(processos.total) : loading}</strong><span>clientes</span></div></div><div className="legend"><div><i className="legend-dot dot-violet" /><span>Em andamento</span><strong>{processos?.andamento ?? loading}</strong></div><div><i className="legend-dot dot-yellow" /><span>Atenção</span><strong>{processos?.atencao ?? loading}</strong></div><div><i className="legend-dot dot-green" /><span>Concluídos</span><strong>{processos?.concluidos ?? loading}</strong></div></div></div>
+        <div className="donut-wrap"><div className="donut" key={processos ? "pronto" : "carregando"} style={{ "--donut-fill": donutBackground } as CSSProperties}><div className="donut-center"><strong>{processos ? <CountUp value={processos.total} format={formatCount} /> : loading}</strong><span>clientes</span></div></div><div className="legend"><div><i className="legend-dot dot-violet" /><span>Em andamento</span><strong>{processos ? <CountUp value={processos.andamento} format={formatCount} /> : loading}</strong></div><div><i className="legend-dot dot-yellow" /><span>Atenção</span><strong>{processos ? <CountUp value={processos.atencao} format={formatCount} /> : loading}</strong></div><div><i className="legend-dot dot-green" /><span>Concluídos</span><strong>{processos ? <CountUp value={processos.concluidos} format={formatCount} /> : loading}</strong></div></div></div>
         <div className="progress-caption"><span>Taxa de conclusão</span><strong>{formatPercent(processos?.taxaConclusao ?? null)}</strong></div><div className="progress-bar"><span style={{ width: `${(processos?.taxaConclusao ?? 0) * 100}%` }} /></div>
         <p className="panel-footnote" title={METRIC_HELP.desconsiderados}>{m ? <>{formatInt(m.desconsiderados)} desconsiderado(s) — suspensos ou com chargeback, fora das métricas.{m.desconsiderados > 0 && <> <button type="button" className="inline-link" onClick={() => navigate("clientes", "desconsiderados")}>Ver quais</button></>}</> : ""}</p>
       </section>
