@@ -3072,7 +3072,6 @@ tbody tr.empty-row:hover { background: transparent; }
 .admin-address { margin: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
 .admin-usage { align-items: stretch; }
 .admin-usage .admin-card-head { flex-wrap: wrap; }
-.admin-usage-plan { margin-left: auto; padding: 2px 9px; border: 1px solid var(--border); border-radius: 99px; color: var(--muted); font-size: 12px; }
 .admin-usage-alert { display: flex; align-items: center; gap: 6px; margin: 0; }
 .admin-gauge { display: flex; flex-direction: column; }
 .admin-gauge-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--text-soft); font-size: 14px; }

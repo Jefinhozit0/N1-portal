@@ -4,7 +4,6 @@ import { supabase } from "./supabase";
 
 /** Free plan limits. Change them here if the plan changes. */
 export const PLAN_LIMITS = {
-  plano: "Grátis",
   bancoBytes: 500 * 1024 * 1024,
   arquivosBytes: 1024 * 1024 * 1024,
   usuariosAtivosMes: 50_000,
@@ -84,7 +83,6 @@ export async function computeSupabaseUsage(now = Date.now()) {
   };
 
   return {
-    plano: PLAN_LIMITS.plano,
     avisarEm: WARN_AT,
     tamanhoExato: exact,
     ...gauges,
