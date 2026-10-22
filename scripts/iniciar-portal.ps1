@@ -10,9 +10,10 @@ $logs = Join-Path $root "logs"
 New-Item -ItemType Directory -Force $logs | Out-Null
 function Log($text) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $text" | Out-File -Append -Encoding utf8 (Join-Path $logs "inicio.log") }
 
-# Outro vigia já rodando (a tarefa também roda a cada 5 minutos)? Então não faz nada: dois brigariam pelo portal.
+# Outro vigia desta mesma pasta já rodando (a tarefa também roda a cada 5 minutos)? Então não faz nada:
+# dois brigariam pelo portal. O vigia de outro portal no mesmo notebook (outra pasta) não conta.
 $otherWatcher = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
-  Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match "iniciar-portal\.ps1" } | Select-Object -First 1
+  Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match [regex]::Escape($PSCommandPath) } | Select-Object -First 1
 if ($otherWatcher) { exit 0 }
 
 # Com o Tailscale Funnel ligado na porta 3000 (endereço fixo, mantido pelo próprio serviço do Tailscale),
