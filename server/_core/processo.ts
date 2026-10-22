@@ -101,6 +101,15 @@ export async function documentDownloadUrl(documentId: number, clientId?: number)
   return signed.signedUrl;
 }
 
+/** The file itself, for the server to read (e.g. a contract the laudo is made from). */
+export async function downloadDocument(documentId: number) {
+  const { data } = await supabase.from("documentos").select("nome, caminho, tipo, client_id").eq("id", documentId).maybeSingle();
+  if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+  const { data: file, error } = await supabase.storage.from(BUCKET).download(data.caminho as string);
+  if (error || !file) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível abrir o arquivo agora." });
+  return { nome: data.nome as string, tipo: (data.tipo as string | null) ?? null, clientId: data.client_id as number, bytes: new Uint8Array(await file.arrayBuffer()) };
+}
+
 export async function deleteDocument(documentId: number, author: string) {
   const { data } = await supabase.from("documentos").select("client_id, nome, caminho").eq("id", documentId).maybeSingle();
   if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Este documento já foi apagado." });

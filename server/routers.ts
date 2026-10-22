@@ -28,7 +28,10 @@ import QRCode from "qrcode";
 import type { TrpcContext } from "./_core/context";
 import { TICKET_TOPICS, formatTicketMessage, parseTicketMessage } from "@shared/tickets";
 import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, toneForStatus } from "@shared/processo";
-import { addEvent, deleteDocument, documentDownloadUrl, listDocuments, listEvents, removeClientFiles, uploadDocument } from "./_core/processo";
+import { addEvent, deleteDocument, documentDownloadUrl, downloadDocument, listDocuments, listEvents, removeClientFiles, uploadDocument } from "./_core/processo";
+import { lerContrato } from "./_core/laudoContrato";
+import { buildLaudoPdf, laudoFileName } from "./_core/laudoPdf";
+import { problemasLaudo } from "@shared/laudo";
 
 const verificationRequestTimes = new Map<string, number>();
 const verificationRequestCooldownMs = 60_000;
@@ -113,6 +116,27 @@ function isAdminUser(user: { email?: string; app_metadata?: Record<string, unkno
   if (user.app_metadata?.role === "admin") return true;
   return Boolean(user.email && ENV.adminEmails.includes(user.email.toLowerCase()));
 }
+
+const valor = z.number().min(0).max(1e9);
+/** The laudo form (LaudoDados in shared/laudo.ts). */
+const laudoInput = z.object({
+  contrato: z.string().trim().max(60),
+  contratante: z.string().trim().max(200),
+  instituicao: z.string().trim().max(200),
+  objeto: z.string().trim().max(100),
+  garantia: z.string().trim().max(200),
+  valorSolicitado: valor,
+  valorFinanciado: valor,
+  parcelas: z.number().int().min(0).max(600),
+  valorParcela: valor,
+  dataContrato: z.string().trim().max(20),
+  primeiroVencimento: z.string().trim().max(20),
+  taxaMensal: z.number().min(0).max(100),
+  taxaAnual: z.number().min(0).max(10000),
+  jurosMora: z.string().trim().max(40),
+  iof: valor,
+  encargos: z.object({ seguros: valor.nullable(), avaliacao: valor.nullable(), cadastro: valor.nullable(), registro: valor.nullable() }),
+});
 
 /** Procedures for the N1 team: every route with data from all clients goes through here. */
 const staffProcedure = publicProcedure.use(async ({ ctx, next, type }) => {
@@ -817,6 +841,40 @@ export const appRouter = router({
         const removed = await deleteDocument(input.id, ctx.staffUser.email ?? "equipe");
         await registrarAcao(ctx.staffUser.email, "Apagou documento", removed.nome, removed.clientId);
         return { success: true } as const;
+      }),
+
+    /** Fills the laudo form from a contract PDF: one already attached to the client, or one sent now. */
+    lerContrato: staffProcedure
+      .input(z.object({
+        documentoId: z.number().int().positive().optional(),
+        conteudo: z.string().min(1).max(Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 4).optional(),
+      }).refine((input) => input.documentoId !== undefined || input.conteudo !== undefined, "Envie o contrato em PDF."))
+      .mutation(async ({ input }) => {
+        const bytes = input.documentoId !== undefined ? (await downloadDocument(input.documentoId)).bytes : new Uint8Array(Buffer.from(input.conteudo!, "base64"));
+        if (Buffer.from(bytes.subarray(0, 5)).toString("latin1") !== "%PDF-") throw new TRPCError({ code: "BAD_REQUEST", message: "Esse arquivo não é um PDF." });
+        try {
+          return await lerContrato(bytes);
+        } catch (error) {
+          console.warn("[laudo] Could not read contract:", error instanceof Error ? error.message : error);
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível ler esse PDF. Preencha os dados à mão." });
+        }
+      }),
+
+    /** The parecer técnico as a PDF; optionally saved among the client's documents. */
+    gerarLaudo: staffProcedure
+      .input(z.object({ clientId: z.number().int().positive().optional(), anexar: z.boolean().default(false), dados: laudoInput }))
+      .mutation(async ({ ctx, input }) => {
+        const problems = problemasLaudo(input.dados);
+        if (problems.length) throw new TRPCError({ code: "BAD_REQUEST", message: problems.join(" ") });
+        const pdf = await buildLaudoPdf(input.dados);
+        const nome = laudoFileName(input.dados);
+        if (input.anexar && input.clientId !== undefined) {
+          const { data: cliente } = await supabase.from("clientes").select("id, name").eq("id", input.clientId).maybeSingle();
+          if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+          await uploadDocument(input.clientId, { nome, tipo: "application/pdf", descricao: `Parecer técnico do contrato ${input.dados.contrato}`, bytes: pdf }, ctx.staffUser.email ?? "equipe");
+        }
+        await registrarAcao(ctx.staffUser.email, "Gerou laudo", `${input.dados.contratante}: contrato ${input.dados.contrato}`, input.clientId);
+        return { nome, conteudo: pdf.toString("base64") };
       }),
 
     /** Clears a client's whole conversation (messages, tickets and the assistant's lines). The client stays registered. */
