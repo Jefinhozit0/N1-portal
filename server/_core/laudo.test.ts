@@ -16,6 +16,8 @@ const SIM_CCB = [
   line(811, "[258]OPERAÇAO N° 663795516"),
   line(763, "[50]Nome do Cliente: [123]MARIA DA SILVA EXEMPLO"),
   line(750, "[50]CPF: [85]000.000.000-00 [320]RG: [340]00000000"),
+  line(736, "[50]Endereço, fone de contato e e-mail: R DAS FLORES, 68 - cohab II - 15495-000 - SP (17)"),
+  line(724, "[50]99999-0000 - MARIA.EXEMPLO@GMAIL.COM"),
   line(710, "[426]COROLLA GLI 1.8 FLEX 16V"),
   line(705, "[50]Veículo (Marca): [123]TOYOTA [221]Ano-modelo: [277]2017/2018 [391]Modelo:"),
   line(700, "[426]AUT."),
@@ -54,6 +56,8 @@ const SANTANDER_CDC = [
   line(767, "[394]OPERAÇÃO Nº 101601607/00693981806"),
   line(717, "[67]Nome/Razão Social do Cliente: JOÃO EXEMPLO DOS SANTOS"),
   line(707, "[67]CPF/CNPJ: 000.000.000-00 [434]RG: 000000000"),
+  line(696, "[36]A.1 [67]Endereço e telefone de contato: RUA EXEMPLO 39 CASA JARDIM EXEMPLO SAO PAULO SP - (11)999999999"),
+  line(687, "[67]Email: JOAO.EXEMPLO@GMAIL.COM"),
   line(676, "[67]Veículo: Marca: BAJAJ [298]Modelo: DOMINAR 250"),
   line(666, "[67]Ano/Modelo: 2025 [298]Cor: VERMELHA [408]Combustível: GASOLINA"),
   line(614, "[36]B.1 [67]Valor do veículo à vista [434]R$ [448]23.000,00"),
@@ -84,6 +88,11 @@ describe("extrairContrato (Santander CDC Veículos)", () => {
 
   it("takes the client's name from its label, not from a clause that mentions the client", () => {
     expect(dados.contratante).toBe("JOÃO EXEMPLO DOS SANTOS");
+  });
+
+  it("reads the client's e-mail and address, without the phone that follows (used by the termo)", () => {
+    expect(extrairContrato(SANTANDER_CDC)).toMatchObject({ email: "joao.exemplo@gmail.com", endereco: "RUA EXEMPLO 39 CASA JARDIM EXEMPLO SAO PAULO SP" });
+    expect(extrairContrato(SIM_CCB)).toMatchObject({ email: "maria.exemplo@gmail.com", endereco: "R DAS FLORES, 68 - cohab II - 15495-000 - SP" });
   });
 
   it("reads the client's CPF and the bank's CNPJ (used by the notificação)", () => {

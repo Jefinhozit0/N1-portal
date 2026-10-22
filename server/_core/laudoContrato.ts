@@ -100,7 +100,33 @@ function contractDate(lines: Line[]) {
 }
 
 /** cpf, cnpjInstituicao and modalidade are not in the laudo, but other documents (notificação) use them. */
-export type LeituraContrato = { dados: LaudoDados; cpf: string; cnpjInstituicao: string; modalidade: Modalidade | null; encontrados: string[] };
+export type LeituraContrato = { dados: LaudoDados; cpf: string; cnpjInstituicao: string; modalidade: Modalidade | null; email: string; endereco: string; encontrados: string[] };
+
+const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+/** The client's e-mail on page 1: the one on a line that says "e-mail"/"email" first, else any (SIM writes it after the phone, on the next line). */
+function clientEmail(lines: Line[]) {
+  const page1 = lines.filter((line) => line.page === 1);
+  const labeled = page1.find((line) => /e-?mail/i.test(line.text) && EMAIL.test(line.text));
+  return (labeled ?? page1.find((line) => EMAIL.test(line.text)))?.text.match(EMAIL)?.[0].toLowerCase() ?? "";
+}
+
+/**
+ * The client's address, from the "Endereço…:" line, without the phone or e-mail that follow it.
+ * SIM: "Endereço, fone de contato e e-mail: R FREDERICO GIACHETO FILHO, 68 - cohab II - 15495-000 - SP (17)".
+ * Santander: "Endereço e telefone de contato: TANAZEIRO 39 CASA JARDIM MATARAZZO SAO PAULO SP - (11)999164161".
+ */
+function clientAddress(lines: Line[]) {
+  // The line may start with the item code ("A.1 Endereço e telefone de contato: …").
+  const label = /^(?:[A-Z]\.\d+\s+)?Endere[çc]o[^:]{0,40}:\s*/i;
+  const line = lines.find((candidate) => candidate.page === 1 && label.test(candidate.text));
+  if (!line) return "";
+  return line.text.replace(label, "")
+    .replace(/\s*-?\s*\(\d{2}\)[\s\d-]*.*$/, "")
+    .replace(EMAIL, "")
+    .replace(/[\s,-]+$/, "")
+    .trim();
+}
 
 export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
   return extrairContrato(await readLines(bytes));
@@ -108,7 +134,7 @@ export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
 
 export function extrairContrato(lines: Line[]): LeituraContrato {
   const dados = emptyLaudo();
-  if (lines.length === 0) return { dados, cpf: "", cnpjInstituicao: "", modalidade: null, encontrados: [] };
+  if (lines.length === 0) return { dados, cpf: "", cnpjInstituicao: "", modalidade: null, email: "", endereco: "", encontrados: [] };
 
   dados.contrato = lines.map((line) => line.text.match(/(?:OPERA[ÇC][AÃ]O|CONTRATO|C[ÉE]DULA|PROPOSTA)\s*(?:N[º°o.]*|n[úu]mero)\s*:?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean) ?? "";
   dados.instituicao = (find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text ?? "")
@@ -175,5 +201,5 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
   const cnpjInstituicao = find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text.match(/CNPJ:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i)?.[1] ?? "";
   // The title sits in the first lines of page 1 ("CÉDULA DE CRÉDITO BANCÁRIO - CRÉDITO PESSOAL…", "…CRÉDITO DIRETO AO CONSUMIDOR (CDC) – VEÍCULOS").
   const modalidade = modalidadeDoTitulo(lines.filter((line) => line.page === 1).slice(0, 8).map((line) => line.text).join(" "));
-  return { dados, cpf, cnpjInstituicao, modalidade, encontrados };
+  return { dados, cpf, cnpjInstituicao, modalidade, email: clientEmail(lines), endereco: clientAddress(lines), encontrados };
 }

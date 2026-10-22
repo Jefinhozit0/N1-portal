@@ -8,6 +8,7 @@ import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { formatCPF, hojeISO } from "@shared/procuracao";
 import { Button } from "@/components/ui/button";
 import { downloadPdf, pickPdf } from "@/lib/downloadPdf";
+import { clienteDiferente } from "@/lib/nomes";
 import { trpc } from "@/lib/trpc";
 import type { ProcuracaoClient } from "./ProcuracaoForm";
 
@@ -222,6 +223,7 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
       {problems.length ? <p>{problems[0]}</p> : preview}
     </div>
 
+    {clienteDiferente(chosen?.name, form.nome) && <p className="laudo-warning"><AlertTriangle size={14} /> O cliente escolhido ({chosen!.name}) não é o nome do documento ({form.nome.toUpperCase()}). Confira antes de anexar.</p>}
     {chosen
       ? <label className="laudo-attach">
           <input type="checkbox" checked={anexar} onChange={(event) => setAnexar(event.target.checked)} />
