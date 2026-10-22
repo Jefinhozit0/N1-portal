@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
 import { formatCPF } from "@shared/procuracao";
 import { N1_NOTIFICACAO as N1, type NotificacaoContratoDados, type NotificacaoDados, dataPorExtenso, moeda, reaisPorExtenso } from "@shared/notificacao";
@@ -14,14 +16,17 @@ const MARGIN_LEFT = 92, MARGIN_RIGHT = 80;
 const EMAIL = "e‑mail";
 const body = (text: Content): Content => ({ text, style: "body" } as Content);
 
-/** Gray rule on top, N1's footer on every page, the title; the content goes in between. */
-/** compacto: tighter lines, for the longer model (it still has to fit on one page). */
-function pagina(titulo: string, content: Content[], compacto = false): TDocumentDefinitions {
-  const lineHeight = compacto ? 1.32 : 1.5, gap = compacto ? 7 : 10;
+/**
+ * Gray rule on top, the title, then the content. rodape: N1's "Em prestação de serviços jurídicos"
+ * line on every page (the manual model has it, the com-contrato one does not). compacto: tighter
+ * lines, for the longer model (it still has to fit on one page).
+ */
+function pagina(titulo: string, content: Content[], { compacto = false, rodape = true } = {}): TDocumentDefinitions {
+  const lineHeight = compacto ? 1.25 : 1.5, gap = compacto ? 6 : 10;
   return {
     pageSize: "A4",
-    // Sized so the manual one fits on one page, signature included, even with a long bank address.
-    pageMargins: [MARGIN_LEFT, 66, MARGIN_RIGHT, 60],
+    // Sized so each model fits on one page, signature included, even with a long bank address.
+    pageMargins: [MARGIN_LEFT, compacto ? 56 : 66, MARGIN_RIGHT, rodape ? 60 : 32],
     info: { title: titulo, author: N1.nome },
     defaultStyle: { font: "Roboto", fontSize: 10.5, color: "#1a1a1a" },
     styles: {
@@ -29,21 +34,31 @@ function pagina(titulo: string, content: Content[], compacto = false): TDocument
       recuo: { lineHeight, alignment: "justify", margin: [0, 0, 0, gap - 2], leadingIndent: 28 },
     },
     background: () => ({ canvas: [{ type: "line", x1: 72, y1: 42, x2: PAGE_WIDTH, y2: 42, lineWidth: 1.4, lineColor: "#b3b3b3" }] }),
-    footer: () => ({
+    footer: rodape ? () => ({
       text: `Em prestação de serviços jurídicos para N1 SOLUÇÕES - CNPJ nº ${N1.cnpj} – sediada em ${N1.sede}.`,
       bold: true, fontSize: 8, lineHeight: 1.15, margin: [MARGIN_LEFT, 18, MARGIN_RIGHT, 0],
-    }),
+    }) : undefined,
     content: [{ text: "NOTIFICAÇÃO EXTRAJUDICIAL", bold: true, fontSize: 13, alignment: "center", margin: [0, 0, 0, compacto ? 14 : 20] }, ...content],
   };
 }
 
-const assinatura = (compacto = false): Content => ({
+const assinatura = (): Content => ({
   unbreakable: true,
   stack: [
-    { text: "Cordialmente,", margin: [56, compacto ? 2 : 6, 0, compacto ? 22 : 26] },
+    { text: "Cordialmente,", margin: [56, 6, 0, 26] },
     { canvas: [{ type: "line", x1: 0, y1: 0, x2: PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT, y2: 0, lineWidth: 0.8, lineColor: "#333" }] },
     { text: N1.nome, bold: true, alignment: "center", margin: [0, 8, 0, 4] },
     { text: `CNPJ: ${N1.cnpj}`, bold: true, alignment: "center" },
+  ],
+});
+
+/** N1's CNPJ stamp (taken from the team's model), which signs the com-contrato notificação. */
+const CARIMBO = `data:image/png;base64,${readFileSync(path.resolve(process.cwd(), "server/assets/notificacao/carimbo.png")).toString("base64")}`;
+const assinaturaCarimbo = (): Content => ({
+  unbreakable: true,
+  stack: [
+    { text: "Cordialmente,", margin: [56, 0, 0, 8] },
+    { image: CARIMBO, width: 165 },
   ],
 });
 
@@ -96,7 +111,7 @@ export function notificacaoContratoDefinition(dados: NotificacaoContratoDados): 
       { text: nome, bold: true },
       ", inscrito(a) no ",
       { text: `CPF nº ${formatCPF(dados.cpf)}`, bold: true },
-      ", manifestar sua irresignação acerca do contrato de empréstimo ",
+      `, manifestar sua irresignação acerca do contrato de ${dados.modalidade} `,
       { text: `Nº ${dados.contrato.trim()}.`, bold: true },
     ]),
     { text: "01. DOS JUROS REMUNERATÓRIOS", bold: true, margin: [0, 4, 0, 5] },
@@ -112,16 +127,16 @@ export function notificacaoContratoDefinition(dados: NotificacaoContratoDados): 
     body("O atendimento dessa notificação extrajudicial por V. Sª evitará o ajuizamento de ação judicial própria, bem como aborrecimentos e despesas indesejáveis."),
     body("Decorrido o prazo in albis, entender-se-á que a presente notificação foi desconsiderada, possibilitando, pois, a busca pelo amparo judicial."),
     body("Nos colocamos à disposição para discutir eventuais acordos."),
-    assinatura(true),
+    assinaturaCarimbo(),
     // The footnote of the CDC reference, below the signature as in the model.
     {
       unbreakable: true,
       stack: [
-        { canvas: [{ type: "line", x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.8, lineColor: "#333" }], margin: [0, 12, 0, 4] },
+        { canvas: [{ type: "line", x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.8, lineColor: "#333" }], margin: [0, 8, 0, 4] },
         { stack: CDC, fontSize: 7.5, lineHeight: 1.15, alignment: "justify" },
       ],
     },
-  ], true);
+  ], { compacto: true, rodape: false });
 }
 
 export const buildNotificacaoPdf = (dados: NotificacaoDados) => renderPdf(notificacaoDefinition(dados));

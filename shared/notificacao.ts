@@ -54,6 +54,8 @@ export type NotificacaoContratoDados = {
   contrato: string;
   /** Monthly rate written in the contract, in percent (1.96 = 1,96% a.m.). */
   taxaMensal: number;
+  /** "contrato de financiamento" (CDC, vehicle) or "contrato de empréstimo" (crédito pessoal). */
+  modalidade: Modalidade;
   bancoNome: string;
   bancoCnpj: string;
   bancoEndereco: string;
@@ -61,6 +63,16 @@ export type NotificacaoContratoDados = {
   /** aaaa-mm-dd */
   data: string;
 };
+
+export const MODALIDADES = ["financiamento", "empréstimo"] as const;
+export type Modalidade = (typeof MODALIDADES)[number];
+
+/** From the contract's title: crédito pessoal / empréstimo / CCB of a loan → empréstimo; CDC, veículos, financiamento → financiamento. */
+export function modalidadeDoTitulo(titulo: string): Modalidade | null {
+  if (/cr[ée]dito pessoal|empr[ée]stimo|consignado/i.test(titulo)) return "empréstimo";
+  if (/financiamento|cdc|cr[ée]dito direto ao consumidor|ve[íi]culo/i.test(titulo)) return "financiamento";
+  return null;
+}
 
 export function problemasNotificacaoContrato(dados: NotificacaoContratoDados): string[] {
   const problems: string[] = [];
