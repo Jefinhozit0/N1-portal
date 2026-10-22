@@ -3350,3 +3350,26 @@ tbody tr.empty-row:hover { background: transparent; }
   .hub-toolbar select { max-width: none; }
 }
 
+
+/* ── Laudo (parecer técnico) ── */
+.section-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.laudo-dialog { max-width: 720px; }
+.laudo-source { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-muted); }
+.laudo-source small { color: var(--text-soft); font-size: 12.5px; }
+.laudo-dialog form > .new-sale-grid { margin: 18px 0 8px; }
+.laudo-encargos { margin: 10px 0 0; padding: 12px 14px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.laudo-encargos legend { padding: 0 6px; color: var(--text); font-size: 13.5px; font-weight: 600; }
+.laudo-encargos legend small { color: var(--muted); font-weight: 500; }
+.laudo-preview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 8px; padding: 14px; border-radius: 10px; background: var(--gold-soft); }
+.laudo-preview div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.laudo-preview span { color: var(--text-soft); font-size: 11.5px; }
+.laudo-preview strong { color: var(--text); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.laudo-preview .laudo-total { color: var(--gold-text); font-size: 15px; }
+.laudo-preview p { grid-column: 1 / -1; margin: 0; color: var(--text-soft); font-size: 13px; }
+.laudo-warning { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0 0; color: var(--yellow, #a16207); font-size: 12.5px; }
+.laudo-warning svg { flex: none; margin-top: 2px; }
+.laudo-attach { display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; color: var(--text-soft); font-size: 13px; cursor: pointer; }
+@media (max-width: 640px) {
+  .laudo-source { flex-direction: column; align-items: flex-start; }
+  .laudo-preview { grid-template-columns: 1fr 1fr; }
+}

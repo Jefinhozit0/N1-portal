@@ -1,0 +1,161 @@
+import { getDocumentProxy } from "unpdf";
+import { type Encargos, type LaudoDados, emptyLaudo, mesNumero, parseBRL } from "@shared/laudo";
+
+/**
+ * Reads a bank contract (CCB) PDF and fills what it can of the laudo. Works on the text of the PDF,
+ * line by line, looking for the labels banks use; a scanned contract (image only) has no text and
+ * comes back empty. Whatever is not found stays blank for the team to type in.
+ */
+
+type Item = { x: number; y: number; text: string };
+export type Line = { page: number; y: number; items: Item[]; text: string };
+
+async function readLines(bytes: Uint8Array, maxPages = 3): Promise<Line[]> {
+  const pdf = await getDocumentProxy(bytes);
+  const lines: Line[] = [];
+  for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, maxPages); pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const items = (content.items as { str?: string; transform?: number[] }[])
+      .filter((item) => item.str?.trim() && item.transform)
+      .map((item) => ({ x: item.transform![4], y: item.transform![5], text: item.str!.trim() }))
+      .sort((a, b) => b.y - a.y || a.x - b.x);
+    const pageLines: Line[] = [];
+    for (const item of items) {
+      const line = pageLines.find((candidate) => Math.abs(candidate.y - item.y) < 3);
+      if (line) line.items.push(item);
+      else pageLines.push({ page: pageNumber, y: item.y, items: [item], text: "" });
+    }
+    for (const line of pageLines) {
+      line.items.sort((a, b) => a.x - b.x);
+      line.text = line.items.map((item) => item.text).join(" ").replace(/\s+/g, " ");
+    }
+    lines.push(...pageLines);
+  }
+  return lines;
+}
+
+/** Amounts written with R$ on the line, in order; without R$, plain numbers that are not percentages. */
+function money(text: string): number[] {
+  const withSymbol = Array.from(text.matchAll(/R\$\s*(-?[\d.]+,\d{2})/g)).map((match) => parseBRL(match[1])!);
+  if (withSymbol.length) return withSymbol;
+  return Array.from(text.matchAll(/(?<![\d,.%])(\d{1,3}(?:\.\d{3})*,\d{2})(?!\s*%)/g)).map((match) => parseBRL(match[1])!);
+}
+
+const percents = (text: string) => Array.from(text.matchAll(/(\d{1,3},\d{1,4})\s*%?/g)).map((match) => parseBRL(match[1])!);
+
+const find = (lines: Line[], pattern: RegExp, skip?: RegExp) => lines.find((line) => pattern.test(line.text) && !(skip && skip.test(line.text)));
+
+/** First amount on the line of the first label that has one. */
+function amountFor(lines: Line[], patterns: RegExp[], skip?: RegExp) {
+  for (const pattern of patterns) {
+    for (const line of lines) {
+      if (!pattern.test(line.text) || (skip && skip.test(line.text))) continue;
+      const values = money(line.text.slice(line.text.search(pattern)));
+      if (values.length) return values[0];
+    }
+  }
+  return null;
+}
+
+/** Text written after a label ("Nome do Cliente: FULANO") plus the lines that continue it right below. */
+function textAfter(lines: Line[], label: RegExp, stop?: RegExp) {
+  for (const line of lines) {
+    const index = line.items.findIndex((item) => label.test(item.text));
+    if (index < 0) continue;
+    const labelItem = line.items[index];
+    const sameItem = labelItem.text.replace(label, "").replace(/^[\s:]+/, "");
+    const rest = line.items.slice(index + 1);
+    const stopAt = stop ? rest.findIndex((item) => stop.test(item.text)) : -1;
+    const own = stopAt >= 0 ? rest.slice(0, stopAt) : rest;
+    const stopX = stopAt >= 0 ? rest[stopAt].x : Infinity;
+    const parts = [sameItem, ...own.map((item) => item.text)].filter(Boolean);
+    // A value that wraps (e.g. "COROLLA GLI 1.8 FLEX 16V" / "AUT.") sits a few points above and below, in the same column.
+    const wrapped = lines
+      .filter((other) => other !== line && other.page === line.page && Math.abs(other.y - line.y) < 8)
+      .flatMap((other) => other.items.filter((item) => item.x > labelItem.x + 10 && item.x < stopX).map((item) => ({ ...item, y: other.y })))
+      .sort((a, b) => b.y - a.y);
+    const above = wrapped.filter((item) => item.y > line.y).map((item) => item.text);
+    const below = wrapped.filter((item) => item.y < line.y).map((item) => item.text);
+    const value = [...above, ...parts, ...below].join(" ").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+const zeroIsAbsent = (value: number | null) => (value && value > 0 ? value : null);
+
+function contractDate(lines: Line[]) {
+  const issued = find(lines, /data\s+(?:de\s+)?(?:emiss[ãa]o|contrata[çc][ãa]o|libera[çc][ãa]o)/i);
+  const written = issued?.text.match(/(\d{2}\/\d{2}\/\d{4})/);
+  if (written) return written[1];
+  for (const line of lines) {
+    const match = line.text.match(/(\d{1,2}) de ([A-Za-zçÇ]+) de (\d{4})/);
+    const month = match ? mesNumero(match[2]) : 0;
+    if (match && month) return `${match[1].padStart(2, "0")}/${String(month).padStart(2, "0")}/${match[3]}`;
+  }
+  return "";
+}
+
+export type LeituraContrato = { dados: LaudoDados; encontrados: string[] };
+
+export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
+  return extrairContrato(await readLines(bytes));
+}
+
+export function extrairContrato(lines: Line[]): LeituraContrato {
+  const dados = emptyLaudo();
+  if (lines.length === 0) return { dados, encontrados: [] };
+
+  dados.contrato = lines.map((line) => line.text.match(/(?:OPERA[ÇC][AÃ]O|CONTRATO|C[ÉE]DULA|PROPOSTA)\s*(?:N[º°o.]*|n[úu]mero)\s*:?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean) ?? "";
+  dados.instituicao = (find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text ?? "")
+    .replace(/\s*-?\s*CNPJ.*$/i, "").replace(/\s+/g, " ").trim();
+  dados.contratante = textAfter(lines, /^(?:Nome do Cliente|Nome do Emitente|Emitente|Cliente)\s*:?/i, /^(CPF|RG)\b/i);
+
+  const marca = textAfter(lines, /^Ve[íi]culo\s*\(Marca\)\s*:?/i, /^(Ano|Modelo)/i);
+  const modelo = textAfter(lines, /^Modelo\s*:?/i);
+  const ano = textAfter(lines, /^Ano-?\s*modelo\s*:?/i, /^Modelo/i);
+  dados.garantia = [marca, modelo, ano].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+
+  dados.valorSolicitado = amountFor(lines, [/Valor Solicitado/i, /Valor (?:l[íi]quido )?(?:do )?(?:cr[ée]dito|empr[ée]stimo) liberado/i, /Valor liberado/i, /Valor (?:l[íi]quido )?do cr[ée]dito/i]) ?? 0;
+  dados.valorFinanciado = amountFor(lines, [/VALOR TOTAL CONTRATADO/i, /Valor total (?:do )?financiad/i, /Total financiado/i, /Valor (?:do )?financiamento/i], /sem impostos/i) ?? 0;
+  dados.valorParcela = (() => {
+    const line = find(lines, /Valor (?:de cada|da|das) (?:parcela|presta[çc][ãa]o)/i);
+    const values = line ? money(line.text) : [];
+    return values.length ? values[values.length - 1] : 0;
+  })();
+  dados.parcelas = (() => {
+    const line = find(lines, /(?:N[úu]mero|Quantidade|Qtde\.?)\s+de\s+(?:parcelas|presta[çc][õo]es)|Prazo\s*\(meses\)/i);
+    const numbers = line?.text.replace(/^.*?(?:parcelas|presta[çc][õo]es|meses\))[^\d]*/i, "").match(/\b(\d{1,3})\b/);
+    return numbers ? Number(numbers[1]) : 0;
+  })();
+  dados.primeiroVencimento = find(lines, /(?:1[º°ª]?\s*|primeiro\s+)vencimento/i)?.text.match(/(\d{2}\/\d{2}\/\d{4})/)?.[1] ?? "";
+  dados.dataContrato = contractDate(lines);
+
+  const rateIndex = lines.findIndex((line) => /taxa\s+de\s+juros/i.test(line.text) && !/mora/i.test(line.text));
+  if (rateIndex >= 0) {
+    const rates = lines.slice(rateIndex, rateIndex + 3).map((line) => percents(line.text.replace(/^.*taxa\s+de\s+juros[^\d]*/i, ""))).find((values) => values.length >= 2);
+    if (rates) [dados.taxaMensal, dados.taxaAnual] = rates;
+  }
+  const mora = lines.map((line) => line.text.match(/juros\s+(?:de\s+)?mora[^\d]{0,40}(\d+(?:,\d+)?)\s*%/i)?.[1]).find(Boolean);
+  if (mora) dados.jurosMora = `${mora}% A.M.`;
+
+  dados.iof = amountFor(lines, [/Total de impostos/i, /IOF\s*(?:total|financiado)/i]) ?? 0;
+
+  // Several lines can carry each charge (B.3 cartório + B.4 trânsito); they add up.
+  const sumLines = (pattern: RegExp, skip: RegExp) => lines
+    .filter((line) => pattern.test(line.text) && !skip.test(line.text))
+    .reduce((total, line) => total + (money(line.text)[0] ?? 0), 0);
+  const encargos: Encargos = {
+    seguros: zeroIsAbsent(sumLines(/seguro|prestamista|protegido/i, /total|subtotal|seguradora\s*:/i)),
+    avaliacao: zeroIsAbsent(amountFor(lines, [/Tarifa de Avalia[çc][ãa]o|Avalia[çc][ãa]o (?:do|de) bem/i])),
+    cadastro: zeroIsAbsent(amountFor(lines, [/Tarifa de Cadastro/i])),
+    registro: zeroIsAbsent(sumLines(/registro/i, /total|subtotal|t[íi]tulos e documentos sob/i)),
+  };
+  dados.encargos = encargos;
+
+  const encontrados = Object.entries({ ...dados, ...encargos })
+    .filter(([key, value]) => key !== "encargos" && key !== "objeto" && key !== "jurosMora" && value !== "" && value !== 0 && value !== null)
+    .map(([key]) => key);
+  return { dados, encontrados };
+}
