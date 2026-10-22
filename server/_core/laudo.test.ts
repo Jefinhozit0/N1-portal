@@ -48,6 +48,59 @@ const SIM_CCB = [
   line(198, "[34]I [208]EXEMPLO, em Terça-feira, 7 de Janeiro de 2025 às 13:38:21 através de iPhone-OS iPhone -"),
 ];
 
+// Page 1 of a Santander / Aymoré CDC Veículos contract, plus a clause from page 3; personal data replaced.
+const SANTANDER_CDC = [
+  line(788, "[142]AYMORÉ CRÉDITO, FINANCIAMENTO E INVESTIMENTO S.A. CNPJ: 07.707.650/0001-10"),
+  line(767, "[394]OPERAÇÃO Nº 101601607/00693981806"),
+  line(717, "[67]Nome/Razão Social do Cliente: JOÃO EXEMPLO DOS SANTOS"),
+  line(707, "[67]CPF/CNPJ: 000.000.000-00 [434]RG: 000000000"),
+  line(676, "[67]Veículo: Marca: BAJAJ [298]Modelo: DOMINAR 250"),
+  line(666, "[67]Ano/Modelo: 2025 [298]Cor: VERMELHA [408]Combustível: GASOLINA"),
+  line(614, "[36]B.1 [67]Valor do veículo à vista [434]R$ [448]23.000,00"),
+  line(561, "[67]Seguro Prestamista: CDC PROTEGIDO MOTO COM [308]Financiado: ■ sim □ não [434]R$ [447]1.488,00 [525]5,71%"),
+  line(542, "[67]Seguro Acidente Pessoal: [308]Financiado: □ sim □ não [525]0,00%"),
+  line(532, "[67]Seguradora: Zurich Santander [308]CNPJ:87.376.109/0001-06"),
+  line(522, "[67]Seguro Auto: [308]Financiado: □ sim ■ não [434]R$ [447]0,00 [525]0,00%"),
+  line(464, "[36]B.8 [67]Registro contrato – Cartório (cf. Legislação estadual) – financiado: [382]□ sim ■ não [434]R$ [447]0,00 [525]0,00%"),
+  line(453, "[37]B.9 [67]Registro contrato-órgão de trânsito (Res. 689 CONTRAN) – financiado: [382]■ sim □ não [434]R$ [447]305,97 [525]1,17%"),
+  line(443, "[67]SUBTOTAL: VEÍCULO + ACESSÓRIOS + SERV DE TERCEIROS FINANCIADOS A PEDIDO DO [434]R$ [447]24.793,97"),
+  line(402, "[36]C.2 [67]Valor Líquido Liberado (B.1+B.2+B.3+B.4+B.5+B.7-C.1) [434]R$ [447]23.000,00 [523]88,32%"),
+  line(371, "[36]D.1 [67]Tarifa de cadastro [245]Isenta: □ sim ■ não [335]Financiada: ■ sim □ não [434]R$ [447]1.149,00 [525]4,41%"),
+  line(360, "[36]D.2 [67]Tarifa de avaliação de bem [245]Isenta: □ sim ■ não [335]Financiada: □ sim ■ não [434]R$ [447]0,00 [525]0,00%"),
+  line(327, "[36]E.1 [67]Valor total a ser financiado sem impostos (B.10 - C.1 + D.3) [434]R$ [448]25.942,97"),
+  line(285, "[36]E.4 [67]Total de impostos a serem financiados [434]R$ [448]98,56 [524]0,38%"),
+  line(264, "[36]F.1 [67]Data do 1º Vencimento: 30/11/2025 [314]F.2 [335]Número de Parcelas mensais: 48"),
+  line(242, "[67]Taxa de juros remuneratórios diária, mensal e [245]diária: % a.d.: 0,07% [342]mensal: % a.m.: 2,00% [450]anual: % a.a.: 26,82%"),
+  line(224, "[36]F.5 [67]Valor de cada parcela mensal [434]R$ [447]848,37"),
+  line(213, "[36]F.6 [67]VALOR TOTAL FINANCIADO (COM IMPOSTOS) (E.1 + E.4) [434]R$ [447]26.041,53 [521]100,00%"),
+  line(182, "[67]Prazo de validade do orçamento (²): [195]Local: SAO PAULO [322]Hora: 16:49:57 [434]Data: 31/10/2025"),
+  line(156, "[67]Assinado eletronicamente por JOÃO EXEMPLO DOS SANTOS em sexta-feira, 31 de outubro de 2025 de 16:48:55 através de"),
+  { ...line(120, "[300]capitalizados (item F.4). N – Direitos e Deveres do"), page: 3 },
+  { ...line(110, "[300]Cliente - Direitos: I. Escolher e receber livremente o"), page: 3 },
+];
+
+describe("extrairContrato (Santander CDC Veículos)", () => {
+  const { dados } = extrairContrato(SANTANDER_CDC);
+
+  it("takes the client's name from its label, not from a clause that mentions the client", () => {
+    expect(dados.contratante).toBe("JOÃO EXEMPLO DOS SANTOS");
+  });
+
+  it("reads the labeled monthly and yearly rates, not the daily one", () => {
+    expect(dados).toMatchObject({ taxaMensal: 2, taxaAnual: 26.82 });
+  });
+
+  it("reads the rest of the contract", () => {
+    expect(dados).toMatchObject({
+      contrato: "101601607/00693981806", garantia: "BAJAJ DOMINAR 250 2025", valorSolicitado: 23000, valorFinanciado: 26041.53,
+      parcelas: 48, valorParcela: 848.37, primeiroVencimento: "30/11/2025", dataContrato: "31/10/2025", iof: 98.56,
+    });
+    expect(dados.encargos).toEqual({ seguros: 1488, cadastro: 1149, registro: 305.97, avaliacao: null });
+    expect(problemasLaudo(dados)).toEqual([]);
+    expect(avisosLaudo(dados)).toEqual([]);
+  });
+});
+
 describe("extrairContrato", () => {
   const { dados } = extrairContrato(SIM_CCB);
 
