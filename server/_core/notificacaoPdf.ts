@@ -67,7 +67,7 @@ const assinaturaCarimbo = (nota: Content): Content => ({
 
 export function notificacaoDefinition(dados: NotificacaoDados): TDocumentDefinitions {
   const nome = dados.nome.trim().toUpperCase();
-  const qualificacao = `${dados.bancoNome.trim()}, pessoa jurídica de direito privado, inscrita no CNPJ sob o n° ${dados.bancoCnpj.trim()}, com sede na ${dados.bancoEndereco.trim().replace(/\.$/, "")}.`;
+  const qualificacao = `${dados.bancoNome.trim()}, pessoa jurídica de direito privado, inscrita no CNPJ sob o n° ${dados.bancoCnpj.trim()}, com sede em ${dados.bancoEndereco.trim().replace(/\.$/, "")}.`;
   return pagina(`Notificação extrajudicial – ${nome}`, [
     body(dataPorExtenso(dados.cidade, dados.data)),
     body(`À Instituição financeira ${qualificacao}`),
