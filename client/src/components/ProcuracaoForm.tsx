@@ -46,7 +46,8 @@ export function ProcuracaoForm({ clients, onDone }: { clients: ProcuracaoClient[
 
   const set = (key: keyof ProcuracaoDados) => (event: React.ChangeEvent<HTMLInputElement>) => setDados((current) => ({ ...current, [key]: event.target.value }));
 
-  return <form onSubmit={generate} className="laudo-form laudo-form-page">
+  // autoComplete off: these are the client's data, and the browser would offer the employee's own (or an IBGE code for the city).
+  return <form onSubmit={generate} className="laudo-form laudo-form-page" autoComplete="off">
     <div className="new-sale-grid">
       <label className="full-field">Cliente (opcional)
         <input list="procuracao-clientes" value={clientName} onChange={(event) => chooseClient(event.target.value)} placeholder="Escolha da lista para preencher nome, CPF e e-mail" disabled={gerar.isPending} />
@@ -57,6 +58,8 @@ export function ProcuracaoForm({ clients, onDone }: { clients: ProcuracaoClient[
           type={field.key === "data" ? "date" : field.key === "email" ? "email" : "text"}
           inputMode={field.key === "cpf" || field.key === "cep" ? "numeric" : undefined}
           maxLength={field.key === "uf" ? 2 : undefined}
+          name={`procuracao-${field.key}`}
+          autoComplete="off"
           value={dados[field.key]}
           onChange={set(field.key)}
           placeholder={field.placeholder}

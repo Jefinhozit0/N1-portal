@@ -68,6 +68,8 @@ export function problemasProcuracao(dados: ProcuracaoDados): string[] {
   if (dados.cep.replace(/\D/g, "").length !== 8) problems.push("O CEP precisa ter 8 números.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dados.email.trim())) problems.push("Falta um e-mail válido.");
   if (!dados.cidade.trim()) problems.push("Falta a cidade.");
+  // The browser's autofill sometimes brings the IBGE code (3550308 = São Paulo) instead of the name.
+  else if (/\d/.test(dados.cidade)) problems.push(`Escreva a cidade por extenso: "${dados.cidade.trim()}" parece um código, não o nome da cidade.`);
   if (!/^[A-Za-z]{2}$/.test(dados.uf.trim())) problems.push("A UF precisa ter 2 letras.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dados.data)) problems.push("Falta a data.");
   return problems;
