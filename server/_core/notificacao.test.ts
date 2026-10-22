@@ -32,9 +32,10 @@ describe("notificação extrajudicial", () => {
     expect(problemasNotificacao({ ...dados, valorParcela: 0, cidade: "3550308" })).toHaveLength(2);
   });
 
-  it("produces a PDF named after the client", async () => {
-    const pdf = await buildNotificacaoPdf(dados);
+  it("produces a one-page PDF named after the client, even with long names and amounts", async () => {
+    const pdf = await buildNotificacaoPdf({ ...dados, nome: "Maria Odete de Paula Lessa Rocha Albuquerque", valor: 123456.78, valorParcela: 7777.77 });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)).toHaveLength(1);
     expect(notificacaoFileName(dados)).toBe("Notificação extrajudicial - MARIA DA SILVA.pdf");
   });
 });
