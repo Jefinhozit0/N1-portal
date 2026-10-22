@@ -5,6 +5,7 @@ import { ENCARGO_LABELS, type Encargos, type LaudoDados, avisosLaudo, calcularLa
 import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { downloadPdf } from "@/lib/downloadPdf";
 import { trpc } from "@/lib/trpc";
 
 type TextKey = "contrato" | "contratante" | "instituicao" | "garantia" | "dataContrato" | "primeiroVencimento" | "jurosMora";
@@ -64,14 +65,6 @@ function readAsBase64(file: File) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
-}
-
-function downloadPdf(name: string, base64: string) {
-  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  const link = Object.assign(document.createElement("a"), { href: url, download: name });
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 type ClientOption = { id: number; name: string };
