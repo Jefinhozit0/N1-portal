@@ -154,8 +154,10 @@ const procuracaoInput = z.object({
 });
 
 /** The notificação form (NotificacaoDados in shared/notificacao.ts). */
+const genero = z.enum(["M", "F"]).nullable().default(null);
 const notificacaoInput = z.object({
   nome: z.string().trim().max(200),
+  genero,
   cpf: z.string().trim().max(20),
   valor: valor,
   parcelas: z.number().int().min(0).max(600),
@@ -170,6 +172,7 @@ const notificacaoInput = z.object({
 /** The notificação com contrato form (NotificacaoContratoDados in shared/notificacao.ts). */
 const notificacaoContratoInput = z.object({
   nome: z.string().trim().max(200),
+  genero,
   cpf: z.string().trim().max(20),
   contrato: z.string().trim().max(60),
   taxaMensal: z.number().min(0).max(100),
