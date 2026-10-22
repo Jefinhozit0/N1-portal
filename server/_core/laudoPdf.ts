@@ -1,9 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import PdfPrinter from "pdfmake";
-import vfs from "pdfmake/build/vfs_fonts.js";
 import type { Content, ContentTable, TDocumentDefinitions, TableCell } from "pdfmake/interfaces";
 import { ENCARGO_LABELS, type Encargos, type LaudoDados, type TabelaPrice, calcularLaudo, formatBRL, formatPercent, mesPorExtenso } from "@shared/laudo";
+import { renderPdf, safePdfName } from "./pdf";
 
 /** Who signs the parecer. The logo and the signature are in server/assets/laudo. */
 const PERITO = { nome: "José Olímpio Djalma de Castro", cargo: "CONTADOR", registro: "CRC SP-354319/O" };
@@ -11,11 +10,6 @@ const FINALIDADE = "Finalidade: instruir ação revisional de contratos bancári
 
 const ASSETS = path.resolve(process.cwd(), "server/assets/laudo");
 const asset = (file: string) => `data:image/png;base64,${readFileSync(path.join(ASSETS, file)).toString("base64")}`;
-
-const fontFile = (name: string) => Buffer.from((vfs as unknown as Record<string, string>)[name], "base64");
-const printer = new PdfPrinter({
-  Roboto: { normal: fontFile("Roboto-Regular.ttf"), bold: fontFile("Roboto-Medium.ttf"), italics: fontFile("Roboto-Italic.ttf"), bolditalics: fontFile("Roboto-MediumItalic.ttf") },
-});
 
 const SECOES = [
   "OBJETIVO",
@@ -228,16 +222,7 @@ export function laudoDefinition(dados: LaudoDados, now = new Date()): TDocumentD
   };
 }
 
-export function buildLaudoPdf(dados: LaudoDados, now = new Date()): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const document = printer.createPdfKitDocument(laudoDefinition(dados, now));
-    const chunks: Buffer[] = [];
-    document.on("data", (chunk: Buffer) => chunks.push(chunk));
-    document.on("end", () => resolve(Buffer.concat(chunks)));
-    document.on("error", reject);
-    document.end();
-  });
-}
+export const buildLaudoPdf = (dados: LaudoDados, now = new Date()) => renderPdf(laudoDefinition(dados, now));
 
 /** "Laudo - MARIA ODETE - 663795516.pdf" */
-export const laudoFileName = (dados: LaudoDados) => `Laudo - ${dados.contratante.split(" ").slice(0, 2).join(" ")} - ${dados.contrato}.pdf`.replace(/[\\/:*?"<>|]+/g, "-");
+export const laudoFileName = (dados: LaudoDados) => safePdfName(`Laudo - ${dados.contratante.split(" ").slice(0, 2).join(" ")} - ${dados.contrato}`);

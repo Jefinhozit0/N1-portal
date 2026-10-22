@@ -328,7 +328,7 @@ function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName, i
     { id: "chargebacks", label: "Chargebacks", icon: CreditCard },
     { id: "atendimento", label: "Atendimento", icon: MessageCircle },
     { id: "termos", label: "Termos", icon: FileCheck2 },
-    { id: "laudos", label: "Laudos", icon: FileSpreadsheet },
+    { id: "laudos", label: "Gerar documentos", icon: FileSpreadsheet },
     { id: "saleshub", label: "Sales HUB", icon: FileText },
     ...(isAdmin ? [{ id: "admin" as View, label: "Administração", icon: ShieldCheck }] : []),
   ];
@@ -389,7 +389,7 @@ function WhatsAppIndicator({ onClick }: { onClick: () => void }) {
 
 function Topbar({ view, onMenu, onSearch, onNotifications, onWhatsApp, userName }: { view: View; onMenu: () => void; onSearch: () => void; onNotifications: () => void; onWhatsApp: () => void; userName: string }) {
   const hasAwaiting = useAwaitingConversations().length > 0;
-  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", "Visão geral do seu portal"], clientes: ["Clientes", "Acompanhe pessoas e processos"], "client-detail": ["Detalhes do Cliente", "Informações completas do cliente"], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", "Converse com seus clientes"], termos: ["Termos", "Quem já aceitou os termos do portal e quem está pendente"], laudos: ["Laudos", "Pareceres técnicos para ações revisionais"], saleshub: ["Sales HUB", "Centro de inteligência comercial e jurídico"], admin: ["Administração", "WhatsApp, backup e registro de ações"] };
+  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", "Visão geral do seu portal"], clientes: ["Clientes", "Acompanhe pessoas e processos"], "client-detail": ["Detalhes do Cliente", "Informações completas do cliente"], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", "Converse com seus clientes"], termos: ["Termos", "Quem já aceitou os termos do portal e quem está pendente"], laudos: ["Gerar documentos", "Laudos e procurações prontos em PDF"], saleshub: ["Sales HUB", "Centro de inteligência comercial e jurídico"], admin: ["Administração", "WhatsApp, backup e registro de ações"] };
   const initials = userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
   return <header className="topbar"><button className="mobile-menu-button icon-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button><div><p className="breadcrumb">N1 Soluções <ChevronRight size={14} /> {titles[view][0]}</p><h1>{titles[view][0]}</h1><span>{titles[view][1]}</span></div><div className="topbar-actions"><button className="icon-button" aria-label="Buscar clientes" title="Buscar clientes" onClick={onSearch}><Search size={19} /></button><button className="icon-button notification-button" aria-label="Abrir atendimentos" title="Abrir atendimentos" onClick={onNotifications}><Bell size={19} />{hasAwaiting && <span />}</button><WhatsAppIndicator onClick={onWhatsApp} /><ThemeToggle /><span className="topbar-separator" /><div className="topbar-user"><span className="avatar avatar-gold">{initials}</span><div><strong>{userName}</strong><small>Online agora</small></div></div></div></header>;
 }

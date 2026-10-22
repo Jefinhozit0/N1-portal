@@ -31,6 +31,8 @@ import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, toneForStatus } from "@shared/pro
 import { addEvent, deleteDocument, documentDownloadUrl, downloadDocument, listDocuments, listEvents, listLaudos, removeClientFiles, uploadDocument } from "./_core/processo";
 import { lerContrato } from "./_core/laudoContrato";
 import { buildLaudoPdf, laudoFileName } from "./_core/laudoPdf";
+import { buildProcuracaoPdf, procuracaoFileName } from "./_core/procuracaoPdf";
+import { problemasProcuracao } from "@shared/procuracao";
 import { problemasLaudo } from "@shared/laudo";
 
 const verificationRequestTimes = new Map<string, number>();
@@ -136,6 +138,18 @@ const laudoInput = z.object({
   jurosMora: z.string().trim().max(40),
   iof: valor,
   encargos: z.object({ seguros: valor.nullable(), avaliacao: valor.nullable(), cadastro: valor.nullable(), registro: valor.nullable() }),
+});
+
+/** The procuração form (ProcuracaoDados in shared/procuracao.ts). */
+const procuracaoInput = z.object({
+  nome: z.string().trim().max(200),
+  cpf: z.string().trim().max(20),
+  endereco: z.string().trim().max(300),
+  cep: z.string().trim().max(12),
+  email: z.string().trim().max(200),
+  cidade: z.string().trim().max(100),
+  uf: z.string().trim().max(2),
+  data: z.string().trim().max(10),
 });
 
 /** Procedures for the N1 team: every route with data from all clients goes through here. */
@@ -862,6 +876,23 @@ export const appRouter = router({
 
     /** Laudos attached to clients, for the Laudos screen. */
     laudos: staffProcedure.query(() => listLaudos()),
+
+    /** Procuração extrajudicial (consumidor.gov.br) as a PDF; optionally saved among the client's documents. */
+    gerarProcuracao: staffProcedure
+      .input(z.object({ clientId: z.number().int().positive().optional(), anexar: z.boolean().default(false), dados: procuracaoInput }))
+      .mutation(async ({ ctx, input }) => {
+        const problems = problemasProcuracao(input.dados);
+        if (problems.length) throw new TRPCError({ code: "BAD_REQUEST", message: problems.join(" ") });
+        const pdf = await buildProcuracaoPdf(input.dados);
+        const nome = procuracaoFileName(input.dados);
+        if (input.anexar && input.clientId !== undefined) {
+          const { data: cliente } = await supabase.from("clientes").select("id").eq("id", input.clientId).maybeSingle();
+          if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+          await uploadDocument(input.clientId, { nome, tipo: "application/pdf", descricao: "Procuração extrajudicial (consumidor.gov.br)", bytes: pdf }, ctx.staffUser.email ?? "equipe");
+        }
+        await registrarAcao(ctx.staffUser.email, "Gerou procuração", input.dados.nome, input.clientId);
+        return { nome, conteudo: pdf.toString("base64") };
+      }),
 
     /** The parecer técnico as a PDF; optionally saved among the client's documents. */
     gerarLaudo: staffProcedure

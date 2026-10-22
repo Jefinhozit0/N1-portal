@@ -101,19 +101,26 @@ export async function documentDownloadUrl(documentId: number, clientId?: number)
   return signed.signedUrl;
 }
 
-/** Laudos the system generated and attached to a client (their name starts with "Laudo - "), newest first. */
+/** Names the generated documents start with (laudoFileName, procuracaoFileName). */
+const GENERATED_PREFIXES = ["Laudo - ", "Procuração extrajudicial - "];
+
+/** Documents the system generated and attached to a client (laudos, procurações), newest first. */
 export async function listLaudos(limit = 50) {
-  const { data, error } = await supabase
+  const results = await Promise.all(GENERATED_PREFIXES.map((prefix) => supabase
     .from("documentos")
     .select("id, nome, descricao, tamanho, enviado_por, created_at, client_id, clientes(name)")
-    .ilike("nome", "Laudo - %")
+    .ilike("nome", `${prefix}%`)
     .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) {
-    console.warn("[documentos] Could not list laudos:", error.message);
+    .limit(limit)));
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    console.warn("[documentos] Could not list generated documents:", failed.error.message);
     return [];
   }
-  return (data ?? []).map((row) => {
+  const data = results.flatMap((result) => result.data ?? [])
+    .sort((a, b) => Date.parse(b.created_at as string) - Date.parse(a.created_at as string))
+    .slice(0, limit);
+  return data.map((row) => {
     const cliente = row.clientes as { name?: string } | { name?: string }[] | null;
     const clientName = (Array.isArray(cliente) ? cliente[0]?.name : cliente?.name) ?? null;
     return { id: row.id as number, nome: row.nome as string, descricao: row.descricao as string | null, tamanho: row.tamanho as number, enviadoPor: row.enviado_por as string | null, createdAt: row.created_at as string, clientId: row.client_id as number, clientName };

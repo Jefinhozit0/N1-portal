@@ -3393,3 +3393,7 @@ tbody tr.empty-row:hover { background: transparent; }
   .laudos-item { flex-wrap: wrap; }
   .laudos-client { max-width: 100%; order: 3; }
 }
+.laudos-heading { flex-wrap: wrap; gap: 12px; }
+.laudos-heading .filter-buttons button { display: inline-flex; align-items: center; gap: 6px; }
+.procuracao-preview { grid-template-columns: 1fr; }
+.procuracao-preview p strong { color: var(--text); font-size: inherit; }
