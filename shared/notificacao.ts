@@ -30,23 +30,8 @@ export const N1_NOTIFICACAO = {
   correspondencia: "Rua Líbero Badaró, 488, Edifício Stella Penteado, 5° andar – Conjunto 5A, Centro – SP, 01008-000",
 };
 
-/** Banks whose full qualification the team already uses. Aymoré contracts are notified to Santander, its parent bank. */
-export const BANCOS_CONHECIDOS = [
-  {
-    id: "santander",
-    nome: "Banco Santander (Brasil) S.A",
-    cnpj: "90.400.888/0001-42",
-    endereco: "Av. Presidente Juscelino Kubitschek, n° 2041, conj. 281, Bloco A cond. WTorre JK, Vila Nova Conceição, São Paulo - SP, CEP: 04543-011",
-    reconhece: /santander|aymor[ée]/i,
-  },
-  {
-    id: "bb",
-    nome: "Banco do Brasil S.A.",
-    cnpj: "00.000.000/0001-91",
-    endereco: "SAUN, Quadra 5, Bloco B, Torres I, II e III, Asa Norte, Brasília/DF, CEP 70040-912",
-    reconhece: /banco do brasil/i,
-  },
-];
+/** The banks the documents are addressed to (razão social, CNPJ, sede): see shared/bancos.ts. */
+export { BANCOS as BANCOS_CONHECIDOS, BANCOS_POR_NOME, bancoConhecido } from "./bancos";
 
 /**
  * Notificação com contrato: the client already has the contract, and N1 contests the interest rate
@@ -111,7 +96,6 @@ function problemasBancoELocal(dados: { bancoNome: string; bancoCnpj: string; ban
   return problems;
 }
 
-export const bancoConhecido = (instituicao: string) => BANCOS_CONHECIDOS.find((banco) => banco.reconhece.test(instituicao));
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 

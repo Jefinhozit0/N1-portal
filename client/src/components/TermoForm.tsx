@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { GENERO_LABEL, type Genero, generoDoNome } from "@shared/genero";
-import { BANCOS_CONHECIDOS, MODALIDADES, type Modalidade, bancoConhecido } from "@shared/notificacao";
+import { BANCOS_CONHECIDOS, BANCOS_POR_NOME, MODALIDADES, type Modalidade, bancoConhecido } from "@shared/notificacao";
 import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { formatCPF } from "@shared/procuracao";
 import { type TermoDados, problemasTermo } from "@shared/termo";
@@ -44,7 +44,7 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
     if (!file) return;
     setSource(`Lendo ${file.name}...`);
     try {
-      const { dados, cpf, modalidade: lida, email, endereco, encontrados } = await lerContrato.mutateAsync({ conteudo: file.base64 });
+      const { dados, cpf, cnpjInstituicao, modalidade: lida, email, endereco, encontrados } = await lerContrato.mutateAsync({ conteudo: file.base64 });
       if (encontrados.length === 0) {
         setSource(`Não encontrei texto em ${file.name} (pode ser um contrato escaneado). Preencha os dados à mão.`);
         return;
@@ -56,7 +56,7 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
         cpf: cpf ? formatCPF(cpf) : current.cpf,
         email: email || current.email,
         endereco: endereco || current.endereco,
-        banco: bancoConhecido(dados.instituicao)?.nome ?? (dados.instituicao || current.banco),
+        banco: bancoConhecido(dados.instituicao, cnpjInstituicao)?.nome ?? (dados.instituicao || current.banco),
       }));
       const faltando = [!email && "e-mail", !endereco && "endereço", endereco && !/\d{5}-?\d{3}/.test(endereco) && "CEP"].filter(Boolean);
       setSource(`Dados lidos de ${file.name}. ${faltando.length ? `Complete: ${faltando.join(", ")}.` : "Confira antes de gerar."}`);
@@ -130,7 +130,7 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
       </label>
       <label>Banco
         <select value={knownBank?.nome ?? ""} onChange={(event) => setForm((current) => ({ ...current, banco: event.target.value }))} disabled={busy}>
-          {BANCOS_CONHECIDOS.map((bank) => <option key={bank.id} value={bank.nome}>{bank.nome}</option>)}
+          {BANCOS_POR_NOME.map((bank) => <option key={bank.id} value={bank.nome}>{bank.nome}</option>)}
           <option value="">Outro (digitar ao lado)</option>
         </select>
       </label>

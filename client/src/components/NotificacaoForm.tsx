@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { impliedRate, parseBRL } from "@shared/laudo";
-import { BANCOS_CONHECIDOS, MODALIDADES, type Modalidade, type NotificacaoContratoDados, type NotificacaoDados, avisoTaxa, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
+import { BANCOS_CONHECIDOS, BANCOS_POR_NOME, MODALIDADES, type Modalidade, type NotificacaoContratoDados, type NotificacaoDados, avisoTaxa, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
 import { GENERO_LABEL, type Genero, generoDoNome } from "@shared/genero";
 import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { formatCPF, hojeISO } from "@shared/procuracao";
@@ -97,7 +97,7 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
         setSource(`Não encontrei texto em ${file.name} (pode ser um contrato escaneado). Preencha os dados à mão.`);
         return;
       }
-      const bank = bancoConhecido(dados.instituicao);
+      const bank = bancoConhecido(dados.instituicao, cnpjInstituicao);
       if (lida) setModalidade(lida);
       setForm((current) => ({
         ...current,
@@ -206,7 +206,7 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
       <div className="new-sale-grid">
         <label className="full-field">Banco
           <select value={knownBank?.id ?? ""} onChange={(event) => chooseBank(event.target.value)} disabled={busy}>
-            {BANCOS_CONHECIDOS.map((bank) => <option key={bank.id} value={bank.id}>{bank.nome}</option>)}
+            {BANCOS_POR_NOME.map((bank) => <option key={bank.id} value={bank.id}>{bank.nome}</option>)}
             <option value="">Outro (digitar abaixo)</option>
           </select>
         </label>

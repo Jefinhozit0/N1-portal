@@ -18,9 +18,10 @@ describe("notificação extrajudicial", () => {
     expect(moeda(50000)).toBe("R$50.000,00");
   });
 
-  it("notifies Santander for Aymoré and Santander contracts", () => {
-    expect(bancoConhecido("AYMORÉ CRÉDITO, FINANCIAMENTO E INVESTIMENTO S.A.")?.cnpj).toBe("90.400.888/0001-42");
-    expect(bancoConhecido("BANCO PAN S.A.")).toBeUndefined();
+  it("finds the bank of an Aymoré contract and others by name", () => {
+    expect(bancoConhecido("AYMORÉ CRÉDITO, FINANCIAMENTO E INVESTIMENTO S.A.")?.cnpj).toBe("07.707.650/0001-10");
+    expect(bancoConhecido("BANCO PAN S.A.")?.id).toBe("pan");
+    expect(bancoConhecido("FINANCEIRA DESCONHECIDA S.A.")).toBeUndefined();
   });
 
   it("writes the place and date", () => {
