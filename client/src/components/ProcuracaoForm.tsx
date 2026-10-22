@@ -57,7 +57,6 @@ export function ProcuracaoForm({ clients, onDone }: { clients: ProcuracaoClient[
         <input
           type={field.key === "data" ? "date" : field.key === "email" ? "email" : "text"}
           inputMode={field.key === "cpf" || field.key === "cep" ? "numeric" : undefined}
-          maxLength={field.key === "uf" ? 2 : undefined}
           name={`procuracao-${field.key}`}
           autoComplete="off"
           value={dados[field.key]}

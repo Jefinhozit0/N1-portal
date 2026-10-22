@@ -10,7 +10,6 @@ export type ProcuracaoDados = {
   cep: string;
   email: string;
   cidade: string;
-  uf: string;
   /** aaaa-mm-dd, as an <input type="date"> gives it. */
   data: string;
 };
@@ -31,21 +30,20 @@ export const PROCURACAO_CAMPOS: { key: keyof ProcuracaoDados; label: string; pla
   { key: "endereco", label: "Endereço", placeholder: "Rua, número, complemento, bairro", wide: true },
   { key: "cep", label: "CEP", placeholder: "00000-000" },
   { key: "cidade", label: "Cidade (local da assinatura)", placeholder: "São Paulo" },
-  { key: "uf", label: "UF", placeholder: "SP" },
   { key: "data", label: "Data" },
 ];
 
 /** Today in São Paulo, as aaaa-mm-dd. */
 export const hojeISO = (at = new Date()) => at.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
 
-export const emptyProcuracao = (): ProcuracaoDados => ({ nome: "", cpf: "", endereco: "", cep: "", email: "", cidade: "", uf: "SP", data: hojeISO() });
+export const emptyProcuracao = (): ProcuracaoDados => ({ nome: "", cpf: "", endereco: "", cep: "", email: "", cidade: "", data: hojeISO() });
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
-/** "São Paulo/SP, 22 de outubro de 2026." */
-export function localEData(dados: Pick<ProcuracaoDados, "cidade" | "uf" | "data">) {
+/** "São Paulo, 22 de outubro de 2026." */
+export function localEData(dados: Pick<ProcuracaoDados, "cidade" | "data">) {
   const [year, month, day] = dados.data.split("-").map(Number);
-  return `${dados.cidade.trim()}/${dados.uf.trim().toUpperCase()}, ${day} de ${MESES[month - 1]} de ${year}.`;
+  return `${dados.cidade.trim()}, ${day} de ${MESES[month - 1]} de ${year}.`;
 }
 
 /** "00000000000" → "000.000.000-00"; anything else stays as typed. */
@@ -70,7 +68,6 @@ export function problemasProcuracao(dados: ProcuracaoDados): string[] {
   if (!dados.cidade.trim()) problems.push("Falta a cidade.");
   // The browser's autofill sometimes brings the IBGE code (3550308 = São Paulo) instead of the name.
   else if (/\d/.test(dados.cidade)) problems.push(`Escreva a cidade por extenso: "${dados.cidade.trim()}" parece um código, não o nome da cidade.`);
-  if (!/^[A-Za-z]{2}$/.test(dados.uf.trim())) problems.push("A UF precisa ter 2 letras.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dados.data)) problems.push("Falta a data.");
   return problems;
 }

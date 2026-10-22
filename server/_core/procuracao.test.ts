@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { emptyProcuracao, formatCEP, formatCPF, hojeISO, localEData, problemasProcuracao } from "@shared/procuracao";
 import { buildProcuracaoPdf, procuracaoFileName } from "./procuracaoPdf";
 
-const dados = { nome: "Maria da Silva", cpf: "00000000000", endereco: "Rua das Flores, 123", cep: "01234567", email: "maria@exemplo.com", cidade: "São Paulo", uf: "sp", data: "2026-10-22" };
+const dados = { nome: "Maria da Silva", cpf: "00000000000", endereco: "Rua das Flores, 123", cep: "01234567", email: "maria@exemplo.com", cidade: "São Paulo", data: "2026-10-22" };
 
 describe("procuração extrajudicial", () => {
   it("writes the place and date like the model", () => {
-    expect(localEData(dados)).toBe("São Paulo/SP, 22 de outubro de 2026.");
-    expect(localEData({ ...dados, data: "2026-03-05" })).toBe("São Paulo/SP, 5 de março de 2026.");
+    expect(localEData(dados)).toBe("São Paulo, 22 de outubro de 2026.");
+    expect(localEData({ ...dados, data: "2026-03-05" })).toBe("São Paulo, 5 de março de 2026.");
   });
 
   it("formats CPF and CEP typed without punctuation", () => {
@@ -19,7 +19,6 @@ describe("procuração extrajudicial", () => {
   it("asks for what is missing and accepts a complete form", () => {
     expect(problemasProcuracao(dados)).toEqual([]);
     expect(problemasProcuracao(emptyProcuracao())).toEqual(expect.arrayContaining(["Falta o nome do outorgante.", "O CPF precisa ter 11 números.", "Falta um e-mail válido."]));
-    expect(problemasProcuracao({ ...dados, uf: "S" })).toEqual(["A UF precisa ter 2 letras."]);
     expect(problemasProcuracao({ ...dados, cidade: "3550308" })).toEqual(['Escreva a cidade por extenso: "3550308" parece um código, não o nome da cidade.']);
   });
 
