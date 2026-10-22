@@ -35,7 +35,63 @@ export const BANCOS_CONHECIDOS = [
     endereco: "Av. Presidente Juscelino Kubitschek, n° 2041, conj. 281, Bloco A cond. WTorre JK, Vila Nova Conceição, São Paulo - SP, CEP: 04543-011",
     reconhece: /santander|aymor[ée]/i,
   },
+  {
+    id: "bb",
+    nome: "Banco do Brasil S.A.",
+    cnpj: "00.000.000/0001-91",
+    endereco: "SAUN, Quadra 5, Bloco B, Torres I, II e III, Asa Norte, Brasília/DF, CEP 70040-912",
+    reconhece: /banco do brasil/i,
+  },
 ];
+
+/**
+ * Notificação com contrato: the client already has the contract, and N1 contests the interest rate
+ * (the one actually charged is higher than the one written) and asks for the difference back.
+ */
+export type NotificacaoContratoDados = {
+  nome: string;
+  cpf: string;
+  contrato: string;
+  /** Monthly rate written in the contract, in percent (1.96 = 1,96% a.m.). */
+  taxaMensal: number;
+  bancoNome: string;
+  bancoCnpj: string;
+  bancoEndereco: string;
+  cidade: string;
+  /** aaaa-mm-dd */
+  data: string;
+};
+
+export function problemasNotificacaoContrato(dados: NotificacaoContratoDados): string[] {
+  const problems: string[] = [];
+  if (!dados.nome.trim()) problems.push("Falta o nome do cliente.");
+  if (dados.cpf.replace(/\D/g, "").length !== 11) problems.push("O CPF precisa ter 11 números.");
+  if (!dados.contrato.trim()) problems.push("Falta o número do contrato.");
+  if (!(dados.taxaMensal > 0)) problems.push("Falta a taxa de juros mensal do contrato.");
+  problems.push(...problemasBancoELocal(dados));
+  return problems;
+}
+
+/** Checks the notificação's claim: the rate the payments imply must be above the one written in the contract. */
+export function avisoTaxa(taxaMensal: number, taxaEfetiva: number | null) {
+  if (taxaEfetiva === null || !(taxaMensal > 0)) return null;
+  const efetiva = taxaEfetiva * 100;
+  const texto = efetiva.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return efetiva - taxaMensal > 0.005
+    ? { ok: true, texto: `As parcelas correspondem a ${texto}% a.m., acima dos ${taxaMensal.toLocaleString("pt-BR")}% do contrato.` }
+    : { ok: false, texto: `As parcelas correspondem a ${texto}% a.m., que não é maior que os ${taxaMensal.toLocaleString("pt-BR")}% do contrato: o argumento da notificação não se aplica a este contrato.` };
+}
+
+function problemasBancoELocal(dados: { bancoNome: string; bancoCnpj: string; bancoEndereco: string; cidade: string; data: string }) {
+  const problems: string[] = [];
+  if (!dados.bancoNome.trim()) problems.push("Falta a instituição financeira.");
+  if (!dados.bancoCnpj.trim()) problems.push("Falta o CNPJ da instituição.");
+  if (!dados.bancoEndereco.trim()) problems.push("Falta o endereço da sede da instituição.");
+  if (!dados.cidade.trim()) problems.push("Falta a cidade.");
+  else if (/\d/.test(dados.cidade)) problems.push(`Escreva a cidade por extenso: "${dados.cidade.trim()}" parece um código, não o nome da cidade.`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dados.data)) problems.push("Falta a data.");
+  return problems;
+}
 
 export const bancoConhecido = (instituicao: string) => BANCOS_CONHECIDOS.find((banco) => banco.reconhece.test(instituicao));
 
@@ -107,11 +163,6 @@ export function problemasNotificacao(dados: NotificacaoDados): string[] {
   if (!(dados.valor > 0)) problems.push("Falta o valor do contrato.");
   if (!(dados.parcelas > 0 && Number.isInteger(dados.parcelas))) problems.push("Falta a quantidade de parcelas.");
   if (!(dados.valorParcela > 0)) problems.push("Falta o valor da parcela.");
-  if (!dados.bancoNome.trim()) problems.push("Falta a instituição financeira.");
-  if (!dados.bancoCnpj.trim()) problems.push("Falta o CNPJ da instituição.");
-  if (!dados.bancoEndereco.trim()) problems.push("Falta o endereço da sede da instituição.");
-  if (!dados.cidade.trim()) problems.push("Falta a cidade.");
-  else if (/\d/.test(dados.cidade)) problems.push(`Escreva a cidade por extenso: "${dados.cidade.trim()}" parece um código, não o nome da cidade.`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dados.data)) problems.push("Falta a data.");
+  problems.push(...problemasBancoELocal(dados));
   return problems;
 }

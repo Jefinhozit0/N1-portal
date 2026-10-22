@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BANCOS_CONHECIDOS, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, reaisPorExtenso } from "@shared/notificacao";
-import { buildNotificacaoPdf, notificacaoFileName } from "./notificacaoPdf";
+import { impliedRate } from "@shared/laudo";
+import { BANCOS_CONHECIDOS, avisoTaxa, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, problemasNotificacaoContrato, reaisPorExtenso } from "@shared/notificacao";
+import { buildNotificacaoContratoPdf, buildNotificacaoPdf, notificacaoContratoFileName, notificacaoFileName } from "./notificacaoPdf";
 
 const santander = BANCOS_CONHECIDOS[0];
 const dados = { nome: "Maria da Silva", cpf: "00000000000", valor: 50000, parcelas: 60, valorParcela: 1845.54, bancoNome: santander.nome, bancoCnpj: santander.cnpj, bancoEndereco: santander.endereco, cidade: "São Paulo", data: "2025-11-14" };
@@ -32,10 +33,38 @@ describe("notificação extrajudicial", () => {
     expect(problemasNotificacao({ ...dados, valorParcela: 0, cidade: "3550308" })).toHaveLength(2);
   });
 
+  it("notifies Banco do Brasil with its own qualification", () => {
+    expect(bancoConhecido("BANCO DO BRASIL S.A.")?.cnpj).toBe("00.000.000/0001-91");
+  });
+
   it("produces a one-page PDF named after the client, even with long names and amounts", async () => {
     const pdf = await buildNotificacaoPdf({ ...dados, nome: "Maria Odete de Paula Lessa Rocha Albuquerque", valor: 123456.78, valorParcela: 7777.77 });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)).toHaveLength(1);
     expect(notificacaoFileName(dados)).toBe("Notificação extrajudicial - MARIA DA SILVA.pdf");
+  });
+});
+
+describe("notificação com contrato", () => {
+  const bb = BANCOS_CONHECIDOS.find((bank) => bank.id === "bb")!;
+  const dadosContrato = { nome: "Jorge Exemplo Rodrigues", cpf: "00000000000", contrato: "147126013", taxaMensal: 1.96, bancoNome: bb.nome, bancoCnpj: bb.cnpj, bancoEndereco: bb.endereco, cidade: "Teresina", data: "2026-10-06" };
+
+  it("asks for the contract number and the rate", () => {
+    expect(problemasNotificacaoContrato(dadosContrato)).toEqual([]);
+    expect(problemasNotificacaoContrato({ ...dadosContrato, contrato: "", taxaMensal: 0 })).toEqual(["Falta o número do contrato.", "Falta a taxa de juros mensal do contrato."]);
+  });
+
+  it("checks the claim against the rate the payments imply", () => {
+    // Santander CDC: 26.041,53 in 48 × 848,37 is 1,9963% a.m.
+    const rate = impliedRate(26041.53, 848.37, 48);
+    expect(avisoTaxa(1.96, rate)).toMatchObject({ ok: true });
+    expect(avisoTaxa(2, rate)).toMatchObject({ ok: false });
+    expect(avisoTaxa(1.96, null)).toBeNull();
+  });
+
+  it("fits on one page, the CDC footnote included, even with long names and addresses", async () => {
+    const pdf = await buildNotificacaoContratoPdf({ ...dadosContrato, nome: "Maria Odete de Paula Lessa Rocha Albuquerque", bancoEndereco: `${bb.endereco}, Edifício Sede III, 10º andar, sala 1001` });
+    expect(pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)).toHaveLength(1);
+    expect(notificacaoContratoFileName(dadosContrato)).toBe("Notificação extrajudicial com contrato - JORGE EXEMPLO RODRIGUES - 147126013.pdf");
   });
 });

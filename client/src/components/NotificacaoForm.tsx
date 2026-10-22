@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { FileUp, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { parseBRL } from "@shared/laudo";
-import { BANCOS_CONHECIDOS, type NotificacaoDados, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao } from "@shared/notificacao";
+import { impliedRate, parseBRL } from "@shared/laudo";
+import { BANCOS_CONHECIDOS, type NotificacaoContratoDados, type NotificacaoDados, avisoTaxa, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
 import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { formatCPF, hojeISO } from "@shared/procuracao";
 import { Button } from "@/components/ui/button";
@@ -10,41 +10,63 @@ import { downloadPdf, pickPdf } from "@/lib/downloadPdf";
 import { trpc } from "@/lib/trpc";
 import type { ProcuracaoClient } from "./ProcuracaoForm";
 
-/** Every field as typed; the amounts are converted for the preview and the PDF. */
-type Form = Record<keyof NotificacaoDados, string>;
+/**
+ * Both notificações: "manual" asks the bank for the contract; "contrato" contests the interest rate
+ * of a contract the client has. The contract PDF fills the client, the figures and the bank.
+ */
+export type TipoNotificacao = "manual" | "contrato";
 
-const FIELDS: { key: keyof NotificacaoDados; label: string; placeholder?: string; wide?: boolean; numeric?: boolean }[] = [
+type Key = "nome" | "cpf" | "valor" | "parcelas" | "valorParcela" | "contrato" | "taxaMensal" | "valorFinanciado" | "bancoNome" | "bancoCnpj" | "bancoEndereco" | "cidade" | "data";
+/** Every field as typed; the amounts are converted for the preview and the PDF. */
+type Form = Record<Key, string>;
+type Field = { key: Key; label: string; placeholder?: string; wide?: boolean; numeric?: boolean };
+
+const CLIENT_FIELDS: Field[] = [
   { key: "nome", label: "Nome do cliente", wide: true },
   { key: "cpf", label: "CPF", placeholder: "000.000.000-00" },
-  { key: "valor", label: "Valor do contrato (crédito liberado)", placeholder: "50.000,00", numeric: true },
-  { key: "parcelas", label: "Quantidade de parcelas", placeholder: "60", numeric: true },
-  { key: "valorParcela", label: "Valor da parcela", placeholder: "1.845,54", numeric: true },
 ];
-const BANK_FIELDS: { key: keyof NotificacaoDados; label: string; placeholder?: string; wide?: boolean }[] = [
+const FIELDS: Record<TipoNotificacao, Field[]> = {
+  manual: [
+    { key: "valor", label: "Valor do contrato (crédito liberado)", placeholder: "50.000,00", numeric: true },
+    { key: "parcelas", label: "Quantidade de parcelas", placeholder: "60", numeric: true },
+    { key: "valorParcela", label: "Valor da parcela", placeholder: "1.845,54", numeric: true },
+  ],
+  contrato: [
+    { key: "contrato", label: "Contrato nº", placeholder: "147126013" },
+    { key: "taxaMensal", label: "Taxa de juros mensal do contrato (%)", placeholder: "1,96", numeric: true },
+  ],
+};
+/** Only to check the notificação's claim (the payments imply a higher rate); not printed. */
+const CHECK_FIELDS: Field[] = [
+  { key: "valorFinanciado", label: "Valor financiado", placeholder: "26.041,53", numeric: true },
+  { key: "parcelas", label: "Quantidade de parcelas", placeholder: "48", numeric: true },
+  { key: "valorParcela", label: "Valor da parcela", placeholder: "848,37", numeric: true },
+];
+const BANK_FIELDS: Field[] = [
   { key: "bancoNome", label: "Instituição financeira (notificada)", placeholder: "Banco Santander (Brasil) S.A", wide: true },
   { key: "bancoCnpj", label: "CNPJ da instituição", placeholder: "00.000.000/0000-00" },
   { key: "bancoEndereco", label: "Endereço da sede", placeholder: "Rua, número, bairro, cidade - UF, CEP", wide: true },
 ];
 
 const toText = (value: number) => (value > 0 ? value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
-const blank = (): Form => ({ nome: "", cpf: "", valor: "", parcelas: "", valorParcela: "", bancoNome: "", bancoCnpj: "", bancoEndereco: "", cidade: "São Paulo", data: hojeISO() });
+const blank = (): Form => ({ nome: "", cpf: "", valor: "", parcelas: "", valorParcela: "", contrato: "", taxaMensal: "", valorFinanciado: "", bancoNome: "", bancoCnpj: "", bancoEndereco: "", cidade: "São Paulo", data: hojeISO() });
+const number = (text: string) => parseBRL(text) ?? 0;
 
-function toDados(form: Form): NotificacaoDados {
-  return {
-    ...form,
-    nome: form.nome.trim(), cpf: form.cpf.trim(), bancoNome: form.bancoNome.trim(), bancoCnpj: form.bancoCnpj.trim(), bancoEndereco: form.bancoEndereco.trim(), cidade: form.cidade.trim(),
-    valor: parseBRL(form.valor) ?? 0, valorParcela: parseBRL(form.valorParcela) ?? 0, parcelas: Math.trunc(parseBRL(form.parcelas) ?? 0),
-  };
-}
+const common = (form: Form) => ({
+  nome: form.nome.trim(), cpf: form.cpf.trim(), bancoNome: form.bancoNome.trim(), bancoCnpj: form.bancoCnpj.trim(), bancoEndereco: form.bancoEndereco.trim(), cidade: form.cidade.trim(), data: form.data,
+});
+const toManual = (form: Form): NotificacaoDados => ({ ...common(form), valor: number(form.valor), valorParcela: number(form.valorParcela), parcelas: Math.trunc(number(form.parcelas)) });
+const toContrato = (form: Form): NotificacaoContratoDados => ({ ...common(form), contrato: form.contrato.trim(), taxaMensal: number(form.taxaMensal) });
 
-/** Notificação extrajudicial asking the bank for the contract: the contract PDF fills the client, the amounts and the bank. */
-export function NotificacaoForm({ clients, onDone }: { clients: ProcuracaoClient[]; onDone?: (result: { attached: boolean }) => void }) {
+export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificacao; clients: ProcuracaoClient[]; onDone?: (result: { attached: boolean }) => void }) {
   const [form, setForm] = useState<Form>(blank);
   const [clientName, setClientName] = useState("");
   const [anexar, setAnexar] = useState(false);
   const [source, setSource] = useState("");
   const lerContrato = trpc.portal.lerContrato.useMutation();
-  const gerar = trpc.portal.gerarNotificacao.useMutation();
+  const gerarManual = trpc.portal.gerarNotificacao.useMutation();
+  const gerarContrato = trpc.portal.gerarNotificacaoContrato.useMutation();
+  const generating = gerarManual.isPending || gerarContrato.isPending;
   const chosen = clients.find((option) => option.name.trim().toLowerCase() === clientName.trim().toLowerCase());
 
   function chooseClient(name: string) {
@@ -76,8 +98,11 @@ export function NotificacaoForm({ clients, onDone }: { clients: ProcuracaoClient
         nome: dados.contratante || current.nome,
         cpf: cpf ? formatCPF(cpf) : current.cpf,
         valor: toText(dados.valorSolicitado || dados.valorFinanciado),
+        valorFinanciado: toText(dados.valorFinanciado),
         parcelas: dados.parcelas ? String(dados.parcelas) : "",
         valorParcela: toText(dados.valorParcela),
+        contrato: dados.contrato,
+        taxaMensal: toText(dados.taxaMensal),
         ...(bank
           ? { bancoNome: bank.nome, bancoCnpj: bank.cnpj, bancoEndereco: bank.endereco }
           : { bancoNome: dados.instituicao, bancoCnpj: cnpjInstituicao, bancoEndereco: "" }),
@@ -98,17 +123,20 @@ export function NotificacaoForm({ clients, onDone }: { clients: ProcuracaoClient
     setSource("");
   }
 
-  const dados = toDados(form);
-  const problems = problemasNotificacao(dados);
+  const manual = toManual(form), contrato = toContrato(form);
+  const problems = tipo === "manual" ? problemasNotificacao(manual) : problemasNotificacaoContrato(contrato);
+  const taxaCheck = tipo === "contrato" ? avisoTaxa(contrato.taxaMensal, impliedRate(number(form.valorFinanciado), number(form.valorParcela), Math.trunc(number(form.parcelas)))) : null;
   const attach = anexar && chosen !== undefined;
-  const busy = lerContrato.isPending || gerar.isPending;
+  const busy = lerContrato.isPending || generating;
   const knownBank = BANCOS_CONHECIDOS.find((bank) => bank.nome === form.bancoNome && bank.cnpj === form.bancoCnpj);
 
   async function generate(event: React.FormEvent) {
     event.preventDefault();
     if (problems.length) { toast.error(problems[0]); return; }
     try {
-      const pdf = await gerar.mutateAsync({ clientId: chosen?.id, anexar: attach, dados });
+      const pdf = tipo === "manual"
+        ? await gerarManual.mutateAsync({ clientId: chosen?.id, anexar: attach, dados: manual })
+        : await gerarContrato.mutateAsync({ clientId: chosen?.id, anexar: attach, dados: contrato });
       downloadPdf(pdf.nome, pdf.conteudo);
       toast.success(attach ? `Notificação gerada e anexada aos documentos de ${chosen!.name}.` : "Notificação gerada.");
       onDone?.({ attached: attach });
@@ -118,27 +146,37 @@ export function NotificacaoForm({ clients, onDone }: { clients: ProcuracaoClient
     }
   }
 
-  const set = (key: keyof NotificacaoDados) => (event: React.ChangeEvent<HTMLInputElement>) => setForm((current) => ({ ...current, [key]: event.target.value }));
-  const input = (field: { key: keyof NotificacaoDados; label: string; placeholder?: string; wide?: boolean; numeric?: boolean }) =>
+  const set = (key: Key) => (event: React.ChangeEvent<HTMLInputElement>) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const input = (field: Field) =>
     <label key={field.key} className={field.wide ? "full-field" : undefined}>{field.label}
       <input name={`notificacao-${field.key}`} autoComplete="off" inputMode={field.numeric ? "decimal" : undefined} value={form[field.key]} onChange={set(field.key)} placeholder={field.placeholder} disabled={busy} />
     </label>;
+
+  const preview = tipo === "manual"
+    ? <p>Pede a <strong>{manual.bancoNome}</strong> o contrato de <strong>{manual.nome.toUpperCase()}</strong>: {moeda(manual.valor)} em {manual.parcelas} parcelas de {moeda(manual.valorParcela)} · {dataPorExtenso(manual.cidade, manual.data)}</p>
+    : <p>Contesta junto a <strong>{contrato.bancoNome}</strong> a taxa de {form.taxaMensal}% a.m. do contrato <strong>nº {contrato.contrato}</strong> de <strong>{contrato.nome.toUpperCase()}</strong> · {dataPorExtenso(contrato.cidade, contrato.data)}</p>;
 
   return <form onSubmit={generate} className="laudo-form laudo-form-page" autoComplete="off">
     <div className="laudo-source">
       <Button type="button" variant="outline" size="sm" onClick={readContract} disabled={busy}>
         {lerContrato.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileUp size={15} />} Ler contrato (PDF)
       </Button>
-      <small>{source || "Envie o contrato para preencher cliente, valores e banco, ou digite os dados abaixo."}</small>
+      <small>{source || "Envie o contrato para preencher cliente, dados do contrato e banco, ou digite abaixo."}</small>
     </div>
 
     <div className="new-sale-grid">
       <label className="full-field">Cliente (opcional)
-        <input list="notificacao-clientes" value={clientName} onChange={(event) => chooseClient(event.target.value)} placeholder="Escolha da lista para poder anexar a notificação ao cadastro" disabled={busy} />
-        <datalist id="notificacao-clientes">{clients.map((option) => <option key={option.id} value={option.name} />)}</datalist>
+        <input list={`notificacao-${tipo}-clientes`} value={clientName} onChange={(event) => chooseClient(event.target.value)} placeholder="Escolha da lista para poder anexar a notificação ao cadastro" disabled={busy} />
+        <datalist id={`notificacao-${tipo}-clientes`}>{clients.map((option) => <option key={option.id} value={option.name} />)}</datalist>
       </label>
-      {FIELDS.map(input)}
+      {[...CLIENT_FIELDS, ...FIELDS[tipo]].map(input)}
     </div>
+
+    {tipo === "contrato" && <fieldset className="laudo-encargos">
+      <legend>Conferência da taxa <small>(opcional, não vai no documento)</small></legend>
+      <div className="new-sale-grid">{CHECK_FIELDS.map(input)}</div>
+      {taxaCheck && <p className={taxaCheck.ok ? "laudo-ok" : "laudo-warning"}>{taxaCheck.ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {taxaCheck.texto}</p>}
+    </fieldset>}
 
     <fieldset className="laudo-encargos">
       <legend>Instituição notificada</legend>
@@ -159,9 +197,7 @@ export function NotificacaoForm({ clients, onDone }: { clients: ProcuracaoClient
     </div>
 
     <div className="laudo-preview procuracao-preview" aria-live="polite">
-      {problems.length
-        ? <p>{problems[0]}</p>
-        : <p>Pede a <strong>{dados.bancoNome}</strong> o contrato de <strong>{dados.nome.toUpperCase()}</strong>: {moeda(dados.valor)} em {dados.parcelas} parcelas de {moeda(dados.valorParcela)} · {dataPorExtenso(dados.cidade, dados.data)}</p>}
+      {problems.length ? <p>{problems[0]}</p> : preview}
     </div>
 
     {chosen
@@ -173,7 +209,7 @@ export function NotificacaoForm({ clients, onDone }: { clients: ProcuracaoClient
 
     <div className="laudo-actions">
       <Button type="button" variant="outline" onClick={reset} disabled={busy}>Limpar</Button>
-      <Button type="submit" disabled={busy || problems.length > 0}>{gerar.isPending ? "Gerando..." : "Gerar notificação (PDF)"}</Button>
+      <Button type="submit" disabled={busy || problems.length > 0}>{generating ? "Gerando..." : "Gerar notificação (PDF)"}</Button>
     </div>
   </form>;
 }
