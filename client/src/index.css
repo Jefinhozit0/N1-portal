@@ -3399,3 +3399,6 @@ tbody tr.empty-row:hover { background: transparent; }
 .procuracao-preview p strong { color: var(--text); font-size: inherit; }
 .laudo-place { margin-top: 14px; }
 .laudo-form select { width: 100%; margin-top: 6px; }
+.laudo-ok { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; color: var(--green, #15803d); font-size: 12.5px; }
+.laudo-ok svg, .laudo-encargos .laudo-warning svg { flex: none; margin-top: 2px; }
+.laudo-encargos .laudo-warning { margin-top: 10px; }

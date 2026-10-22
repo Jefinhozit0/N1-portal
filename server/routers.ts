@@ -33,8 +33,8 @@ import { lerContrato } from "./_core/laudoContrato";
 import { buildLaudoPdf, laudoFileName } from "./_core/laudoPdf";
 import { buildProcuracaoPdf, procuracaoFileName } from "./_core/procuracaoPdf";
 import { problemasProcuracao } from "@shared/procuracao";
-import { buildNotificacaoPdf, notificacaoFileName } from "./_core/notificacaoPdf";
-import { problemasNotificacao } from "@shared/notificacao";
+import { buildNotificacaoContratoPdf, buildNotificacaoPdf, notificacaoContratoFileName, notificacaoFileName } from "./_core/notificacaoPdf";
+import { problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
 import { problemasLaudo } from "@shared/laudo";
 
 const verificationRequestTimes = new Map<string, number>();
@@ -160,6 +160,19 @@ const notificacaoInput = z.object({
   valor: valor,
   parcelas: z.number().int().min(0).max(600),
   valorParcela: valor,
+  bancoNome: z.string().trim().max(200),
+  bancoCnpj: z.string().trim().max(30),
+  bancoEndereco: z.string().trim().max(400),
+  cidade: z.string().trim().max(100),
+  data: z.string().trim().max(10),
+});
+
+/** The notificação com contrato form (NotificacaoContratoDados in shared/notificacao.ts). */
+const notificacaoContratoInput = z.object({
+  nome: z.string().trim().max(200),
+  cpf: z.string().trim().max(20),
+  contrato: z.string().trim().max(60),
+  taxaMensal: z.number().min(0).max(100),
   bancoNome: z.string().trim().max(200),
   bancoCnpj: z.string().trim().max(30),
   bancoEndereco: z.string().trim().max(400),
@@ -906,6 +919,23 @@ export const appRouter = router({
           await uploadDocument(input.clientId, { nome, tipo: "application/pdf", descricao: `Notificação extrajudicial a ${input.dados.bancoNome} pedindo o contrato`, bytes: pdf }, ctx.staffUser.email ?? "equipe");
         }
         await registrarAcao(ctx.staffUser.email, "Gerou notificação", `${input.dados.nome} → ${input.dados.bancoNome}`, input.clientId);
+        return { nome, conteudo: pdf.toString("base64") };
+      }),
+
+    /** Notificação com contrato (contests the interest rate), as a PDF; optionally saved among the client's documents. */
+    gerarNotificacaoContrato: staffProcedure
+      .input(z.object({ clientId: z.number().int().positive().optional(), anexar: z.boolean().default(false), dados: notificacaoContratoInput }))
+      .mutation(async ({ ctx, input }) => {
+        const problems = problemasNotificacaoContrato(input.dados);
+        if (problems.length) throw new TRPCError({ code: "BAD_REQUEST", message: problems.join(" ") });
+        const pdf = await buildNotificacaoContratoPdf(input.dados);
+        const nome = notificacaoContratoFileName(input.dados);
+        if (input.anexar && input.clientId !== undefined) {
+          const { data: cliente } = await supabase.from("clientes").select("id").eq("id", input.clientId).maybeSingle();
+          if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+          await uploadDocument(input.clientId, { nome, tipo: "application/pdf", descricao: `Notificação a ${input.dados.bancoNome} sobre os juros do contrato ${input.dados.contrato}`, bytes: pdf }, ctx.staffUser.email ?? "equipe");
+        }
+        await registrarAcao(ctx.staffUser.email, "Gerou notificação com contrato", `${input.dados.nome} → ${input.dados.bancoNome}, contrato ${input.dados.contrato}`, input.clientId);
         return { nome, conteudo: pdf.toString("base64") };
       }),
 

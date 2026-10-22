@@ -101,8 +101,8 @@ export async function documentDownloadUrl(documentId: number, clientId?: number)
   return signed.signedUrl;
 }
 
-/** Names the generated documents start with (laudoFileName, procuracaoFileName, notificacaoFileName). */
-const GENERATED_PREFIXES = ["Laudo - ", "Procuração extrajudicial - ", "Notificação extrajudicial - "];
+/** Names the generated documents start with (laudoFileName, procuracaoFileName, notificacaoFileName, notificacaoContratoFileName). */
+const GENERATED_PREFIXES = ["Laudo - ", "Procuração extrajudicial - ", "Notificação extrajudicial - ", "Notificação extrajudicial com contrato - "];
 
 /** Documents the system generated and attached to a client (laudos, procurações), newest first. */
 export async function listLaudos(limit = 50) {
