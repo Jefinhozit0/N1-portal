@@ -20,6 +20,7 @@ describe("procuração extrajudicial", () => {
     expect(problemasProcuracao(dados)).toEqual([]);
     expect(problemasProcuracao(emptyProcuracao())).toEqual(expect.arrayContaining(["Falta o nome do outorgante.", "O CPF precisa ter 11 números.", "Falta um e-mail válido."]));
     expect(problemasProcuracao({ ...dados, uf: "S" })).toEqual(["A UF precisa ter 2 letras."]);
+    expect(problemasProcuracao({ ...dados, cidade: "3550308" })).toEqual(['Escreva a cidade por extenso: "3550308" parece um código, não o nome da cidade.']);
   });
 
   it("starts with today's date in São Paulo", () => {
