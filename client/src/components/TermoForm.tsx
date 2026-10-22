@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileUp, Loader2 } from "lucide-react";
+import { AlertTriangle, FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { GENERO_LABEL, type Genero, generoDoNome } from "@shared/genero";
 import { BANCOS_CONHECIDOS, MODALIDADES, type Modalidade, bancoConhecido } from "@shared/notificacao";
@@ -8,6 +8,7 @@ import { formatCPF } from "@shared/procuracao";
 import { type TermoDados, problemasTermo } from "@shared/termo";
 import { Button } from "@/components/ui/button";
 import { downloadPdf, pickPdf } from "@/lib/downloadPdf";
+import { clienteDiferente } from "@/lib/nomes";
 import { trpc } from "@/lib/trpc";
 import type { ProcuracaoClient } from "./ProcuracaoForm";
 
@@ -43,7 +44,7 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
     if (!file) return;
     setSource(`Lendo ${file.name}...`);
     try {
-      const { dados, cpf, modalidade: lida, encontrados } = await lerContrato.mutateAsync({ conteudo: file.base64 });
+      const { dados, cpf, modalidade: lida, email, endereco, encontrados } = await lerContrato.mutateAsync({ conteudo: file.base64 });
       if (encontrados.length === 0) {
         setSource(`Não encontrei texto em ${file.name} (pode ser um contrato escaneado). Preencha os dados à mão.`);
         return;
@@ -53,9 +54,12 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
         ...current,
         nome: dados.contratante || current.nome,
         cpf: cpf ? formatCPF(cpf) : current.cpf,
+        email: email || current.email,
+        endereco: endereco || current.endereco,
         banco: bancoConhecido(dados.instituicao)?.nome ?? (dados.instituicao || current.banco),
       }));
-      setSource(`Dados lidos de ${file.name}. Confira e complete e-mail e endereço.`);
+      const faltando = [!email && "e-mail", !endereco && "endereço", endereco && !/\d{5}-?\d{3}/.test(endereco) && "CEP"].filter(Boolean);
+      setSource(`Dados lidos de ${file.name}. ${faltando.length ? `Complete: ${faltando.join(", ")}.` : "Confira antes de gerar."}`);
     } catch (error) {
       setSource("");
       toast.error(error instanceof Error ? error.message : "Não foi possível ler o contrato.");
@@ -141,6 +145,7 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
         : <p>Termo para <strong>{dados.nome.toUpperCase()}</strong> sobre a notificação enviada a <strong>{dados.banco}</strong> (contrato de {modalidade}).</p>}
     </div>
 
+    {clienteDiferente(chosen?.name, form.nome) && <p className="laudo-warning"><AlertTriangle size={14} /> O cliente escolhido ({chosen!.name}) não é o nome do documento ({form.nome.toUpperCase()}). Confira antes de anexar.</p>}
     {chosen
       ? <label className="laudo-attach">
           <input type="checkbox" checked={anexar} onChange={(event) => setAnexar(event.target.checked)} />

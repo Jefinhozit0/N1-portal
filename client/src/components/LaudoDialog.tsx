@@ -6,6 +6,7 @@ import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { downloadPdf, pickPdf } from "@/lib/downloadPdf";
+import { clienteDiferente } from "@/lib/nomes";
 import { trpc } from "@/lib/trpc";
 
 type TextKey = "contrato" | "contratante" | "instituicao" | "garantia" | "dataContrato" | "primeiroVencimento" | "jurosMora";
@@ -201,6 +202,7 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
       </> : <p>{problems[0]}</p>}
     </div>
     {warnings.map((warning) => <p key={warning} className="laudo-warning"><AlertTriangle size={14} /> {warning}</p>)}
+    {clienteDiferente(chosenClient?.name, form.contratante) && <p className="laudo-warning"><AlertTriangle size={14} /> O cliente escolhido ({chosenClient!.name}) não é o contratante do contrato ({form.contratante.toUpperCase()}). Confira antes de anexar.</p>}
 
     {chosenClient
       ? <label className="laudo-attach">
