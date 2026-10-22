@@ -70,14 +70,15 @@ function textAfter(lines: Line[], label: RegExp, stop?: RegExp) {
     const own = stopAt >= 0 ? rest.slice(0, stopAt) : rest;
     const stopX = stopAt >= 0 ? rest[stopAt].x : Infinity;
     const parts = [sameItem, ...own.map((item) => item.text)].filter(Boolean);
-    // A value that wraps (e.g. "COROLLA GLI 1.8 FLEX 16V" / "AUT.") sits a few points above and below, in the same column.
+    if (parts.length) return parts.join(" ").trim();
+    // With nothing beside the label, the value wraps (e.g. "COROLLA GLI 1.8 FLEX 16V" / "AUT.") a few points above and below, in the same column.
     const wrapped = lines
       .filter((other) => other !== line && other.page === line.page && Math.abs(other.y - line.y) < 8)
       .flatMap((other) => other.items.filter((item) => item.x > labelItem.x + 10 && item.x < stopX).map((item) => ({ ...item, y: other.y })))
       .sort((a, b) => b.y - a.y);
     const above = wrapped.filter((item) => item.y > line.y).map((item) => item.text);
     const below = wrapped.filter((item) => item.y < line.y).map((item) => item.text);
-    const value = [...above, ...parts, ...below].join(" ").trim();
+    const value = [...above, ...below].join(" ").trim();
     if (value) return value;
   }
   return "";
@@ -110,14 +111,16 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
   dados.contrato = lines.map((line) => line.text.match(/(?:OPERA[ÇC][AÃ]O|CONTRATO|C[ÉE]DULA|PROPOSTA)\s*(?:N[º°o.]*|n[úu]mero)\s*:?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean) ?? "";
   dados.instituicao = (find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text ?? "")
     .replace(/\s*-?\s*CNPJ.*$/i, "").replace(/\s+/g, " ").trim();
-  dados.contratante = textAfter(lines, /^(?:Nome do Cliente|Nome do Emitente|Emitente|Cliente)\s*:?/i, /^(CPF|RG)\b/i);
+  // The colon matters: "Cliente" alone shows up in clauses ("Direitos e Deveres do Cliente").
+  dados.contratante = textAfter(lines, /^(?:Nome(?:\s*\/\s*Raz[ãa]o Social)?\s+do\s+(?:Cliente|Emitente|Consumidor|Devedor)|Emitente|Cliente|Contratante)\s*:/i, /^(CPF|RG)\b/i);
 
-  const marca = textAfter(lines, /^Ve[íi]culo\s*\(Marca\)\s*:?/i, /^(Ano|Modelo)/i);
+  // SIM: "Veículo (Marca): TOYOTA … Ano-modelo: 2017/2018 … Modelo: COROLLA". Santander: "Veículo: Marca: BAJAJ … Modelo: DOMINAR 250", "Ano/Modelo: 2025".
+  const marca = textAfter(lines, /^(?:Ve[íi]culo\s*(?:\(Marca\)|:\s*Marca)|Marca)\s*:?/i, /^(Ano|Modelo)/i);
   const modelo = textAfter(lines, /^Modelo\s*:?/i);
-  const ano = textAfter(lines, /^Ano-?\s*modelo\s*:?/i, /^Modelo/i);
+  const ano = textAfter(lines, /^Ano\s*[-/]?\s*modelo\s*:?/i, /^(Modelo|Cor)\b/i);
   dados.garantia = [marca, modelo, ano].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 
-  dados.valorSolicitado = amountFor(lines, [/Valor Solicitado/i, /Valor (?:l[íi]quido )?(?:do )?(?:cr[ée]dito|empr[ée]stimo) liberado/i, /Valor liberado/i, /Valor (?:l[íi]quido )?do cr[ée]dito/i]) ?? 0;
+  dados.valorSolicitado = amountFor(lines, [/Valor Solicitado/i, /Valor L[íi]quido Liberado/i, /Valor (?:l[íi]quido )?(?:do )?(?:cr[ée]dito|empr[ée]stimo) liberado/i, /Valor liberado/i, /Valor (?:l[íi]quido )?do cr[ée]dito/i]) ?? 0;
   dados.valorFinanciado = amountFor(lines, [/VALOR TOTAL CONTRATADO/i, /Valor total (?:do )?financiad/i, /Total financiado/i, /Valor (?:do )?financiamento/i], /sem impostos/i) ?? 0;
   dados.valorParcela = (() => {
     const line = find(lines, /Valor (?:de cada|da|das) (?:parcela|presta[çc][ãa]o)/i);
@@ -134,8 +137,17 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
 
   const rateIndex = lines.findIndex((line) => /taxa\s+de\s+juros/i.test(line.text) && !/mora/i.test(line.text));
   if (rateIndex >= 0) {
-    const rates = lines.slice(rateIndex, rateIndex + 3).map((line) => percents(line.text.replace(/^.*taxa\s+de\s+juros[^\d]*/i, ""))).find((values) => values.length >= 2);
-    if (rates) [dados.taxaMensal, dados.taxaAnual] = rates;
+    const window = lines.slice(rateIndex, rateIndex + 3);
+    // Labeled ("diária: % a.d.: 0,07% mensal: % a.m.: 2,00% anual: % a.a.: 26,82%") wins over position, so the daily rate is never taken for the monthly one.
+    const joined = window.map((line) => line.text).join(" ");
+    const labeled = (unit: string) => joined.match(new RegExp(`a\\.?\\s?${unit}\\.?\\s*:?\\s*(\\d{1,3},\\d{1,4})`, "i"))?.[1];
+    const mensal = labeled("m"), anual = labeled("a");
+    if (mensal && anual) [dados.taxaMensal, dados.taxaAnual] = [parseBRL(mensal)!, parseBRL(anual)!];
+    else {
+      // SIM puts the two numbers alone on the line below the label, monthly first.
+      const rates = window.map((line) => percents(line.text.replace(/^.*taxa\s+de\s+juros[^\d]*/i, ""))).find((values) => values.length >= 2);
+      if (rates) [dados.taxaMensal, dados.taxaAnual] = rates;
+    }
   }
   const mora = lines.map((line) => line.text.match(/juros\s+(?:de\s+)?mora[^\d]{0,40}(\d+(?:,\d+)?)\s*%/i)?.[1]).find(Boolean);
   if (mora) dados.jurosMora = `${mora}% A.M.`;
