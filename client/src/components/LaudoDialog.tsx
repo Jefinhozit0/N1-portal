@@ -5,7 +5,7 @@ import { ENCARGO_LABELS, type Encargos, type LaudoDados, avisosLaudo, calcularLa
 import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { downloadPdf } from "@/lib/downloadPdf";
+import { downloadPdf, pickPdf } from "@/lib/downloadPdf";
 import { trpc } from "@/lib/trpc";
 
 type TextKey = "contrato" | "contratante" | "instituicao" | "garantia" | "dataContrato" | "primeiroVencimento" | "jurosMora";
@@ -56,15 +56,6 @@ function toDados(form: Form): LaudoDados {
     parcelas: Math.trunc(number(form.parcelas)), taxaMensal: number(form.taxaMensal), taxaAnual: number(form.taxaAnual),
     encargos: { seguros: charge(form.seguros), avaliacao: charge(form.avaliacao), cadastro: charge(form.cadastro), registro: charge(form.registro) },
   };
-}
-
-function readAsBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 type ClientOption = { id: number; name: string };
@@ -126,15 +117,9 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documento?.id]);
 
-  function pickContract() {
-    const input = Object.assign(document.createElement("input"), { type: "file", accept: "application/pdf,.pdf" });
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      if (file.size > MAX_DOCUMENT_BYTES) { toast.error(`${file.name} passa de 10 MB.`); return; }
-      read({ conteudo: await readAsBase64(file) }, file.name);
-    };
-    input.click();
+  async function pickContract() {
+    const file = await pickPdf(MAX_DOCUMENT_BYTES, (name) => toast.error(`${name} passa de 10 MB.`));
+    if (file) read({ conteudo: file.base64 }, file.name);
   }
 
   function chooseClient(name: string) {

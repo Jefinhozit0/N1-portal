@@ -98,7 +98,8 @@ function contractDate(lines: Line[]) {
   return "";
 }
 
-export type LeituraContrato = { dados: LaudoDados; encontrados: string[] };
+/** cpf and cnpjInstituicao are not in the laudo, but other documents (notificação) use them. */
+export type LeituraContrato = { dados: LaudoDados; cpf: string; cnpjInstituicao: string; encontrados: string[] };
 
 export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
   return extrairContrato(await readLines(bytes));
@@ -106,7 +107,7 @@ export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
 
 export function extrairContrato(lines: Line[]): LeituraContrato {
   const dados = emptyLaudo();
-  if (lines.length === 0) return { dados, encontrados: [] };
+  if (lines.length === 0) return { dados, cpf: "", cnpjInstituicao: "", encontrados: [] };
 
   dados.contrato = lines.map((line) => line.text.match(/(?:OPERA[ÇC][AÃ]O|CONTRATO|C[ÉE]DULA|PROPOSTA)\s*(?:N[º°o.]*|n[úu]mero)\s*:?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean) ?? "";
   dados.instituicao = (find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text ?? "")
@@ -169,5 +170,7 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
   const encontrados = Object.entries({ ...dados, ...encargos })
     .filter(([key, value]) => key !== "encargos" && key !== "objeto" && key !== "jurosMora" && value !== "" && value !== 0 && value !== null)
     .map(([key]) => key);
-  return { dados, encontrados };
+  const cpf = lines.map((line) => line.text.match(/CPF(?:\/CNPJ)?\s*:?\s*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/i)?.[1]).find(Boolean) ?? "";
+  const cnpjInstituicao = find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text.match(/CNPJ:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i)?.[1] ?? "";
+  return { dados, cpf, cnpjInstituicao, encontrados };
 }
