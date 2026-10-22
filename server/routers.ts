@@ -28,7 +28,7 @@ import QRCode from "qrcode";
 import type { TrpcContext } from "./_core/context";
 import { TICKET_TOPICS, formatTicketMessage, parseTicketMessage } from "@shared/tickets";
 import { MAX_DOCUMENT_BYTES, PROCESS_STATUSES, toneForStatus } from "@shared/processo";
-import { addEvent, deleteDocument, documentDownloadUrl, downloadDocument, listDocuments, listEvents, removeClientFiles, uploadDocument } from "./_core/processo";
+import { addEvent, deleteDocument, documentDownloadUrl, downloadDocument, listDocuments, listEvents, listLaudos, removeClientFiles, uploadDocument } from "./_core/processo";
 import { lerContrato } from "./_core/laudoContrato";
 import { buildLaudoPdf, laudoFileName } from "./_core/laudoPdf";
 import { problemasLaudo } from "@shared/laudo";
@@ -859,6 +859,9 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Não foi possível ler esse PDF. Preencha os dados à mão." });
         }
       }),
+
+    /** Laudos attached to clients, for the Laudos screen. */
+    laudos: staffProcedure.query(() => listLaudos()),
 
     /** The parecer técnico as a PDF; optionally saved among the client's documents. */
     gerarLaudo: staffProcedure

@@ -101,6 +101,25 @@ export async function documentDownloadUrl(documentId: number, clientId?: number)
   return signed.signedUrl;
 }
 
+/** Laudos the system generated and attached to a client (their name starts with "Laudo - "), newest first. */
+export async function listLaudos(limit = 50) {
+  const { data, error } = await supabase
+    .from("documentos")
+    .select("id, nome, descricao, tamanho, enviado_por, created_at, client_id, clientes(name)")
+    .ilike("nome", "Laudo - %")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.warn("[documentos] Could not list laudos:", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => {
+    const cliente = row.clientes as { name?: string } | { name?: string }[] | null;
+    const clientName = (Array.isArray(cliente) ? cliente[0]?.name : cliente?.name) ?? null;
+    return { id: row.id as number, nome: row.nome as string, descricao: row.descricao as string | null, tamanho: row.tamanho as number, enviadoPor: row.enviado_por as string | null, createdAt: row.created_at as string, clientId: row.client_id as number, clientName };
+  });
+}
+
 /** The file itself, for the server to read (e.g. a contract the laudo is made from). */
 export async function downloadDocument(documentId: number) {
   const { data } = await supabase.from("documentos").select("nome, caminho, tipo, client_id").eq("id", documentId).maybeSingle();
