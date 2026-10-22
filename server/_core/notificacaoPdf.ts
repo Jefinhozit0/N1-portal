@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
+import { flexiona } from "@shared/genero";
 import { formatCPF } from "@shared/procuracao";
 import { N1_NOTIFICACAO as N1, type NotificacaoContratoDados, type NotificacaoDados, dataPorExtenso, moeda, reaisPorExtenso } from "@shared/notificacao";
 import { renderPdf, safePdfName } from "./pdf";
@@ -73,7 +74,7 @@ export function notificacaoDefinition(dados: NotificacaoDados): TDocumentDefinit
     body([
       "A N1 Soluções Financeiras, vem, por meio de procurador qualificado na procuração em anexo, em nome de ",
       { text: nome, bold: true },
-      ", inscrito(a) no CPF nº ",
+      `, ${flexiona("inscrito", "inscrita", dados.genero)} no CPF nº `,
       { text: formatCPF(dados.cpf), bold: true },
       ", apresentar a presente ",
       { text: "NOTIFICAÇÃO EXTRAJUDICIAL", bold: true },
@@ -111,7 +112,7 @@ export function notificacaoContratoDefinition(dados: NotificacaoContratoDados): 
     body([
       "A N1 Soluções Financeiras vem, por meio de procurador qualificado na procuração em anexo, em nome de ",
       { text: nome, bold: true },
-      ", inscrito(a) no ",
+      `, ${flexiona("inscrito", "inscrita", dados.genero)} no `,
       { text: `CPF nº ${formatCPF(dados.cpf)}`, bold: true },
       `, manifestar sua irresignação acerca do contrato de ${dados.modalidade} `,
       { text: `Nº ${dados.contrato.trim()}.`, bold: true },

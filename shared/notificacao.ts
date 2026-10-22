@@ -3,8 +3,12 @@
  * contract figures and the bank change; N1's contacts and the 7-day term are fixed.
  */
 
+import type { Genero } from "./genero";
+
 export type NotificacaoDados = {
   nome: string;
+  /** "inscrito" / "inscrita"; null keeps "inscrito(a)". */
+  genero: Genero | null;
   cpf: string;
   /** Amount of the contract (crédito liberado). */
   valor: number;
@@ -50,6 +54,8 @@ export const BANCOS_CONHECIDOS = [
  */
 export type NotificacaoContratoDados = {
   nome: string;
+  /** "inscrito" / "inscrita"; null keeps "inscrito(a)". */
+  genero: Genero | null;
   cpf: string;
   contrato: string;
   /** Monthly rate written in the contract, in percent (1.96 = 1,96% a.m.). */

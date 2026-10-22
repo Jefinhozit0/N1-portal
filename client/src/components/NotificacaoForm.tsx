@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { impliedRate, parseBRL } from "@shared/laudo";
 import { BANCOS_CONHECIDOS, MODALIDADES, type Modalidade, type NotificacaoContratoDados, type NotificacaoDados, avisoTaxa, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
+import { GENERO_LABEL, type Genero, generoDoNome } from "@shared/genero";
 import { MAX_DOCUMENT_BYTES } from "@shared/processo";
 import { formatCPF, hojeISO } from "@shared/procuracao";
 import { Button } from "@/components/ui/button";
@@ -55,8 +56,8 @@ const number = (text: string) => parseBRL(text) ?? 0;
 const common = (form: Form) => ({
   nome: form.nome.trim(), cpf: form.cpf.trim(), bancoNome: form.bancoNome.trim(), bancoCnpj: form.bancoCnpj.trim(), bancoEndereco: form.bancoEndereco.trim(), cidade: form.cidade.trim(), data: form.data,
 });
-const toManual = (form: Form): NotificacaoDados => ({ ...common(form), valor: number(form.valor), valorParcela: number(form.valorParcela), parcelas: Math.trunc(number(form.parcelas)) });
-const toContrato = (form: Form, modalidade: Modalidade): NotificacaoContratoDados => ({ ...common(form), contrato: form.contrato.trim(), taxaMensal: number(form.taxaMensal), modalidade });
+const toManual = (form: Form, genero: Genero | null): NotificacaoDados => ({ ...common(form), genero, valor: number(form.valor), valorParcela: number(form.valorParcela), parcelas: Math.trunc(number(form.parcelas)) });
+const toContrato = (form: Form, modalidade: Modalidade, genero: Genero | null): NotificacaoContratoDados => ({ ...common(form), genero, contrato: form.contrato.trim(), taxaMensal: number(form.taxaMensal), modalidade });
 
 export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificacao; clients: ProcuracaoClient[]; onDone?: (result: { attached: boolean }) => void }) {
   const [form, setForm] = useState<Form>(blank);
@@ -64,6 +65,8 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
   const [anexar, setAnexar] = useState(false);
   const [source, setSource] = useState("");
   const [modalidade, setModalidade] = useState<Modalidade>("financiamento");
+  /** "auto" follows the client's first name; the others are the team's choice. */
+  const [generoEscolha, setGeneroEscolha] = useState<"auto" | Genero | "indefinido">("auto");
   const lerContrato = trpc.portal.lerContrato.useMutation();
   const gerarManual = trpc.portal.gerarNotificacao.useMutation();
   const gerarContrato = trpc.portal.gerarNotificacaoContrato.useMutation();
@@ -124,9 +127,12 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
     setAnexar(false);
     setSource("");
     setModalidade("financiamento");
+    setGeneroEscolha("auto");
   }
 
-  const manual = toManual(form), contrato = toContrato(form, modalidade);
+  const generoDetectado = generoDoNome(form.nome);
+  const genero = generoEscolha === "auto" ? generoDetectado : generoEscolha === "indefinido" ? null : generoEscolha;
+  const manual = toManual(form, genero), contrato = toContrato(form, modalidade, genero);
   const problems = tipo === "manual" ? problemasNotificacao(manual) : problemasNotificacaoContrato(contrato);
   const taxaCheck = tipo === "contrato" ? avisoTaxa(contrato.taxaMensal, impliedRate(number(form.valorFinanciado), number(form.valorParcela), Math.trunc(number(form.parcelas)))) : null;
   const attach = anexar && chosen !== undefined;
@@ -173,6 +179,14 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
         <datalist id={`notificacao-${tipo}-clientes`}>{clients.map((option) => <option key={option.id} value={option.name} />)}</datalist>
       </label>
       {[...CLIENT_FIELDS, ...FIELDS[tipo]].map(input)}
+      <label>Gênero do cliente
+        <select value={generoEscolha} onChange={(event) => setGeneroEscolha(event.target.value as typeof generoEscolha)} disabled={busy}>
+          <option value="auto">Pelo nome: {generoDetectado ? GENERO_LABEL[generoDetectado].toLowerCase() : form.nome.trim() ? "não identificado" : "—"}</option>
+          <option value="M">Masculino ("inscrito")</option>
+          <option value="F">Feminino ("inscrita")</option>
+          <option value="indefinido">Não definir ("inscrito(a)")</option>
+        </select>
+      </label>
       {tipo === "contrato" && <label>Tipo de contrato
         <select value={modalidade} onChange={(event) => setModalidade(event.target.value as Modalidade)} disabled={busy}>
           {MODALIDADES.map((option) => <option key={option} value={option}>Contrato de {option}</option>)}
