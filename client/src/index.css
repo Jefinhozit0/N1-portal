@@ -3397,3 +3397,5 @@ tbody tr.empty-row:hover { background: transparent; }
 .laudos-heading .filter-buttons button { display: inline-flex; align-items: center; gap: 6px; }
 .procuracao-preview { grid-template-columns: 1fr; }
 .procuracao-preview p strong { color: var(--text); font-size: inherit; }
+.laudo-place { margin-top: 14px; }
+.laudo-form select { width: 100%; margin-top: 6px; }

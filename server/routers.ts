@@ -33,6 +33,8 @@ import { lerContrato } from "./_core/laudoContrato";
 import { buildLaudoPdf, laudoFileName } from "./_core/laudoPdf";
 import { buildProcuracaoPdf, procuracaoFileName } from "./_core/procuracaoPdf";
 import { problemasProcuracao } from "@shared/procuracao";
+import { buildNotificacaoPdf, notificacaoFileName } from "./_core/notificacaoPdf";
+import { problemasNotificacao } from "@shared/notificacao";
 import { problemasLaudo } from "@shared/laudo";
 
 const verificationRequestTimes = new Map<string, number>();
@@ -147,6 +149,20 @@ const procuracaoInput = z.object({
   endereco: z.string().trim().max(300),
   cep: z.string().trim().max(12),
   email: z.string().trim().max(200),
+  cidade: z.string().trim().max(100),
+  data: z.string().trim().max(10),
+});
+
+/** The notificação form (NotificacaoDados in shared/notificacao.ts). */
+const notificacaoInput = z.object({
+  nome: z.string().trim().max(200),
+  cpf: z.string().trim().max(20),
+  valor: valor,
+  parcelas: z.number().int().min(0).max(600),
+  valorParcela: valor,
+  bancoNome: z.string().trim().max(200),
+  bancoCnpj: z.string().trim().max(30),
+  bancoEndereco: z.string().trim().max(400),
   cidade: z.string().trim().max(100),
   data: z.string().trim().max(10),
 });
@@ -875,6 +891,23 @@ export const appRouter = router({
 
     /** Laudos attached to clients, for the Laudos screen. */
     laudos: staffProcedure.query(() => listLaudos()),
+
+    /** Notificação extrajudicial asking the bank for the contract, as a PDF; optionally saved among the client's documents. */
+    gerarNotificacao: staffProcedure
+      .input(z.object({ clientId: z.number().int().positive().optional(), anexar: z.boolean().default(false), dados: notificacaoInput }))
+      .mutation(async ({ ctx, input }) => {
+        const problems = problemasNotificacao(input.dados);
+        if (problems.length) throw new TRPCError({ code: "BAD_REQUEST", message: problems.join(" ") });
+        const pdf = await buildNotificacaoPdf(input.dados);
+        const nome = notificacaoFileName(input.dados);
+        if (input.anexar && input.clientId !== undefined) {
+          const { data: cliente } = await supabase.from("clientes").select("id").eq("id", input.clientId).maybeSingle();
+          if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+          await uploadDocument(input.clientId, { nome, tipo: "application/pdf", descricao: `Notificação extrajudicial a ${input.dados.bancoNome} pedindo o contrato`, bytes: pdf }, ctx.staffUser.email ?? "equipe");
+        }
+        await registrarAcao(ctx.staffUser.email, "Gerou notificação", `${input.dados.nome} → ${input.dados.bancoNome}`, input.clientId);
+        return { nome, conteudo: pdf.toString("base64") };
+      }),
 
     /** Procuração extrajudicial (consumidor.gov.br) as a PDF; optionally saved among the client's documents. */
     gerarProcuracao: staffProcedure

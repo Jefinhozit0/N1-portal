@@ -86,6 +86,11 @@ describe("extrairContrato (Santander CDC Veículos)", () => {
     expect(dados.contratante).toBe("JOÃO EXEMPLO DOS SANTOS");
   });
 
+  it("reads the client's CPF and the bank's CNPJ (used by the notificação)", () => {
+    expect(extrairContrato(SANTANDER_CDC)).toMatchObject({ cpf: "000.000.000-00", cnpjInstituicao: "07.707.650/0001-10" });
+    expect(extrairContrato(SIM_CCB)).toMatchObject({ cpf: "000.000.000-00", cnpjInstituicao: "07.707.650/0001-10" });
+  });
+
   it("reads the labeled monthly and yearly rates, not the daily one", () => {
     expect(dados).toMatchObject({ taxaMensal: 2, taxaAnual: 26.82 });
   });
