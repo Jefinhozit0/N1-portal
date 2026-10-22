@@ -68,9 +68,9 @@ describe("notificação com contrato", () => {
     expect(avisoTaxa(1.96, null)).toBeNull();
   });
 
-  it("fits on one page with the stamp and the CDC footnote, even with long names, addresses and contract numbers", async () => {
+  it("takes at most two pages, the stamp and the CDC footnote kept together, even with long names, addresses and contract numbers", async () => {
     const pdf = await buildNotificacaoContratoPdf({ ...dadosContrato, nome: "Maria Odete de Paula Lessa Rocha Albuquerque", bancoEndereco: `${bb.endereco}, Edifício Sede III, 10º andar, sala 1001`, contrato: "0139677475718485232641484552566277378267" });
-    expect(pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)).toHaveLength(1);
+    expect(pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)!.length).toBeLessThanOrEqual(2);
     expect(notificacaoContratoFileName(dadosContrato)).toBe("Notificação extrajudicial com contrato - JORGE EXEMPLO RODRIGUES - 147126013.pdf");
   });
 });

@@ -18,27 +18,25 @@ const body = (text: Content): Content => ({ text, style: "body" } as Content);
 
 /**
  * Gray rule on top, the title, then the content. rodape: N1's "Em prestação de serviços jurídicos"
- * line on every page (the manual model has it, the com-contrato one does not). compacto: tighter
- * lines, for the longer model (it still has to fit on one page).
+ * line on every page (the manual model has it, the com-contrato one does not).
  */
-function pagina(titulo: string, content: Content[], { compacto = false, rodape = true } = {}): TDocumentDefinitions {
-  const lineHeight = compacto ? 1.25 : 1.5, gap = compacto ? 6 : 10;
+function pagina(titulo: string, content: Content[], { rodape = true } = {}): TDocumentDefinitions {
   return {
     pageSize: "A4",
-    // Sized so each model fits on one page, signature included, even with a long bank address.
-    pageMargins: [MARGIN_LEFT, compacto ? 56 : 66, MARGIN_RIGHT, rodape ? 60 : 32],
+    // The manual one fits on one page, signature included, even with a long bank address; the com-contrato one may take two.
+    pageMargins: [MARGIN_LEFT, 66, MARGIN_RIGHT, rodape ? 60 : 50],
     info: { title: titulo, author: N1.nome },
     defaultStyle: { font: "Roboto", fontSize: 10.5, color: "#1a1a1a" },
     styles: {
-      body: { lineHeight, alignment: "justify", margin: [0, 0, 0, gap] },
-      recuo: { lineHeight, alignment: "justify", margin: [0, 0, 0, gap - 2], leadingIndent: 28 },
+      body: { lineHeight: 1.5, alignment: "justify", margin: [0, 0, 0, 10] },
+      recuo: { lineHeight: 1.5, alignment: "justify", margin: [0, 0, 0, 8], leadingIndent: 28 },
     },
     background: () => ({ canvas: [{ type: "line", x1: 72, y1: 42, x2: PAGE_WIDTH, y2: 42, lineWidth: 1.4, lineColor: "#b3b3b3" }] }),
     footer: rodape ? () => ({
       text: `Em prestação de serviços jurídicos para N1 SOLUÇÕES - CNPJ nº ${N1.cnpj} – sediada em ${N1.sede}.`,
       bold: true, fontSize: 8, lineHeight: 1.15, margin: [MARGIN_LEFT, 18, MARGIN_RIGHT, 0],
     }) : undefined,
-    content: [{ text: "NOTIFICAÇÃO EXTRAJUDICIAL", bold: true, fontSize: 13, alignment: "center", margin: [0, 0, 0, compacto ? 14 : 20] }, ...content],
+    content: [{ text: "NOTIFICAÇÃO EXTRAJUDICIAL", bold: true, fontSize: 13, alignment: "center", margin: [0, 0, 0, 20] }, ...content],
   };
 }
 
@@ -52,13 +50,17 @@ const assinatura = (): Content => ({
   ],
 });
 
-/** N1's CNPJ stamp (taken from the team's model), which signs the com-contrato notificação. */
+/**
+ * N1's CNPJ stamp (taken from the team's model) and the CDC footnote, which close the com-contrato
+ * notificação. They stay together: when they do not fit after the text, they go to the next page whole.
+ */
 const CARIMBO = `data:image/png;base64,${readFileSync(path.resolve(process.cwd(), "server/assets/notificacao/carimbo.png")).toString("base64")}`;
-const assinaturaCarimbo = (): Content => ({
+const assinaturaCarimbo = (nota: Content): Content => ({
   unbreakable: true,
   stack: [
-    { text: "Cordialmente,", margin: [56, 0, 0, 8] },
-    { image: CARIMBO, width: 165 },
+    { text: "Cordialmente,", margin: [56, 10, 0, 18] },
+    { image: CARIMBO, width: 210 },
+    nota,
   ],
 });
 
@@ -114,7 +116,7 @@ export function notificacaoContratoDefinition(dados: NotificacaoContratoDados): 
       `, manifestar sua irresignação acerca do contrato de ${dados.modalidade} `,
       { text: `Nº ${dados.contrato.trim()}.`, bold: true },
     ]),
-    { text: "01. DOS JUROS REMUNERATÓRIOS", bold: true, margin: [0, 4, 0, 5] },
+    { text: "01. DOS JUROS REMUNERATÓRIOS", bold: true, margin: [0, 8, 0, 8] },
     { text: "Há uma injustificável diferença entre a taxa de juros contratada e a taxa realmente aplicada.", style: "recuo" },
     { text: "A análise de eventual abusividade das taxas de juros contratadas é possível em mútuo quando o pagamento é realizado através de parcelas iguais e prefixadas.", style: "recuo" },
     { text: "O método utilizado para averiguação da legalidade do cálculo confrontou a taxa aplicada pela instituição financeira junto às taxas fixadas no respectivo instrumento.", style: "recuo" },
@@ -127,16 +129,14 @@ export function notificacaoContratoDefinition(dados: NotificacaoContratoDados): 
     body("O atendimento dessa notificação extrajudicial por V. Sª evitará o ajuizamento de ação judicial própria, bem como aborrecimentos e despesas indesejáveis."),
     body("Decorrido o prazo in albis, entender-se-á que a presente notificação foi desconsiderada, possibilitando, pois, a busca pelo amparo judicial."),
     body("Nos colocamos à disposição para discutir eventuais acordos."),
-    assinaturaCarimbo(),
-    // The footnote of the CDC reference, below the signature as in the model.
-    {
-      unbreakable: true,
+    // The footnote of the CDC reference goes below the stamp, as in the model.
+    assinaturaCarimbo({
       stack: [
-        { canvas: [{ type: "line", x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.8, lineColor: "#333" }], margin: [0, 8, 0, 4] },
-        { stack: CDC, fontSize: 7.5, lineHeight: 1.15, alignment: "justify" },
+        { canvas: [{ type: "line", x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.8, lineColor: "#333" }], margin: [0, 26, 0, 5] },
+        { stack: CDC, fontSize: 8, lineHeight: 1.2, alignment: "justify" },
       ],
-    },
-  ], { compacto: true, rodape: false });
+    }),
+  ], { rodape: false });
 }
 
 export const buildNotificacaoPdf = (dados: NotificacaoDados) => renderPdf(notificacaoDefinition(dados));
