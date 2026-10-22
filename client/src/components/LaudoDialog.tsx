@@ -74,25 +74,32 @@ function downloadPdf(name: string, base64: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-type LaudoDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  clientId?: number;
-  clientName: string;
-  /** A contract already attached to the client: it is read as soon as the dialog opens. */
+type ClientOption = { id: number; name: string };
+
+type LaudoFormProps = {
+  /** "dialog" inside the client's page; "page" on the Laudos screen, where the client is optional and chosen in the form. */
+  variant: "dialog" | "page";
+  /** The client the laudo is for, when it is already known (client's page). */
+  client?: ClientOption;
+  /** Clients to pick from on the Laudos screen. */
+  clients?: ClientOption[];
+  /** A contract already attached to the client: it is read as soon as the form appears. */
   documento?: { id: number; nome: string } | null;
-  onAttached?: () => void;
+  onDone?: (result: { attached: boolean }) => void;
+  onCancel?: () => void;
 };
 
 /**
  * Parecer técnico from a contract: the PDF fills the form (or the team types it), the numbers can be
  * changed, and the preview shows the result before the PDF is made.
  */
-export default function LaudoDialog({ open, onOpenChange, clientId, clientName, documento, onAttached }: LaudoDialogProps) {
-  const blank = () => toForm({ ...emptyLaudo(), contratante: clientName.toUpperCase() });
+export function LaudoForm({ variant, client, clients = [], documento, onDone, onCancel }: LaudoFormProps) {
+  const blank = () => toForm({ ...emptyLaudo(), contratante: (client?.name ?? "").toUpperCase() });
   const [form, setForm] = useState<Form>(blank);
   const [source, setSource] = useState("");
   const [anexar, setAnexar] = useState(false);
+  const [clientName, setClientName] = useState(client?.name ?? "");
+  const chosenClient = client ?? clients.find((option) => option.name.trim().toLowerCase() === clientName.trim().toLowerCase());
 
   const lerContrato = trpc.portal.lerContrato.useMutation();
   const gerarLaudo = trpc.portal.gerarLaudo.useMutation();
@@ -105,7 +112,7 @@ export default function LaudoDialog({ open, onOpenChange, clientId, clientName, 
         setSource(`Não encontrei texto em ${name} (pode ser um contrato escaneado). Preencha os dados à mão.`);
         return;
       }
-      setForm(toForm({ ...dados, contratante: dados.contratante || clientName.toUpperCase() }));
+      setForm(toForm({ ...dados, contratante: dados.contratante || (chosenClient?.name ?? "").toUpperCase() }));
       setSource(`Dados lidos de ${name}. Confira os valores antes de gerar.`);
     } catch (error) {
       setSource("");
@@ -113,14 +120,18 @@ export default function LaudoDialog({ open, onOpenChange, clientId, clientName, 
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
+  function reset() {
     setForm(blank());
     setSource("");
     setAnexar(false);
+    if (!client) setClientName("");
+  }
+
+  useEffect(() => {
+    reset();
     if (documento) read({ documentoId: documento.id }, documento.nome);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, documento?.id]);
+  }, [documento?.id]);
 
   function pickContract() {
     const input = Object.assign(document.createElement("input"), { type: "file", accept: "application/pdf,.pdf" });
@@ -133,20 +144,28 @@ export default function LaudoDialog({ open, onOpenChange, clientId, clientName, 
     input.click();
   }
 
+  function chooseClient(name: string) {
+    setClientName(name);
+    const match = clients.find((option) => option.name.trim().toLowerCase() === name.trim().toLowerCase());
+    // The contract's own name wins; the client's only fills an empty field.
+    if (match && !form.contratante.trim()) setForm((current) => ({ ...current, contratante: match.name.toUpperCase() }));
+  }
+
   const dados = useMemo(() => toDados(form), [form]);
   const problems = problemasLaudo(dados);
   const warnings = problems.length ? [] : avisosLaudo(dados);
   const result = problems.length ? null : calcularLaudo(dados);
+  const attach = anexar && chosenClient !== undefined;
 
   async function generate(event: React.FormEvent) {
     event.preventDefault();
     if (problems.length) { toast.error(problems[0]); return; }
     try {
-      const pdf = await gerarLaudo.mutateAsync({ clientId, anexar: anexar && clientId !== undefined, dados });
+      const pdf = await gerarLaudo.mutateAsync({ clientId: chosenClient?.id, anexar: attach, dados });
       downloadPdf(pdf.nome, pdf.conteudo);
-      toast.success(anexar ? "Laudo gerado e anexado aos documentos." : "Laudo gerado.");
-      if (anexar) onAttached?.();
-      onOpenChange(false);
+      toast.success(attach ? `Laudo gerado e anexado aos documentos de ${chosenClient!.name}.` : "Laudo gerado.");
+      onDone?.({ attached: attach });
+      if (variant === "page") reset();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível gerar o laudo.");
     }
@@ -154,61 +173,87 @@ export default function LaudoDialog({ open, onOpenChange, clientId, clientName, 
 
   const set = (key: keyof Form) => (event: React.ChangeEvent<HTMLInputElement>) => setForm((current) => ({ ...current, [key]: event.target.value }));
   const busy = lerContrato.isPending || gerarLaudo.isPending;
+  const title = "Gerar laudo";
+  const description = "Parecer técnico com o recálculo das parcelas sem os encargos financiados (seguros, tarifas e registro).";
+  const actions = <>
+    {onCancel && <Button type="button" variant="outline" onClick={onCancel} disabled={gerarLaudo.isPending}>Cancelar</Button>}
+    {variant === "page" && <Button type="button" variant="outline" onClick={reset} disabled={busy}>Limpar</Button>}
+    <Button type="submit" disabled={busy || problems.length > 0}>{gerarLaudo.isPending ? "Gerando..." : "Gerar laudo (PDF)"}</Button>
+  </>;
 
-  return <Dialog open={open} onOpenChange={(next) => !gerarLaudo.isPending && onOpenChange(next)}>
-    <DialogContent className="hub-dialog laudo-dialog">
-      <form onSubmit={generate}>
-        <DialogHeader>
-          <DialogTitle>Gerar laudo</DialogTitle>
-          <DialogDescription>Parecer técnico com o recálculo das parcelas sem os encargos financiados (seguros, tarifas e registro).</DialogDescription>
-        </DialogHeader>
+  return <form onSubmit={generate} className={variant === "page" ? "laudo-form laudo-form-page" : "laudo-form"}>
+    {variant === "dialog" && <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>}
 
-        <div className="laudo-source">
-          <Button type="button" variant="outline" size="sm" onClick={pickContract} disabled={busy}>
-            {lerContrato.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileUp size={15} />} Ler contrato (PDF)
-          </Button>
-          <small>{source || "Envie o contrato para preencher sozinho, ou digite só os dados abaixo."}</small>
-        </div>
+    <div className="laudo-source">
+      <Button type="button" variant="outline" size="sm" onClick={pickContract} disabled={busy}>
+        {lerContrato.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileUp size={15} />} Ler contrato (PDF)
+      </Button>
+      <small>{source || "Envie o contrato para preencher sozinho, ou digite só os dados abaixo."}</small>
+    </div>
 
-        <div className="new-sale-grid">
-          {TEXT_FIELDS.map((field) => <label key={field.key} className={field.wide ? "full-field" : undefined}>{field.label}
-            <input value={form[field.key]} onChange={set(field.key)} placeholder={field.placeholder} disabled={lerContrato.isPending} />
-          </label>)}
-          {NUMBER_FIELDS.map((field) => <label key={field.key}>{field.label}
-            <input inputMode="decimal" value={form[field.key]} onChange={set(field.key)} placeholder={field.placeholder} disabled={lerContrato.isPending} />
-          </label>)}
-          <label>Juros moratórios<input value={form.jurosMora} onChange={set("jurosMora")} placeholder="1% A.M." disabled={lerContrato.isPending} /></label>
-        </div>
+    <div className="new-sale-grid">
+      {variant === "page" && <label className="full-field">Cliente (opcional)
+        <input list="laudo-clientes" value={clientName} onChange={(event) => chooseClient(event.target.value)} placeholder="Escolha da lista para poder anexar o laudo ao cadastro" disabled={busy} />
+        <datalist id="laudo-clientes">{clients.map((option) => <option key={option.id} value={option.name} />)}</datalist>
+      </label>}
+      {TEXT_FIELDS.map((field) => <label key={field.key} className={field.wide ? "full-field" : undefined}>{field.label}
+        <input value={form[field.key]} onChange={set(field.key)} placeholder={field.placeholder} disabled={lerContrato.isPending} />
+      </label>)}
+      {NUMBER_FIELDS.map((field) => <label key={field.key}>{field.label}
+        <input inputMode="decimal" value={form[field.key]} onChange={set(field.key)} placeholder={field.placeholder} disabled={lerContrato.isPending} />
+      </label>)}
+      <label>Juros moratórios<input value={form.jurosMora} onChange={set("jurosMora")} placeholder="1% A.M." disabled={lerContrato.isPending} /></label>
+    </div>
 
-        <fieldset className="laudo-encargos">
-          <legend>Encargos a retirar <small>(vazio = não consta no contrato)</small></legend>
-          <div className="new-sale-grid">
-            {ENCARGO_KEYS.map((key) => <label key={key}>{ENCARGO_LABELS[key]}
-              <input inputMode="decimal" value={form[key]} onChange={set(key)} placeholder="Não consta" disabled={lerContrato.isPending} />
-            </label>)}
-          </div>
-        </fieldset>
+    <fieldset className="laudo-encargos">
+      <legend>Encargos a retirar <small>(vazio = não consta no contrato)</small></legend>
+      <div className="new-sale-grid">
+        {ENCARGO_KEYS.map((key) => <label key={key}>{ENCARGO_LABELS[key]}
+          <input inputMode="decimal" value={form[key]} onChange={set(key)} placeholder="Não consta" disabled={lerContrato.isPending} />
+        </label>)}
+      </div>
+    </fieldset>
 
-        <div className="laudo-preview" aria-live="polite">
-          {result ? <>
-            <div><span>Parcela</span><strong>{formatBRL(result.original.prestacao)} → {formatBRL(result.recalculado.prestacao)}</strong></div>
-            <div><span>Encargos retirados</span><strong>{formatBRL(result.encargos)}</strong></div>
-            <div><span>Diferença por parcela</span><strong>{formatBRL(result.diferencaParcela)}</strong></div>
-            <div><span>Proveito econômico</span><strong className="laudo-total">{formatBRL(result.diferencaTotal)}</strong></div>
-          </> : <p>{problems[0]}</p>}
-        </div>
-        {warnings.map((warning) => <p key={warning} className="laudo-warning"><AlertTriangle size={14} /> {warning}</p>)}
+    <div className="laudo-preview" aria-live="polite">
+      {result ? <>
+        <div><span>Parcela</span><strong>{formatBRL(result.original.prestacao)} → {formatBRL(Math.round(result.recalculado.prestacao * 100) / 100)}</strong></div>
+        <div><span>Encargos retirados</span><strong>{formatBRL(result.encargos)}</strong></div>
+        <div><span>Diferença por parcela</span><strong>{formatBRL(result.diferencaParcela)}</strong></div>
+        <div><span>Proveito econômico</span><strong className="laudo-total">{formatBRL(result.diferencaTotal)}</strong></div>
+      </> : <p>{problems[0]}</p>}
+    </div>
+    {warnings.map((warning) => <p key={warning} className="laudo-warning"><AlertTriangle size={14} /> {warning}</p>)}
 
-        {clientId !== undefined && <label className="laudo-attach">
+    {chosenClient
+      ? <label className="laudo-attach">
           <input type="checkbox" checked={anexar} onChange={(event) => setAnexar(event.target.checked)} />
-          Anexar também aos documentos do cliente (o cliente vê no portal)
-        </label>}
+          Anexar também aos documentos de {chosenClient.name} (o cliente vê no portal)
+        </label>
+      : variant === "page" && clientName.trim() && <p className="laudo-hint">Cliente não encontrado na lista: o laudo é gerado, mas não fica anexado a nenhum cadastro.</p>}
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={gerarLaudo.isPending}>Cancelar</Button>
-          <Button type="submit" disabled={busy || problems.length > 0}>{gerarLaudo.isPending ? "Gerando..." : "Gerar laudo (PDF)"}</Button>
-        </DialogFooter>
-      </form>
+    {variant === "dialog" ? <DialogFooter>{actions}</DialogFooter> : <div className="laudo-actions">{actions}</div>}
+  </form>;
+}
+
+type LaudoDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  client: ClientOption;
+  documento?: { id: number; nome: string } | null;
+  onAttached?: () => void;
+};
+
+/** The same form, on the client's page. */
+export default function LaudoDialog({ open, onOpenChange, client, documento, onAttached }: LaudoDialogProps) {
+  return <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="hub-dialog laudo-dialog">
+      {open && <LaudoForm
+        variant="dialog"
+        client={client}
+        documento={documento}
+        onCancel={() => onOpenChange(false)}
+        onDone={({ attached }) => { if (attached) onAttached?.(); onOpenChange(false); }}
+      />}
     </DialogContent>
   </Dialog>;
 }

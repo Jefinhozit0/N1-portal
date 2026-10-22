@@ -485,14 +485,13 @@ export default function ClientDetail({ client, onBack, isAdmin }: ClientDetailPr
           </div>
         </section>
 
-        <LaudoDialog
+        {client.id !== undefined && <LaudoDialog
           open={laudo !== null}
           onOpenChange={(open) => !open && setLaudo(null)}
-          clientId={client.id}
-          clientName={client.name}
+          client={{ id: client.id, name: client.name }}
           documento={laudo?.documento}
           onAttached={() => detalhe.refetch()}
-        />
+        />}
 
         <AlertDialog open={documentToDelete !== null} onOpenChange={(open) => !open && !apagarDocumento.isPending && setDocumentToDelete(null)}>
           <AlertDialogContent>
