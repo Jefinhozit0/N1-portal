@@ -1,5 +1,6 @@
 import { getDocumentProxy } from "unpdf";
 import { type Encargos, type LaudoDados, emptyLaudo, mesNumero, parseBRL } from "@shared/laudo";
+import { type Modalidade, modalidadeDoTitulo } from "@shared/notificacao";
 
 /**
  * Reads a bank contract (CCB) PDF and fills what it can of the laudo. Works on the text of the PDF,
@@ -98,8 +99,8 @@ function contractDate(lines: Line[]) {
   return "";
 }
 
-/** cpf and cnpjInstituicao are not in the laudo, but other documents (notificação) use them. */
-export type LeituraContrato = { dados: LaudoDados; cpf: string; cnpjInstituicao: string; encontrados: string[] };
+/** cpf, cnpjInstituicao and modalidade are not in the laudo, but other documents (notificação) use them. */
+export type LeituraContrato = { dados: LaudoDados; cpf: string; cnpjInstituicao: string; modalidade: Modalidade | null; encontrados: string[] };
 
 export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
   return extrairContrato(await readLines(bytes));
@@ -107,7 +108,7 @@ export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
 
 export function extrairContrato(lines: Line[]): LeituraContrato {
   const dados = emptyLaudo();
-  if (lines.length === 0) return { dados, cpf: "", cnpjInstituicao: "", encontrados: [] };
+  if (lines.length === 0) return { dados, cpf: "", cnpjInstituicao: "", modalidade: null, encontrados: [] };
 
   dados.contrato = lines.map((line) => line.text.match(/(?:OPERA[ÇC][AÃ]O|CONTRATO|C[ÉE]DULA|PROPOSTA)\s*(?:N[º°o.]*|n[úu]mero)\s*:?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean) ?? "";
   dados.instituicao = (find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text ?? "")
@@ -172,5 +173,7 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
     .map(([key]) => key);
   const cpf = lines.map((line) => line.text.match(/CPF(?:\/CNPJ)?\s*:?\s*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/i)?.[1]).find(Boolean) ?? "";
   const cnpjInstituicao = find(lines, /(BANCO|CR[ÉE]DITO|FINANCEIRA|FINANCIAMENTO)[^]*\bS\.?\s?\/?A\b/i)?.text.match(/CNPJ:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i)?.[1] ?? "";
-  return { dados, cpf, cnpjInstituicao, encontrados };
+  // The title sits in the first lines of page 1 ("CÉDULA DE CRÉDITO BANCÁRIO - CRÉDITO PESSOAL…", "…CRÉDITO DIRETO AO CONSUMIDOR (CDC) – VEÍCULOS").
+  const modalidade = modalidadeDoTitulo(lines.filter((line) => line.page === 1).slice(0, 8).map((line) => line.text).join(" "));
+  return { dados, cpf, cnpjInstituicao, modalidade, encontrados };
 }

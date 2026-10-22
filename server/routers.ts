@@ -34,7 +34,7 @@ import { buildLaudoPdf, laudoFileName } from "./_core/laudoPdf";
 import { buildProcuracaoPdf, procuracaoFileName } from "./_core/procuracaoPdf";
 import { problemasProcuracao } from "@shared/procuracao";
 import { buildNotificacaoContratoPdf, buildNotificacaoPdf, notificacaoContratoFileName, notificacaoFileName } from "./_core/notificacaoPdf";
-import { problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
+import { MODALIDADES, problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
 import { problemasLaudo } from "@shared/laudo";
 
 const verificationRequestTimes = new Map<string, number>();
@@ -173,6 +173,7 @@ const notificacaoContratoInput = z.object({
   cpf: z.string().trim().max(20),
   contrato: z.string().trim().max(60),
   taxaMensal: z.number().min(0).max(100),
+  modalidade: z.enum(MODALIDADES),
   bancoNome: z.string().trim().max(200),
   bancoCnpj: z.string().trim().max(30),
   bancoEndereco: z.string().trim().max(400),

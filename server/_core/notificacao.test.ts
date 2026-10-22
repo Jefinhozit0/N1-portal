@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { impliedRate } from "@shared/laudo";
-import { BANCOS_CONHECIDOS, avisoTaxa, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, problemasNotificacaoContrato, reaisPorExtenso } from "@shared/notificacao";
+import { BANCOS_CONHECIDOS, avisoTaxa, modalidadeDoTitulo, bancoConhecido, dataPorExtenso, moeda, problemasNotificacao, problemasNotificacaoContrato, reaisPorExtenso } from "@shared/notificacao";
 import { buildNotificacaoContratoPdf, buildNotificacaoPdf, notificacaoContratoFileName, notificacaoFileName } from "./notificacaoPdf";
 
 const santander = BANCOS_CONHECIDOS[0];
@@ -47,7 +47,13 @@ describe("notificação extrajudicial", () => {
 
 describe("notificação com contrato", () => {
   const bb = BANCOS_CONHECIDOS.find((bank) => bank.id === "bb")!;
-  const dadosContrato = { nome: "Jorge Exemplo Rodrigues", cpf: "00000000000", contrato: "147126013", taxaMensal: 1.96, bancoNome: bb.nome, bancoCnpj: bb.cnpj, bancoEndereco: bb.endereco, cidade: "Teresina", data: "2026-10-06" };
+  const dadosContrato = { nome: "Jorge Exemplo Rodrigues", cpf: "00000000000", contrato: "147126013", taxaMensal: 1.96, modalidade: "empréstimo" as const, bancoNome: bb.nome, bancoCnpj: bb.cnpj, bancoEndereco: bb.endereco, cidade: "Teresina", data: "2026-10-06" };
+
+  it("tells financiamento from empréstimo by the contract title", () => {
+    expect(modalidadeDoTitulo("CÉDULA DE CRÉDITO BANCÁRIO - CRÉDITO PESSOAL COM GARANTIA DE VEÍCULO")).toBe("empréstimo");
+    expect(modalidadeDoTitulo("CONDIÇÕES ESPECÍFICAS DE OPERAÇÃO DE CRÉDITO DIRETO AO CONSUMIDOR (CDC) – VEÍCULOS")).toBe("financiamento");
+    expect(modalidadeDoTitulo("CONTRATO")).toBeNull();
+  });
 
   it("asks for the contract number and the rate", () => {
     expect(problemasNotificacaoContrato(dadosContrato)).toEqual([]);
@@ -62,8 +68,8 @@ describe("notificação com contrato", () => {
     expect(avisoTaxa(1.96, null)).toBeNull();
   });
 
-  it("fits on one page, the CDC footnote included, even with long names and addresses", async () => {
-    const pdf = await buildNotificacaoContratoPdf({ ...dadosContrato, nome: "Maria Odete de Paula Lessa Rocha Albuquerque", bancoEndereco: `${bb.endereco}, Edifício Sede III, 10º andar, sala 1001` });
+  it("fits on one page with the stamp and the CDC footnote, even with long names, addresses and contract numbers", async () => {
+    const pdf = await buildNotificacaoContratoPdf({ ...dadosContrato, nome: "Maria Odete de Paula Lessa Rocha Albuquerque", bancoEndereco: `${bb.endereco}, Edifício Sede III, 10º andar, sala 1001`, contrato: "0139677475718485232641484552566277378267" });
     expect(pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)).toHaveLength(1);
     expect(notificacaoContratoFileName(dadosContrato)).toBe("Notificação extrajudicial com contrato - JORGE EXEMPLO RODRIGUES - 147126013.pdf");
   });
