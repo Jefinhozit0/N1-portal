@@ -2765,11 +2765,11 @@ a.primary-button { text-decoration: none; }
 
 /* Termos */
 .terms-funnel { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px 6px; }
-.terms-weeks { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); align-items: end; gap: 8px; height: 190px; padding: 18px 20px 16px; }
-.terms-weeks > div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; min-width: 0; }
-.terms-weeks b { color: var(--text); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.terms-weeks span { width: 100%; max-width: 30px; min-height: 3px; border-radius: 6px 6px 2px 2px; background: var(--gold); }
-.terms-weeks small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.terms-days { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); align-items: end; gap: 4px; height: 190px; padding: 18px 20px 16px; }
+.terms-days > div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; min-width: 0; }
+.terms-days b { color: var(--text); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.terms-days span { width: 100%; max-width: 30px; min-height: 3px; border-radius: 6px 6px 2px 2px; background: var(--gold); }
+.terms-days small { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .terms-actions { margin-top: 16px; }
 .terms-sub { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; }
 .terms-resend { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; white-space: nowrap; }
