@@ -35,6 +35,8 @@ import { buildProcuracaoPdf, procuracaoFileName } from "./_core/procuracaoPdf";
 import { problemasProcuracao } from "@shared/procuracao";
 import { buildNotificacaoContratoPdf, buildNotificacaoPdf, notificacaoContratoFileName, notificacaoFileName } from "./_core/notificacaoPdf";
 import { MODALIDADES, problemasNotificacao, problemasNotificacaoContrato } from "@shared/notificacao";
+import { buildTermoPdf, termoFileName } from "./_core/termoPdf";
+import { problemasTermo } from "@shared/termo";
 import { problemasLaudo } from "@shared/laudo";
 
 const verificationRequestTimes = new Map<string, number>();
@@ -182,6 +184,17 @@ const notificacaoContratoInput = z.object({
   bancoEndereco: z.string().trim().max(400),
   cidade: z.string().trim().max(100),
   data: z.string().trim().max(10),
+});
+
+/** The termo de prestação de serviços form (TermoDados in shared/termo.ts). */
+const termoInput = z.object({
+  nome: z.string().trim().max(200),
+  genero,
+  cpf: z.string().trim().max(20),
+  email: z.string().trim().max(200),
+  endereco: z.string().trim().max(400),
+  banco: z.string().trim().max(200),
+  modalidade: z.enum(MODALIDADES),
 });
 
 /** Procedures for the N1 team: every route with data from all clients goes through here. */
@@ -940,6 +953,23 @@ export const appRouter = router({
           await uploadDocument(input.clientId, { nome, tipo: "application/pdf", descricao: `Notificação a ${input.dados.bancoNome} sobre os juros do contrato ${input.dados.contrato}`, bytes: pdf }, ctx.staffUser.email ?? "equipe");
         }
         await registrarAcao(ctx.staffUser.email, "Gerou notificação com contrato", `${input.dados.nome} → ${input.dados.bancoNome}, contrato ${input.dados.contrato}`, input.clientId);
+        return { nome, conteudo: pdf.toString("base64") };
+      }),
+
+    /** Termo de conhecimento de prestação de serviços, as a PDF; optionally saved among the client's documents. */
+    gerarTermo: staffProcedure
+      .input(z.object({ clientId: z.number().int().positive().optional(), anexar: z.boolean().default(false), dados: termoInput }))
+      .mutation(async ({ ctx, input }) => {
+        const problems = problemasTermo(input.dados);
+        if (problems.length) throw new TRPCError({ code: "BAD_REQUEST", message: problems.join(" ") });
+        const pdf = await buildTermoPdf(input.dados);
+        const nome = termoFileName(input.dados);
+        if (input.anexar && input.clientId !== undefined) {
+          const { data: cliente } = await supabase.from("clientes").select("id").eq("id", input.clientId).maybeSingle();
+          if (!cliente) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado." });
+          await uploadDocument(input.clientId, { nome, tipo: "application/pdf", descricao: `Termo de conhecimento: notificação enviada a ${input.dados.banco}`, bytes: pdf }, ctx.staffUser.email ?? "equipe");
+        }
+        await registrarAcao(ctx.staffUser.email, "Gerou termo de prestação de serviços", `${input.dados.nome} → ${input.dados.banco}`, input.clientId);
         return { nome, conteudo: pdf.toString("base64") };
       }),
 

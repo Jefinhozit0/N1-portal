@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Download, FileSignature, FileSpreadsheet, Mail, MailWarning, User } from "lucide-react";
+import { ClipboardCheck, Download, FileSignature, FileSpreadsheet, Mail, MailWarning, User } from "lucide-react";
 import { toast } from "sonner";
 import { formatFileSize } from "@shared/processo";
 import { LaudoForm } from "@/components/LaudoDialog";
 import { NotificacaoForm } from "@/components/NotificacaoForm";
 import { ProcuracaoForm } from "@/components/ProcuracaoForm";
+import { TermoForm } from "@/components/TermoForm";
 import { trpc } from "@/lib/trpc";
 
 const formatDateTime = (iso: string) => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -15,6 +16,7 @@ const MODELOS = [
   { id: "procuracao", label: "Procuração extrajudicial", icon: FileSignature, help: "Procuração para a N1 representar o cliente em reclamações administrativas (consumidor.gov.br)." },
   { id: "notificacao-contrato", label: "Notificação com contrato", icon: MailWarning, help: "Notificação ao banco contestando a taxa de juros do contrato e pedindo a devolução. Envie o contrato em PDF para preencher tudo." },
   { id: "notificacao", label: "Notificação manual", icon: Mail, help: "Notificação ao banco pedindo a cópia do contrato, quando o cliente não tem. Digite os dados ou envie o que houver em PDF." },
+  { id: "termo", label: "Termo de prestação de serviços", icon: ClipboardCheck, help: "Termo que comunica ao cliente a notificação extrajudicial enviada ao banco." },
 ] as const;
 type Modelo = (typeof MODELOS)[number]["id"];
 
@@ -58,6 +60,7 @@ export default function LaudosPage({ onOpenClient }: { onOpenClient: (row: Recor
       {modelo === "procuracao" && <ProcuracaoForm clients={clients} onDone={onDone} />}
       {modelo === "notificacao-contrato" && <NotificacaoForm key="contrato" tipo="contrato" clients={clients} onDone={onDone} />}
       {modelo === "notificacao" && <NotificacaoForm key="manual" tipo="manual" clients={clients} onDone={onDone} />}
+      {modelo === "termo" && <TermoForm clients={clients} onDone={onDone} />}
     </section>
 
     <section className="panel">
@@ -65,7 +68,7 @@ export default function LaudosPage({ onOpenClient }: { onOpenClient: (row: Recor
       <div className="laudos-list">
         {!laudosQuery.isLoading && documentos.length === 0 && <p className="detail-empty">Nenhum documento anexado ainda. Escolha um cliente no formulário e marque "Anexar" para guardar o documento no cadastro dele.</p>}
         {documentos.map((documento) => {
-          const Icon = documento.nome.startsWith("Procuração") ? FileSignature : documento.nome.startsWith("Notificação extrajudicial com contrato") ? MailWarning : documento.nome.startsWith("Notificação") ? Mail : FileSpreadsheet;
+          const Icon = documento.nome.startsWith("Procuração") ? FileSignature : documento.nome.startsWith("Notificação extrajudicial com contrato") ? MailWarning : documento.nome.startsWith("Notificação") ? Mail : documento.nome.startsWith("Termo") ? ClipboardCheck : FileSpreadsheet;
           return <div key={documento.id} className="laudos-item">
             <span className="laudos-icon"><Icon size={18} /></span>
             <div className="laudos-info">
