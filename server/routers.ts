@@ -110,7 +110,10 @@ const clientCheckedAt = new Map<number, number>();
 function isStaffUser(user: { email?: string; app_metadata?: Record<string, unknown> }) {
   if (user.app_metadata?.role === "client") return false;
   if (user.app_metadata?.role === "staff" || user.app_metadata?.role === "admin") return true;
-  return Boolean(user.email && ENV.staffEmails.includes(user.email.toLowerCase()));
+  return Boolean(user.email && (
+    ENV.staffEmails.includes(user.email.toLowerCase()) ||
+    ENV.adminEmails.includes(user.email.toLowerCase())
+  ));
 }
 
 /**
@@ -1354,4 +1357,3 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
-

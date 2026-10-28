@@ -3070,6 +3070,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .admin-status span { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
 .admin-status-connected span { background: var(--green); }
 .admin-status-waiting_qr span, .admin-status-connecting span { background: var(--amber); }
+.admin-status-conflict span { background: var(--red); }
 .admin-qr { display: flex; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #ffffff; }
 .admin-qr img { flex: none; image-rendering: pixelated; }
 .admin-qr p { margin: 0; color: #2b2a27; font-size: 13.5px; line-height: 1.5; }

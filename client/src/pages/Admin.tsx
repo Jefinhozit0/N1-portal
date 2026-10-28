@@ -15,6 +15,7 @@ const STATUS_TEXT: Record<string, string> = {
   connected: "Conectado",
   waiting_qr: "Aguardando o QR code",
   connecting: "Conectando...",
+  conflict: "Conflito com outra conexão",
   off: "Desligado",
 };
 
@@ -85,6 +86,9 @@ export default function AdminPage() {
           ) : (
             <>
               <p className={`admin-status admin-status-${whatsapp.status}`}><span /> {STATUS_TEXT[whatsapp.status] ?? whatsapp.status}{whatsapp.number ? ` · ${whatsapp.number}` : ""}</p>
+              {whatsapp.status === "conflict" && (
+                <p className="admin-muted">Outra instância do portal está usando a mesma sessão. Feche os servidores duplicados e reinicie o portal para reconectar.</p>
+              )}
               {whatsapp.qr && (
                 <div className="admin-qr">
                   <img src={whatsapp.qr} alt="QR code para conectar o WhatsApp da empresa" width={240} height={240} />
