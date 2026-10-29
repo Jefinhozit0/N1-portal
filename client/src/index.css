@@ -42,18 +42,18 @@
 
 /*
  * N1 Soluções — visual "claro e profissional".
- * Navy is the main color, gold only marks details (active item, eyebrows).
+ * Navy is the main color, gold only marks details (the active item, focus, a card under the pointer).
  * Every color lives in a token below; components never hard-code a hex.
- * Type: Inter for interface text, Source Serif 4 for page-level titles (editorial, jurídico).
+ * Type: IBM Plex Sans for interface text, Source Serif 4 for titles and big numbers (editorial, jurídico).
  */
 :root {
-  --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  --font: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Source Serif 4', 'Iowan Old Style', Georgia, serif;
 
   /* Radius scale: controls 8, cards 12, large surfaces (login, modal, hero) 16 */
   --radius-control: 8px;
-  --radius-card: 12px;
-  --radius-surface: 16px;
+  --radius-card: 10px;
+  --radius-surface: 12px;
 
   --bg: #f6f5f1;
   --surface: #ffffff;
@@ -122,8 +122,8 @@
   --heat-3: #b8994f;
   --heat-4: #7a6328;
 
-  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-xs: none;
+  --shadow-sm: none;
   --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.07), 0 1px 3px rgba(16, 24, 40, 0.05);
   --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.16);
   --focus-ring: 0 0 0 3px rgba(165, 139, 78, 0.24);
@@ -205,8 +205,8 @@
   --heat-3: #7d6a3a;
   --heat-4: #d0b56f;
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-xs: none;
+  --shadow-sm: none;
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
   --focus-ring: 0 0 0 3px rgba(201, 173, 102, 0.3);
@@ -315,15 +315,14 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
   color: var(--text);
 }
 
+/* A short line that says what a panel is about ("Venda #123 · Veículos"): plain small text, not a gold caps label */
 .eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--gold-text);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
 }
 .avatar {
   flex: 0 0 auto;
@@ -362,7 +361,7 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
   width: min(100%, 430px);
   padding: 40px 36px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-surface);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -793,9 +792,22 @@ html.portal-revealing .client-portal-center > .login-panel-inner { animation: po
 }
 .nav-item-active {
   color: #ffffff;
+  font-weight: 600;
+}
+.nav-item-active:hover { background: transparent; }
+/* The active item's highlight: one marker that glides from item to item (Sidebar in Home.tsx places it) */
+.main-nav { position: relative; }
+.main-nav > .nav-item { z-index: 1; }
+.nav-marker {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
   box-shadow: inset 3px 0 0 var(--gold);
-  font-weight: 600;
+  pointer-events: none;
+  transition: transform 420ms cubic-bezier(.65, 0, .25, 1), height 420ms cubic-bezier(.65, 0, .25, 1);
 }
 .nav-item-active svg { color: var(--brand-highlight); }
 .nav-count {
@@ -805,7 +817,7 @@ html.portal-revealing .client-portal-center > .login-panel-inner { animation: po
   display: grid;
   place-items: center;
   margin-left: auto;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--brand-surface);
   background: var(--brand-highlight);
   font-size: 11.5px;
@@ -819,7 +831,7 @@ html.portal-revealing .client-portal-center > .login-panel-inner { animation: po
 }
 .profile-card {
   padding: 10px 10px 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
 }
 .profile-card-header {
@@ -943,7 +955,7 @@ html.portal-revealing .client-portal-center > .login-panel-inner { animation: po
 
 /* Page Content & Alert Banner */
 .page-content { max-width: 1400px; margin: 0 auto; padding: 28px 4vw 0; }
-.power-banner { display: flex; align-items: center; gap: 12px; margin: 16px 28px 0; padding: 12px 16px; border: 1px solid var(--red-line); border-radius: 12px; color: var(--text); background: var(--red-soft); }
+.power-banner { display: flex; align-items: center; gap: 12px; margin: 16px 28px 0; padding: 12px 16px; border: 1px solid var(--red-line); border-radius: var(--radius-card); color: var(--text); background: var(--red-soft); }
 .power-banner > svg { flex: none; color: var(--red); }
 .power-banner-soft { border-color: var(--amber-line); background: var(--amber-soft); }
 .power-banner-soft > svg { color: var(--amber); }
@@ -962,7 +974,7 @@ html.portal-revealing .client-portal-center > .login-panel-inner { animation: po
   align-items: center;
   gap: 14px;
   border: 1px solid var(--gold-line);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   color: var(--text);
   background: var(--gold-soft);
 }
@@ -999,7 +1011,7 @@ html.portal-revealing .client-portal-center > .login-panel-inner { animation: po
   align-items: end;
   justify-content: space-between;
 }
-.eyebrow-muted { color: var(--gold-text); }
+.eyebrow-muted { color: var(--muted); }
 .welcome-row h2 {
   margin: 8px 0 6px;
   color: var(--text);
@@ -1025,7 +1037,7 @@ html.portal-revealing .client-portal-center > .login-panel-inner { animation: po
 /* Panels & Dashboard Grid */
 .panel {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
 }
@@ -1409,7 +1421,7 @@ tbody tr:hover { background: var(--surface-muted); }
 /* Shared card look for the client detail sections */
 .client-header-section, .progress-section, .action-panel, .documents-section, .timeline-section {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
 }
@@ -1745,7 +1757,7 @@ tbody tr:hover { background: var(--surface-muted); }
   gap: 16px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
   transition: border-color .15s, background .15s;
 }
@@ -1862,7 +1874,7 @@ tbody tr:hover { background: var(--surface-muted); }
   min-height: 114px;
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
 }
@@ -1966,7 +1978,7 @@ tbody tr:hover { background: var(--surface-muted); }
   max-width: 65%;
   margin-bottom: 14px;
   padding: 11px 15px;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
 }
 .chat-message p { margin: 0; color: var(--text); font-size: 14.5px; line-height: 1.5; }
 .chat-message small {
@@ -2034,7 +2046,7 @@ tbody tr:hover { background: var(--surface-muted); }
   margin: 16px 0 0;
   padding: 12px 14px 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-muted);
 }
 .client-service-selection legend {
@@ -2101,7 +2113,7 @@ tbody tr:hover { background: var(--surface-muted); }
   gap: 0 9px;
   padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.06);
   color: var(--brand-highlight);
 }
@@ -2114,7 +2126,7 @@ tbody tr:hover { background: var(--surface-muted); }
   gap: 4px;
   padding: 4px;
   background: var(--surface-sunken);
-  border-radius: 10px;
+  border-radius: 8px;
   margin: 18px 0;
 }
 .hub-tabs button {
@@ -2144,7 +2156,7 @@ tbody tr:hover { background: var(--surface-muted); }
   margin-top: 16px;
   padding: 24px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
 }
@@ -2155,7 +2167,7 @@ tbody tr:hover { background: var(--surface-muted); }
 .sector-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
 .sector-overview > div {
   padding: 18px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-muted);
   border: 1px solid var(--border-subtle);
 }
@@ -2174,7 +2186,7 @@ tbody tr:hover { background: var(--surface-muted); }
   padding: 20px;
   border: 1px solid var(--border);
   border-left-width: 4px;
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
   min-height: 136px;
@@ -2190,7 +2202,7 @@ tbody tr:hover { background: var(--surface-muted); }
 .hub-filter-panel, .hub-panel, .control-panel {
   padding: 22px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
   margin: 16px 0;
@@ -2289,7 +2301,7 @@ tbody tr:hover { background: var(--surface-muted); }
   text-align: left;
   padding: 18px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
@@ -2412,7 +2424,7 @@ tbody tr:hover { background: var(--surface-muted); }
 .hub-modal small { color: var(--muted); font-size: 13px; }
 .add-consultant { display: flex; gap: 8px; margin-bottom: 14px; }
 .add-consultant input { flex: 1; }
-.consultant-list { max-height: 360px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; }
+.consultant-list { max-height: 360px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
 .consultant-list > div { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); font-size: 14px; }
 .consultant-list > div:last-child { border: 0; }
 .new-sale-modal { width: min(780px, 100%); }
@@ -2449,11 +2461,11 @@ tbody tr:hover { background: var(--surface-muted); }
 .control-title h2 { font: 600 30px/1.12 var(--font-display); margin: 10px 0 4px; color: var(--text); letter-spacing: -.3px; }
 .control-title p { color: var(--muted); margin: 0; font-size: 14px; }
 .distribution-row { display: grid; grid-template-columns: 100px 1fr 240px; align-items: center; gap: 14px; margin: 18px 0; color: var(--text-soft); font-size: 14px; }
-.distribution-row > div { height: 10px; border-radius: 9px; background: var(--surface-sunken); }
-.distribution-row i { display: block; height: 100%; border-radius: 9px; background: var(--navy); }
+.distribution-row > div { height: 10px; border-radius: 8px; background: var(--surface-sunken); }
+.distribution-row i { display: block; height: 100%; border-radius: 8px; background: var(--navy); }
 .distribution-row strong { color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
 .control-sector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.control-sector { padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-xs); }
+.control-sector { padding: 22px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-xs); }
 .control-sector h3 { margin: 0; color: var(--text); font-size: 17px; font-weight: 600; }
 .control-sector p { margin: 4px 0 16px; color: var(--muted); font-size: 14px; }
 .control-sector > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -2461,7 +2473,7 @@ tbody tr:hover { background: var(--surface-muted); }
 .control-sector b { display: block; color: var(--text); margin-top: 5px; font-size: 16px; font-variant-numeric: tabular-nums; }
 .control-sector hr { border: 0; border-top: 1px solid var(--border-subtle); margin: 18px 0; }
 .smart-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 14px; }
-.smart-summary span { padding: 16px; border-radius: 10px; background: var(--surface-muted); border: 1px solid var(--border-subtle); color: var(--muted); font-size: 13.5px; }
+.smart-summary span { padding: 16px; border-radius: 8px; background: var(--surface-muted); border: 1px solid var(--border-subtle); color: var(--muted); font-size: 13.5px; }
 .smart-summary b { display: block; color: var(--text); font-size: 17px; margin-top: 8px; font-family: var(--font); font-variant-numeric: tabular-nums; }
 
 /* Toast */
@@ -2474,7 +2486,7 @@ tbody tr:hover { background: var(--surface-muted); }
   gap: 14px;
   padding: 14px 18px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--navy);
   color: var(--on-primary);
   font-size: 14px;
@@ -2609,7 +2621,7 @@ tbody tr:hover { background: var(--surface-muted); }
   gap: 16px;
   padding: 20px;
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-muted);
 }
 .client-portal-status small, .client-portal-services small { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
@@ -2629,7 +2641,7 @@ tbody tr:hover { background: var(--surface-muted); }
 .client-portal-chat-head p { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 13.5px; }
 .client-portal-chat-body { height: 420px; padding: 22px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background: var(--surface-muted); }
 .client-portal-empty { margin: auto; max-width: 320px; color: var(--muted); font-size: 14.5px; line-height: 1.5; text-align: center; }
-.client-bubble { max-width: 75%; padding: 11px 15px; border-radius: 14px; }
+.client-bubble { max-width: 75%; padding: 11px 15px; border-radius: var(--radius-card); }
 .client-bubble p { margin: 0; color: var(--text); font-size: 15px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .client-bubble small { display: flex; align-items: center; gap: 4px; margin-top: 6px; color: var(--muted); font-size: 12px; }
 .client-bubble-author { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; color: var(--link); font-size: 12.5px; font-weight: 700; }
@@ -2676,7 +2688,7 @@ tbody tr:hover { background: var(--surface-muted); }
     gap: 4px;
     padding: 4px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     background: var(--surface);
     box-shadow: var(--shadow-xs);
   }
@@ -2688,7 +2700,7 @@ tbody tr:hover { background: var(--surface-muted); }
     gap: 7px;
     height: 42px;
     border: 0;
-    border-radius: 9px;
+    border-radius: 8px;
     color: var(--muted);
     background: transparent;
     font: inherit;
@@ -2801,7 +2813,7 @@ a.primary-button { text-decoration: none; }
   padding: 4px 20px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-muted);
 }
 .client-terms-text h2 { margin: 16px 0 6px; color: var(--text); font-size: 15px; font-weight: 600; }
@@ -2812,7 +2824,7 @@ a.primary-button { text-decoration: none; }
 .client-terms-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
 /* Dashboard states */
-.dashboard-error { margin: 0 0 14px; padding: 12px 16px; border-radius: 10px; color: var(--red); background: var(--red-soft); font-size: 14px; }
+.dashboard-error { margin: 0 0 14px; padding: 12px 16px; border-radius: 8px; color: var(--red); background: var(--red-soft); font-size: 14px; }
 .dashboard-empty { margin: 0; padding: 22px 20px; color: var(--muted); font-size: 14px; text-align: center; }
 
 /* Dashboard layout: highlights, three panels, activity + deadlines */
@@ -2827,18 +2839,30 @@ a.primary-button { text-decoration: none; }
   padding: 20px 20px 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
+  overflow: hidden;
   color: var(--text);
   background: var(--surface);
-  box-shadow: var(--shadow-xs);
   text-align: left;
-  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
-.kpi-card:hover { border-color: var(--navy-line); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-.kpi-card-alert { border-color: var(--amber-line); background: linear-gradient(180deg, var(--amber-soft), var(--surface) 70%); }
-.kpi-card-alert .kpi-icon { color: var(--amber); background: var(--amber-soft); }
-.kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 14px; font-weight: 500; }
-.kpi-icon { width: 36px; height: 36px; display: grid; place-items: center; flex: none; border-radius: 10px; color: var(--gold-text); background: var(--gold-soft); }
-.kpi-card > strong { margin-top: 2px; color: var(--text); font: 700 34px/1.1 var(--font); letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+/* Pointing at a card draws a gold line along its foot, as the login's gold accents */
+.kpi-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 420ms cubic-bezier(.65, 0, .25, 1);
+}
+.kpi-card:hover::after, .kpi-card:focus-visible::after { transform: scaleX(1); }
+/* Something waiting: an amber edge on the left, no colored fill */
+.kpi-card-alert { box-shadow: inset 3px 0 0 var(--amber); }
+.kpi-card-alert > strong { color: var(--amber); }
+.kpi-head { color: var(--muted); font-size: 14px; font-weight: 500; }
+.kpi-card > strong { margin-top: 4px; color: var(--text); font: 600 36px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
 .kpi-card > small { min-height: 18px; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .dashboard-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
@@ -2885,7 +2909,7 @@ a.primary-button { text-decoration: none; }
 .portal-stats small { display: block; margin-top: 6px; color: var(--muted); font-size: 12.5px; }
 .progress-track { height: 8px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: var(--surface-sunken); }
 .progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
-.portal-stat-link { display: block; width: 100%; margin: -8px -10px; padding: 8px 10px; box-sizing: content-box; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 150ms ease; }
+.portal-stat-link { display: block; width: 100%; margin: -8px -10px; padding: 8px 10px; box-sizing: content-box; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 150ms ease; }
 .portal-stat-link:hover { background: var(--surface-muted); }
 .portal-stat-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .portal-stat-link .portal-stat-head span { display: inline-flex; align-items: center; gap: 4px; }
@@ -2979,7 +3003,7 @@ tbody tr.empty-row:hover { background: transparent; }
   margin: 16px 20px 20px;
   padding: 22px 16px;
   border: 1px dashed var(--border-strong);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-muted);
 }
 
@@ -3062,12 +3086,12 @@ tbody tr.empty-row:hover { background: transparent; }
 .install-app-card { position: relative; display: flex; gap: 14px; padding: 20px 24px; border-color: var(--gold-line); background: var(--gold-soft); }
 .install-app-card h2 { margin: 0 0 6px; padding-right: 26px; color: var(--text); font-size: 16px; font-weight: 600; }
 .install-app-card p { margin: 0; color: var(--text-soft); font-size: 14px; line-height: 1.55; }
-.install-app-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: var(--gold); background: var(--surface); }
+.install-app-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; color: var(--gold); background: var(--surface); }
 .install-app-close { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; }
 .install-app-button { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; }
 .install-inline-icon { vertical-align: -2px; }
 .app-setup-steps { display: grid; gap: 12px; margin: 14px 0 0; padding: 0; list-style: none; }
-.app-setup-steps li { padding: 12px 14px; border: 1px solid var(--gold-line); border-radius: 10px; background: var(--surface); }
+.app-setup-steps li { padding: 12px 14px; border: 1px solid var(--gold-line); border-radius: 8px; background: var(--surface); }
 .app-setup-steps li > strong { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14.5px; font-weight: 600; }
 .app-setup-steps li > p { margin-top: 6px; }
 .app-setup-steps .install-app-button { margin-top: 10px; }
@@ -3077,7 +3101,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .client-portal-block h2 > svg { margin-right: 6px; color: var(--link); vertical-align: -2px; }
 .client-portal-summary { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
 .client-doc-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.client-doc-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--surface-muted); }
+.client-doc-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-muted); }
 .client-doc-list li > svg { flex: none; color: var(--link); }
 .client-doc-list li > div { flex: 1; min-width: 0; }
 .client-doc-list strong { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -3089,7 +3113,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .client-history strong { display: block; color: var(--text); font-size: 14px; font-weight: 600; }
 .client-history p { margin: 2px 0 0; color: var(--text-soft); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
 .client-history small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
-.detail-empty { margin: 0; padding: 18px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); font-size: 14px; line-height: 1.5; text-align: center; }
+.detail-empty { margin: 0; padding: 18px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 14px; line-height: 1.5; text-align: center; }
 
 /* Atendimento: ações no topo da conversa */
 .chat-head-actions { display: flex; align-items: center; gap: 6px; }
@@ -3116,7 +3140,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .hub-bar-net { background: var(--hub-net); }
 .hub-evolution-month small { overflow: hidden; color: var(--muted); font-size: 11.5px; text-align: center; white-space: nowrap; }
 .hub-evolution-month.is-selected small { color: var(--text); font-weight: 600; }
-.hub-tooltip { position: absolute; bottom: calc(100% - 8px); left: 50%; z-index: 5; display: flex; flex-direction: column; gap: 4px; min-width: 190px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-md); color: var(--text-soft); font-size: 12.5px; transform: translateX(-50%); pointer-events: none; }
+.hub-tooltip { position: absolute; bottom: calc(100% - 8px); left: 50%; z-index: 5; display: flex; flex-direction: column; gap: 4px; min-width: 190px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-md); color: var(--text-soft); font-size: 12.5px; transform: translateX(-50%); pointer-events: none; }
 .hub-tooltip-left { left: auto; right: 0; transform: none; }
 .hub-tooltip strong { color: var(--text); font-size: 13px; }
 .hub-tooltip span { display: flex; align-items: center; gap: 6px; }
@@ -3175,7 +3199,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .admin-status-connected span { background: var(--green); }
 .admin-status-waiting_qr span, .admin-status-connecting span { background: var(--amber); }
 .admin-status-conflict span { background: var(--red); }
-.admin-qr { display: flex; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #ffffff; }
+.admin-qr { display: flex; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-card); background: #ffffff; }
 .admin-qr img { flex: none; image-rendering: pixelated; }
 .admin-qr p { margin: 0; color: #2b2a27; font-size: 13.5px; line-height: 1.5; }
 .admin-address { margin: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
@@ -3196,7 +3220,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .admin-usage-top li b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .admin-log { padding: 22px; }
 .admin-log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-.admin-search { display: flex; align-items: center; gap: 8px; min-width: min(320px, 100%); padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); }
+.admin-search { display: flex; align-items: center; gap: 8px; min-width: min(320px, 100%); padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); }
 .admin-search input { flex: 1; height: 38px; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 14px; }
 @media (max-width: 900px) { .admin-grid { grid-template-columns: 1fr; } .admin-qr { flex-direction: column; align-items: flex-start; } }
 
@@ -3206,10 +3230,11 @@ tbody tr.empty-row:hover { background: transparent; }
 
 /* ==========================================================================
  * Motion
- * Only what tells the user something happened: a menu or modal opening, a chat message arriving,
- * a bar changing value, the portal loading. Pages, cards and lists appear at once, with no
- * entrance effects. Short (160–360ms), ease-out, only transform/opacity, plus bars that change
- * their own width/height inside a fixed track.
+ * Fluid, in the login's language, and always about something that happened: a page opening,
+ * the menu's marker gliding to it, a gold line under the card being pointed at, a menu or modal
+ * opening, a chat message arriving, a bar changing value. No decorative entrances (cards popping
+ * in one by one, numbers counting up). Only transform/opacity/filter, plus bars that change their
+ * own width/height inside a fixed track.
  * "Reduzir movimento" switches all of it off: see the prefers-reduced-motion block near the top.
  * ========================================================================== */
 :root {
@@ -3226,7 +3251,16 @@ tbody tr.empty-row:hover { background: transparent; }
 .nav-item svg { transition: color var(--motion-fast) ease; }
 
 /* Clickable cards: only the border answers the pointer */
-.kpi-card, .ranking-card { transition: border-color .15s ease; }
+.kpi-card, .ranking-card { transition: border-color .2s ease; }
+
+/*
+ * Opening a page: it comes up from a soft blur while the menu's marker glides to it, the way the
+ * login's pieces arrive. Pages mount fresh on each visit, so this plays on every change of page.
+ */
+@keyframes n1-page-in { from { opacity: 0; transform: translateY(10px); filter: blur(3px); } }
+.main-area > .page-content,
+.main-area > .client-detail-page,
+.main-area > .hub-dashboard { animation: n1-page-in 460ms cubic-bezier(.2, .7, .2, 1) backwards; }
 
 /* Bars and progress fills ease to a new value when the data changes */
 .hub-evolution-bars span { transition: height .3s var(--ease-out); }
@@ -3267,7 +3301,7 @@ tbody tr.empty-row:hover { background: transparent; }
   flex-wrap: wrap;
   padding: 16px 18px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
   margin: 0 0 16px;
@@ -3323,7 +3357,7 @@ tbody tr.empty-row:hover { background: transparent; }
   gap: 1px;
   margin: 0 0 18px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--border);
   overflow: hidden;
   box-shadow: var(--shadow-xs);
@@ -3354,13 +3388,13 @@ tbody tr.empty-row:hover { background: transparent; }
 /* ── Laudo (parecer técnico) ── */
 .section-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .laudo-dialog { max-width: 720px; }
-.laudo-source { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-muted); }
+.laudo-source { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 8px; background: var(--surface-muted); }
 .laudo-source small { color: var(--text-soft); font-size: 12.5px; }
 .laudo-dialog form > .new-sale-grid { margin: 18px 0 8px; }
-.laudo-encargos { margin: 10px 0 0; padding: 12px 14px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.laudo-encargos { margin: 10px 0 0; padding: 12px 14px 14px; border: 1px solid var(--border); border-radius: 8px; }
 .laudo-encargos legend { padding: 0 6px; color: var(--text); font-size: 13.5px; font-weight: 600; }
 .laudo-encargos legend small { color: var(--muted); font-weight: 500; }
-.laudo-preview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 8px; padding: 14px; border-radius: 10px; background: var(--gold-soft); }
+.laudo-preview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 8px; padding: 14px; border-radius: 8px; background: var(--gold-soft); }
 .laudo-preview div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .laudo-preview span { color: var(--text-soft); font-size: 11.5px; }
 .laudo-preview strong { color: var(--text); font-size: 13.5px; font-variant-numeric: tabular-nums; }
@@ -3382,7 +3416,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .laudos-list { display: grid; padding: 0 20px 16px; }
 .laudos-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
 .laudos-item:first-child { border-top: 0; }
-.laudos-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 9px; color: var(--gold-text); background: var(--gold-soft); }
+.laudos-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 8px; color: var(--gold-text); background: var(--gold-soft); }
 .laudos-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .laudos-info strong { overflow: hidden; color: var(--text); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
 .laudos-info small { color: var(--muted); font-size: 12px; }
@@ -3403,3 +3437,163 @@ tbody tr.empty-row:hover { background: transparent; }
 .laudo-ok svg, .laudo-encargos .laudo-warning svg { flex: none; margin-top: 2px; }
 .laudo-encargos .laudo-warning { margin-top: 10px; }
 .laudos-heading .filter-buttons { flex-wrap: wrap; }
+
+/* ==========================================================================
+ * Liquid glass
+ * The portal's surfaces are glass over a living backdrop: soft gold and warm light fields drift
+ * slowly behind everything (the login's light, spread out), and cards, panels, the top bar,
+ * drawers and modals blur and tint what passes under them, with a thin light along their top edge
+ * like real glass. The menu floats as a dark glass slab; the top bar stays put while the page
+ * scrolls under it. A soft highlight follows the pointer over glass (startGlassLight in
+ * lib/motion.ts sets --gx/--gy). Readability first: text sits on a strong enough tint, inputs and
+ * tables stay solid.
+ * Without backdrop-filter, or with "reduzir transparência", surfaces are solid again.
+ * ========================================================================== */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.42);
+  --glass-bg-strong: rgba(255, 255, 255, 0.76);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-edge: rgba(23, 22, 20, 0.06);
+  /* The glass's thickness: light on the top edge, a faint shade on the bottom one */
+  --glass-highlight: rgba(255, 255, 255, 0.95);
+  --glass-underside: rgba(120, 96, 50, 0.10);
+  /* A diagonal sheen across the upper corner, as light catching a pane */
+  --glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.12) 38%, rgba(255, 255, 255, 0) 60%);
+  --glass-shadow: 0 14px 34px rgba(80, 62, 30, 0.10), 0 2px 6px rgba(80, 62, 30, 0.05);
+  --glass-blur: blur(24px) saturate(180%);
+  --glass-glow-color: 255, 255, 255;
+  --glass-glow-strength: 0.5;
+  --backdrop-a: rgba(208, 181, 111, 0.55);
+  --backdrop-b: rgba(226, 178, 120, 0.42);
+  --backdrop-c: rgba(165, 139, 78, 0.34);
+  --backdrop-d: rgba(122, 99, 40, 0.22);
+}
+:root.dark {
+  --glass-bg: rgba(32, 30, 27, 0.48);
+  --glass-bg-strong: rgba(30, 29, 26, 0.84);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-edge: rgba(0, 0, 0, 0.3);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-underside: rgba(0, 0, 0, 0.35);
+  --glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0) 60%);
+  --glass-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+  --glass-glow-color: 255, 236, 196;
+  --glass-glow-strength: 0.16;
+  --backdrop-a: rgba(208, 181, 111, 0.24);
+  --backdrop-b: rgba(160, 110, 55, 0.24);
+  --backdrop-c: rgba(208, 181, 111, 0.12);
+  --backdrop-d: rgba(90, 70, 30, 0.3);
+}
+
+/* The backdrop: light fields behind the portal, drifting very slowly */
+.app-shell, .client-portal, .client-portal-center { position: relative; isolation: isolate; }
+.app-shell::before, .client-portal::before, .client-portal-center::before {
+  content: "";
+  position: fixed;
+  inset: -15%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(30% 28% at 22% 20%, var(--backdrop-a), transparent 70%),
+    radial-gradient(28% 32% at 84% 16%, var(--backdrop-b), transparent 70%),
+    radial-gradient(36% 34% at 66% 60%, var(--backdrop-d), transparent 70%),
+    radial-gradient(38% 34% at 74% 92%, var(--backdrop-c), transparent 70%),
+    radial-gradient(26% 26% at 30% 84%, var(--backdrop-b), transparent 70%);
+  animation: glass-drift 38s ease-in-out infinite alternate;
+}
+@keyframes glass-drift {
+  50% { transform: translate(3%, -2%) scale(1.04); }
+  100% { transform: translate(-2%, 3%) scale(1.02); }
+}
+
+/* Glass surfaces */
+@property --glass-glow { syntax: "<number>"; inherits: false; initial-value: 0; }
+.panel, .kpi-card, .action-panel, .ranking-card, .hub-metric, .hub-panel, .hub-filter-panel, .control-panel,
+.client-portal-card, .topbar, .detail-drawer, .hub-modal, .client-portal-header {
+  background-color: var(--glass-bg);
+  background-image:
+    radial-gradient(260px circle at var(--gx, 50%) var(--gy, 0%), rgba(var(--glass-glow-color), calc(var(--glass-glow) * var(--glass-glow-strength))), transparent 70%),
+    var(--glass-sheen);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 var(--glass-underside), inset 0 0 0 1px var(--glass-edge);
+  transition: --glass-glow .45s ease, border-color .2s ease;
+}
+/* The highlight comes up under the pointer and fades when it leaves */
+:is(.panel, .kpi-card, .action-panel, .ranking-card, .hub-metric, .hub-panel, .hub-filter-panel, .control-panel, .client-portal-card):hover { --glass-glow: 1; }
+/* Cards that already mark something keep their mark over the glass */
+.hub-metric-gold { border-left-color: var(--gold); }
+.hub-metric-green { border-left-color: var(--chart-3); }
+.hub-metric-blue { border-left-color: var(--link); }
+.hub-metric-red { border-left-color: var(--red); }
+.kpi-card-alert { box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 var(--glass-underside), inset 3px 0 0 var(--amber); }
+
+/* Drawers and modals: a stronger tint, the page behind blurred deeper */
+.detail-drawer, .hub-modal { background-color: var(--glass-bg-strong); border-left-color: var(--glass-border); }
+.hub-modal-backdrop { -webkit-backdrop-filter: blur(10px) saturate(120%); backdrop-filter: blur(10px) saturate(120%); background: rgba(19, 19, 18, 0.32); }
+
+/*
+ * The top bar floats like the menu: it starts on the same line, ends at the height of the menu's
+ * head (12px + 77px), and stays put while the page scrolls under it, blurred.
+ */
+.main-area > .topbar {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  min-height: 77px;
+  margin: 12px 12px 0 16px;
+  padding: 0 20px 0 26px;
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+.topbar-title { min-width: 0; }
+.topbar .breadcrumb { margin: 0 0 2px; font-size: 12.5px; }
+@media (max-width: 1050px) {
+  .main-area > .topbar { top: 8px; min-height: 64px; margin: 8px 8px 0; padding: 0 12px; border-radius: 16px; }
+}
+
+/*
+ * The menu's logo (MenuMark in Home.tsx): the 512px icon cut to its letters, x 15–80% and y 22–82%,
+ * so N|1 and SOLUÇÕES fill the box. "lighten" drops the icon's black on the dark glass.
+ */
+.sidebar-head { padding: 0 14px 0 20px; }
+.menu-mark { position: relative; display: block; flex: none; width: 54px; height: 50px; overflow: hidden; mix-blend-mode: lighten; }
+.menu-mark img { position: absolute; width: 83px; height: 83px; left: -12.5px; top: -18.3px; max-width: none; }
+.sidebar-collapsed .menu-mark { width: 38px; height: 35px; }
+.sidebar-collapsed .menu-mark img { width: 58px; height: 58px; left: -8.7px; top: -12.8px; }
+
+/* The menu floats: a dark glass slab with rounded corners, a step away from the edges */
+.app-shell > .sidebar {
+  position: sticky;
+  top: 12px;
+  align-self: flex-start;
+  height: calc(100vh - 24px);
+  min-height: 0;
+  margin: 12px 0 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  overflow: hidden auto;
+  /* Solid brand black under a sheen: the logo blends into it exactly (".menu-mark") */
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 30%), var(--brand-surface);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: 0 18px 40px rgba(19, 19, 18, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.mobile-sidebar { background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 30%), var(--brand-surface); }
+/* The client's header: the same dark glass, held at the top */
+.client-portal > .client-portal-header { position: sticky; top: 0; z-index: 20; background-color: rgba(19, 19, 18, 0.82); border: 0; box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08); }
+
+/* Secondary buttons become small glass pills of the same family */
+.secondary-button { background: var(--glass-bg); -webkit-backdrop-filter: blur(12px) saturate(160%); backdrop-filter: blur(12px) saturate(160%); }
+
+/* No glass where it cannot be drawn, or where the visitor asked for less transparency */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass-bg: var(--surface); --glass-bg-strong: var(--surface); }
+  .app-shell > .sidebar { background: var(--sidebar-bg); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root, :root.dark { --glass-bg: var(--surface); --glass-bg-strong: var(--surface); }
+  .app-shell > .sidebar, .mobile-sidebar, .client-portal > .client-portal-header { background: var(--sidebar-bg); }
+  .app-shell::before, .client-portal::before, .client-portal-center::before { display: none; }
+}

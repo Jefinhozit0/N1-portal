@@ -56,3 +56,31 @@ export function playEnter(elements: Iterable<Element>, { distance = 6, duration 
     index += 1;
   }
 }
+
+/** Glass surfaces whose highlight follows the pointer ("Liquid glass" in index.css). */
+const GLASS_SELECTOR = ".panel, .kpi-card, .action-panel, .ranking-card, .hub-metric, .hub-panel, .hub-filter-panel, .control-panel, .client-portal-card";
+
+/**
+ * Moves the soft highlight of the glass surface under the mouse to where the mouse is (--gx/--gy),
+ * once per frame. Touch and pen leave it alone, and so does "reduzir movimento". Call once at start-up.
+ */
+export function startGlassLight() {
+  if (prefersReducedMotion()) return;
+  let pending: { target: HTMLElement; x: number; y: number } | null = null;
+  document.addEventListener("pointermove", (event) => {
+    if (event.pointerType !== "mouse" || !(event.target instanceof Element)) return;
+    const target = event.target.closest<HTMLElement>(GLASS_SELECTOR);
+    if (!target) return;
+    const schedule = pending === null;
+    pending = { target, x: event.clientX, y: event.clientY };
+    if (!schedule) return;
+    requestAnimationFrame(() => {
+      if (!pending) return;
+      const { target: surface, x, y } = pending;
+      pending = null;
+      const box = surface.getBoundingClientRect();
+      surface.style.setProperty("--gx", `${x - box.left}px`);
+      surface.style.setProperty("--gy", `${y - box.top}px`);
+    });
+  }, { passive: true });
+}

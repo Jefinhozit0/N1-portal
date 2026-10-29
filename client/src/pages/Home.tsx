@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { FormEvent, Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { hubMoney } from "./salesHubData";
 
 // The Sales HUB is only downloaded when someone opens it, so the portal opens faster.
@@ -78,8 +78,9 @@ const clientServices = ["Financiamento Imobiliário", "Financiamento Veicular", 
 
 export { hubMoney } from "./salesHubData";
 
-function Logo({ compact = false, size = "md" }: { compact?: boolean; size?: "sm" | "md" | "lg" | "xl" }) {
-  return <N1Logo compact={compact} size={size} />;
+/** The menu's logo: the large icon cut down to its letters (".menu-mark" in index.css), sharp and without a frame. */
+function MenuMark() {
+  return <span className="menu-mark" role="img" aria-label="N1 Soluções"><img src="/icons/icon-512.png" alt="" /></span>;
 }
 
 /** A row of the clientes table as the client screens use it. */
@@ -344,9 +345,23 @@ function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName, i
     { id: "saleshub", label: "Sales HUB", icon: FileText },
     ...(isAdmin ? [{ id: "admin" as View, label: "Administração", icon: ShieldCheck }] : []),
   ];
+  // A client's page belongs to Clientes in the menu.
+  const activeId = view === "client-detail" ? "clientes" : view;
+  // The highlight is one marker that glides to the active item (".nav-marker" in index.css).
+  const navRef = useRef<HTMLElement>(null);
+  const [marker, setMarker] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const active = navRef.current?.querySelector<HTMLElement>(".nav-item-active");
+      setMarker(active ? { top: active.offsetTop, height: active.offsetHeight } : null);
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [activeId, collapsed, isAdmin]);
   return <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
-    <div className="sidebar-head"><Logo compact={collapsed} size={collapsed ? "sm" : "md"} /><button className="icon-button collapse-button" onClick={() => setCollapsed(!collapsed)} aria-label="Recolher menu">{collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button></div>
-    <nav className="main-nav">{items.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${view === id ? "nav-item-active" : ""}`} onClick={() => setView(id)}><Icon size={18} /><span>{label}</span>{id === "atendimento" && awaitingCount > 0 && <b className="nav-count">{awaitingCount}</b>}</button>)}</nav>
+    <div className="sidebar-head"><MenuMark /><button className="icon-button collapse-button" onClick={() => setCollapsed(!collapsed)} aria-label="Recolher menu">{collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button></div>
+    <nav className="main-nav" ref={navRef}>{marker && <span className="nav-marker" aria-hidden="true" style={{ transform: `translateY(${marker.top}px)`, height: marker.height }} />}{items.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${activeId === id ? "nav-item-active" : ""}`} onClick={() => setView(id)}><Icon size={18} /><span>{label}</span>{id === "atendimento" && awaitingCount > 0 && <b className="nav-count">{awaitingCount}</b>}</button>)}</nav>
     <div className="sidebar-bottom">
       {!collapsed ? (
         <div className="profile-card">
@@ -401,9 +416,10 @@ function WhatsAppIndicator({ onClick }: { onClick: () => void }) {
 
 function Topbar({ view, onMenu, onSearch, onNotifications, onWhatsApp, userName }: { view: View; onMenu: () => void; onSearch: () => void; onNotifications: () => void; onWhatsApp: () => void; userName: string }) {
   const hasAwaiting = useAwaitingConversations().length > 0;
-  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", "Visão geral do seu portal"], clientes: ["Clientes", "Acompanhe pessoas e processos"], "client-detail": ["Detalhes do Cliente", "Informações completas do cliente"], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", "Converse com seus clientes"], termos: ["Termos", "Quem já aceitou os termos do portal e quem está pendente"], laudos: ["Gerar documentos", "Laudos, procurações, notificações e termos prontos em PDF"], saleshub: ["Sales HUB", "Centro de inteligência comercial e jurídico"], admin: ["Administração", "WhatsApp, backup e registro de ações"] };
+  // A subtitle only where it says what the page is for.
+  const titles: Record<View, [string, string]> = { dashboard: ["Dashboard", ""], clientes: ["Clientes", ""], "client-detail": ["Ficha do cliente", ""], chargebacks: ["Chargebacks", "Solicitações de devolução em andamento"], atendimento: ["Atendimento", ""], termos: ["Termos", "Quem já aceitou os termos do portal e quem está pendente"], laudos: ["Gerar documentos", "Laudos, procurações, notificações e termos prontos em PDF"], saleshub: ["Sales HUB", "Vendas, metas e controle comercial"], admin: ["Administração", "WhatsApp, backup e registro de ações"] };
   const initials = userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-  return <header className="topbar"><button className="mobile-menu-button icon-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button><div><p className="breadcrumb">N1 Soluções <ChevronRight size={14} /> {titles[view][0]}</p><h1>{titles[view][0]}</h1><span>{titles[view][1]}</span></div><div className="topbar-actions"><button className="icon-button" aria-label="Buscar clientes" title="Buscar clientes" onClick={onSearch}><Search size={19} /></button><button className="icon-button notification-button" aria-label="Abrir atendimentos" title="Abrir atendimentos" onClick={onNotifications}><Bell size={19} />{hasAwaiting && <span />}</button><WhatsAppIndicator onClick={onWhatsApp} /><ThemeToggle /><span className="topbar-separator" /><div className="topbar-user"><span className="avatar avatar-gold">{initials}</span><div><strong>{userName}</strong><small>Online agora</small></div></div></div></header>;
+  return <header className="topbar"><button className="mobile-menu-button icon-button" onClick={onMenu} aria-label="Abrir menu"><Menu size={21} /></button><div className="topbar-title">{view === "client-detail" && <p className="breadcrumb">Clientes <ChevronRight size={14} /></p>}<h1>{titles[view][0]}</h1>{titles[view][1] && <span>{titles[view][1]}</span>}</div><div className="topbar-actions"><button className="icon-button" aria-label="Buscar clientes" title="Buscar clientes" onClick={onSearch}><Search size={19} /></button><button className="icon-button notification-button" aria-label="Abrir atendimentos" title="Abrir atendimentos" onClick={onNotifications}><Bell size={19} />{hasAwaiting && <span />}</button><WhatsAppIndicator onClick={onWhatsApp} /><ThemeToggle /><span className="topbar-separator" /><div className="topbar-user"><span className="avatar avatar-gold">{initials}</span><div><strong>{userName}</strong><small>Equipe N1</small></div></div></div></header>;
 }
 
 const formatInt = (value: number) => value.toLocaleString("pt-BR");
@@ -445,11 +461,11 @@ function Dashboard({ navigate, userName }: { navigate: (view: View, filter?: Lis
   const processos = data?.processos;
   const loading = "…";
 
-  const heroes: { id: keyof typeof METRIC_HELP; label: string; value: ReactNode; detail: string; icon: typeof Users; target: View; filter?: ListFilter; alert?: boolean }[] = [
-    { id: "ativos", label: "Clientes ativos", value: m ? formatCount(m.ativos) : loading, detail: m ? `${formatInt(m.andamento)} em andamento · ${formatInt(m.atencao)} com atenção` : "", icon: Users, target: "clientes", filter: "ativos" },
-    { id: "pendentes", label: "Solicitações pendentes", value: m ? formatCount(m.pendentes) : loading, detail: m ? (m.pendentes ? "Conversas aguardando resposta" : "Nenhuma conversa esperando") : "", icon: MessageCircle, target: "atendimento", alert: (m?.pendentes ?? 0) > 0 },
-    { id: "cbkAbertos", label: "Chargebacks abertos", value: m ? formatCount(m.cbkAbertos) : loading, detail: m ? (m.ticketCbk === null ? "Sem valores registrados" : `Ticket médio ${hubMoney(m.ticketCbk)}`) : "", icon: CreditCard, target: "chargebacks", filter: "abertos", alert: (m?.prazosVencidos ?? 0) > 0 },
-    { id: "reversao", label: "Taxa de reversão", value: m ? (m.reversao.percent === null ? formatPercent(null) : formatPercent(m.reversao.percent)) : loading, detail: m ? (m.reversao.encerrados ? `${m.reversao.revertidos} de ${m.reversao.encerrados} chargebacks encerrados` : "Nenhum caso encerrado ainda") : "", icon: ArrowUpRight, target: "chargebacks" },
+  const heroes: { id: keyof typeof METRIC_HELP; label: string; value: ReactNode; detail: string; target: View; filter?: ListFilter; alert?: boolean }[] = [
+    { id: "ativos", label: "Clientes ativos", value: m ? formatCount(m.ativos) : loading, detail: m ? `${formatInt(m.andamento)} em andamento · ${formatInt(m.atencao)} com atenção` : "", target: "clientes", filter: "ativos" },
+    { id: "pendentes", label: "Solicitações pendentes", value: m ? formatCount(m.pendentes) : loading, detail: m ? (m.pendentes ? "Conversas aguardando resposta" : "Nenhuma conversa esperando") : "", target: "atendimento", alert: (m?.pendentes ?? 0) > 0 },
+    { id: "cbkAbertos", label: "Chargebacks abertos", value: m ? formatCount(m.cbkAbertos) : loading, detail: m ? (m.ticketCbk === null ? "Sem valores registrados" : `Ticket médio ${hubMoney(m.ticketCbk)}`) : "", target: "chargebacks", filter: "abertos", alert: (m?.prazosVencidos ?? 0) > 0 },
+    { id: "reversao", label: "Taxa de reversão", value: m ? (m.reversao.percent === null ? formatPercent(null) : formatPercent(m.reversao.percent)) : loading, detail: m ? (m.reversao.encerrados ? `${m.reversao.revertidos} de ${m.reversao.encerrados} chargebacks encerrados` : "Nenhum caso encerrado ainda") : "", target: "chargebacks" },
   ];
 
   const attention: { id: ListFilter; label: string; help: string; value: number | undefined; target: View; severity: "yellow" | "red" }[] = [
@@ -459,6 +475,11 @@ function Dashboard({ navigate, userName }: { navigate: (view: View, filter?: Lis
     { id: "vencidos", label: CHARGEBACK_LIST_FILTERS.vencidos, help: "Chargebacks em aberto cujo prazo já passou.", value: m?.prazosVencidos, target: "chargebacks", severity: "red" },
   ];
   const attentionTotal = attention.reduce((sum, item) => sum + (item.value ?? 0), 0);
+  const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  const resumo = !m ? "carregando…" : [
+    m.pendentes ? `${formatInt(m.pendentes)} ${m.pendentes === 1 ? "conversa aguardando" : "conversas aguardando"} resposta` : "",
+    attentionTotal ? `${formatInt(attentionTotal)} ${attentionTotal === 1 ? "item" : "itens"} de atenção` : "",
+  ].filter(Boolean).join(" · ") || "nada pendente";
 
   const share = (n: number) => (processos && processos.total ? (n / processos.total) * 100 : 0);
   const donutBackground = processos && processos.total
@@ -468,13 +489,13 @@ function Dashboard({ navigate, userName }: { navigate: (view: View, filter?: Lis
   return <div className="page-content dashboard-content">
     {alertVisible && latest && <div className="alert-banner"><div className="alert-icon"><Bell size={18} /></div><div><strong>{awaiting.length === 1 ? "1 conversa aguardando resposta" : `${awaiting.length} conversas aguardando resposta`}</strong><p>{latest.name} <span>·</span> {latest.ticketTopic ? `Ticket · ${latest.ticketTopic}: ` : ""}“{latest.lastText.length > 90 ? `${latest.lastText.slice(0, 90)}…` : latest.lastText}”</p></div><button className="banner-link" onClick={() => setView("atendimento")}>Responder <ArrowUpRight size={15} /></button><button className="banner-close icon-button" aria-label="Fechar" onClick={() => setAlertVisible(false)}><X size={16} /></button></div>}
 
-    <div className="welcome-row"><div><span className="eyebrow eyebrow-muted">{new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span><h2>Olá, {userName.split(" ")[0]}</h2><p>{m ? (attentionTotal || m.pendentes ? "Há itens que precisam da sua atenção hoje." : "Tudo em dia por aqui.") : "Carregando o resumo do portal..."}</p></div><button className="secondary-button" onClick={() => setView("clientes")}><Users size={16} /> Ver clientes</button></div>
+    <div className="welcome-row"><div><h2>Olá, {userName.split(" ")[0]}</h2><p>{today} · {resumo}</p></div><button className="secondary-button" onClick={() => setView("clientes")}><Users size={16} /> Ver clientes</button></div>
 
     {dashboardQuery.error && <p className="dashboard-error" role="alert">Não foi possível calcular os indicadores agora: {dashboardQuery.error.message}</p>}
 
     <div className="kpi-grid">
-      {heroes.map(({ id, label, value, detail, icon: Icon, target, filter, alert }) => <button key={id} type="button" className={`kpi-card ${alert ? "kpi-card-alert" : ""}`} title={METRIC_HELP[id]} onClick={() => navigate(target, filter)}>
-        <span className="kpi-head"><span>{label}</span><span className="kpi-icon"><Icon size={17} /></span></span>
+      {heroes.map(({ id, label, value, detail, target, filter, alert }) => <button key={id} type="button" className={`kpi-card ${alert ? "kpi-card-alert" : ""}`} title={METRIC_HELP[id]} onClick={() => navigate(target, filter)}>
+        <span className="kpi-head">{label}</span>
         <strong className={m || dashboardQuery.error ? undefined : "is-loading"}>{value}</strong>
         <small>{detail}</small>
       </button>)}
@@ -634,7 +655,7 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
         <div className="table-wrap">
           <table>
             <thead><tr><th>Nome</th><th>CPF</th><th>Status</th><th>Tags</th><th>Atualização</th><th /></tr></thead>
-            <tbody>{filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{listFilter && !filterIds ? "Carregando..." : listFilter ? "Nenhum cliente nesta situação. Tudo em dia!" : "Nenhum cliente encontrado."}</td></tr>}{visible.map((client) => <tr key={client.name} onClick={() => { setSelectedClient(client); setView("client-detail"); }}><td><div className="table-person"><span className="avatar avatar-gradient">{client.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{client.name}</strong></div></td><td>{client.cpf}</td><td><StatusPill tone={client.tone}>{client.status}</StatusPill></td><td><div className="tags-container">{client.tags && client.tags.length > 0 ? client.tags.map((tag) => <span key={tag} className="client-tag">{tag}</span>) : <span className="no-tags">-</span>}</div></td><td className="muted-cell">{client.updated}</td><td><button className="row-more icon-button" aria-label="Abrir cliente"><ChevronRight size={17} /></button></td></tr>)}</tbody>
+            <tbody>{filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{listFilter && !filterIds ? "Carregando..." : listFilter ? "Nenhum cliente nesta situação." : "Nenhum cliente encontrado."}</td></tr>}{visible.map((client) => <tr key={client.name} onClick={() => { setSelectedClient(client); setView("client-detail"); }}><td><div className="table-person"><span className="avatar avatar-gradient">{client.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><strong>{client.name}</strong></div></td><td>{client.cpf}</td><td><StatusPill tone={client.tone}>{client.status}</StatusPill></td><td><div className="tags-container">{client.tags && client.tags.length > 0 ? client.tags.map((tag) => <span key={tag} className="client-tag">{tag}</span>) : <span className="no-tags">-</span>}</div></td><td className="muted-cell">{client.updated}</td><td><button className="row-more icon-button" aria-label="Abrir cliente"><ChevronRight size={17} /></button></td></tr>)}</tbody>
           </table>
         </div>
         <Pager {...pagination} noun="clientes" />
@@ -642,7 +663,6 @@ function ClientsPage({ setView, selectedClient, setSelectedClient, listFilter, o
       {registrationOpen &&<div className="hub-modal-backdrop" onClick={() => setRegistrationOpen(false)}>
         <section className="hub-modal" role="dialog" aria-modal="true" aria-labelledby="client-registration-title" onClick={(event) => event.stopPropagation()}>
           <button type="button" className="drawer-close icon-button" onClick={() => setRegistrationOpen(false)} aria-label="Fechar cadastro"><X size={18} /></button>
-          <span className="eyebrow saleshub-eyebrow">Carteira de clientes</span>
           <h2 id="client-registration-title">Cadastrar cliente</h2>
           <form onSubmit={registerClient}>
             <div className="new-sale-grid">
@@ -966,7 +986,7 @@ export default function Home() {
             <div className="sidebar-overlay visible" onClick={() => setMobileMenu(false)} />
             <div className="mobile-sidebar mobile-sidebar-open">
               <div className="mobile-sidebar-head">
-                <Logo size="md" />
+                <MenuMark />
                 <button className="icon-button" onClick={() => setMobileMenu(false)} aria-label="Fechar menu">
                   <X size={20} />
                 </button>
