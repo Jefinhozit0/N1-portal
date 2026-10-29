@@ -8,13 +8,10 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import { reloadForNewVersion } from "./lib/staleVersion";
-import { finishIntro, startScrollReveal } from "./lib/motion";
+import { finishIntro } from "./lib/motion";
 // Captures the browser's "install app" offer as early as possible (see InstallAppCard).
 import "./lib/installPrompt";
 import "./index.css";
-
-// Panels further down the page rise in as they are scrolled into view.
-startScrollReveal();
 
 // A part of the portal that failed to load because a new version was deployed: reload instead of erroring.
 window.addEventListener("vite:preloadError", (event) => {

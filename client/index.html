@@ -61,8 +61,11 @@
         var seen = false;
         try { seen = sessionStorage.getItem("n1-intro") === "1"; sessionStorage.setItem("n1-intro", "1"); } catch (e) {}
         var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        if (seen || reduce) intro.remove();
-        else intro.addEventListener("animationend", function (event) { if (event.animationName === "n1-intro-out") intro.remove(); });
+        // html.n1-ready lets the login's own entrance play (index.css): at once without the opening
+        // screen, otherwise when the curtain lifts (finishIntro in lib/motion.ts) or leaves on its own.
+        var ready = function () { document.documentElement.classList.add("n1-ready"); };
+        if (seen || reduce) { intro.remove(); ready(); }
+        else intro.addEventListener("animationend", function (event) { if (event.animationName === "n1-intro-out") { intro.remove(); ready(); } });
       })();
     </script>
     <div id="root"></div>
