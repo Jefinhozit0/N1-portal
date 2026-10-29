@@ -145,6 +145,7 @@ const laudoInput = z.object({
   jurosMora: z.string().trim().max(40),
   iof: valor,
   encargos: z.object({ seguros: valor.nullable(), avaliacao: valor.nullable(), cadastro: valor.nullable(), registro: valor.nullable() }),
+  retirarRegistro: z.boolean().default(false),
 });
 
 /** The procuração form (ProcuracaoDados in shared/procuracao.ts). */

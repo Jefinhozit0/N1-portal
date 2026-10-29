@@ -83,6 +83,7 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
   const [form, setForm] = useState<Form>(blank);
   const [source, setSource] = useState("");
   const [anexar, setAnexar] = useState(false);
+  const [retirarRegistro, setRetirarRegistro] = useState(false);
   const [clientName, setClientName] = useState(client?.name ?? "");
   const chosenClient = client ?? clients.find((option) => option.name.trim().toLowerCase() === clientName.trim().toLowerCase());
 
@@ -113,6 +114,7 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
     setForm(blank());
     setSource("");
     setAnexar(false);
+    setRetirarRegistro(false);
     if (!client) setClientName("");
   }
 
@@ -134,7 +136,7 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
     if (match && !form.contratante.trim()) setForm((current) => ({ ...current, contratante: match.name.toUpperCase() }));
   }
 
-  const dados = useMemo(() => toDados(form), [form]);
+  const dados = useMemo(() => ({ ...toDados(form), retirarRegistro }), [form, retirarRegistro]);
   const problems = problemasLaudo(dados);
   const warnings = problems.length ? [] : avisosLaudo(dados);
   const result = problems.length ? null : calcularLaudo(dados);
@@ -157,7 +159,7 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
   const set = (key: keyof Form) => (event: React.ChangeEvent<HTMLInputElement>) => setForm((current) => ({ ...current, [key]: event.target.value }));
   const busy = lerContrato.isPending || gerarLaudo.isPending;
   const title = "Gerar laudo";
-  const description = "Parecer técnico com o recálculo das parcelas sem os encargos financiados (seguros, tarifas e registro).";
+  const description = "Parecer técnico com o recálculo das parcelas sem os encargos financiados (seguros e tarifas).";
   const actions = <>
     {onCancel && <Button type="button" variant="outline" onClick={onCancel} disabled={gerarLaudo.isPending}>Cancelar</Button>}
     {variant === "page" && <Button type="button" variant="outline" onClick={reset} disabled={busy}>Limpar</Button>}
@@ -185,7 +187,7 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
       {NUMBER_FIELDS.map((field) => <label key={field.key}>{field.label}
         <input inputMode="decimal" value={form[field.key]} onChange={set(field.key)} placeholder={field.placeholder} disabled={lerContrato.isPending} />
       </label>)}
-      <label>Juros moratórios<input value={form.jurosMora} onChange={set("jurosMora")} placeholder="1% A.M." disabled={lerContrato.isPending} /></label>
+      <label>Juros moratórios<input value={form.jurosMora} onChange={set("jurosMora")} placeholder="Não consta" disabled={lerContrato.isPending} /></label>
     </div>
 
     <fieldset className="laudo-encargos">
@@ -195,14 +197,20 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
           <input inputMode="decimal" value={form[key]} onChange={set(key)} placeholder="Não consta" disabled={lerContrato.isPending} />
         </label>)}
       </div>
+      <label className="laudo-attach">
+        <input type="checkbox" checked={retirarRegistro} onChange={(event) => setRetirarRegistro(event.target.checked)} disabled={lerContrato.isPending} />
+        Retirar também o registro do contrato (só quando passar da tabela do Detran; sem marcar, o laudo explica que ele foi mantido)
+      </label>
     </fieldset>
 
     <div className="laudo-preview" aria-live="polite">
       {result ? <>
         <div><span>Parcela</span><strong>{formatBRL(result.original.prestacao)} → {formatBRL(Math.round(result.recalculado.prestacao * 100) / 100)}</strong></div>
+        {result.pactuada && <div><span>Parcela pela taxa do contrato</span><strong>{formatBRL(result.pactuada.prestacao)}</strong></div>}
         <div><span>Encargos retirados</span><strong>{formatBRL(result.encargos)}</strong></div>
         <div><span>Diferença por parcela</span><strong>{formatBRL(result.diferencaParcela)}</strong></div>
-        <div><span>Proveito econômico</span><strong className="laudo-total">{formatBRL(result.diferencaTotal)}</strong></div>
+        <div><span>Proveito econômico{result.alternativo ? " pretendido" : ""}</span><strong className="laudo-total">{formatBRL(result.diferencaTotal)}</strong></div>
+        {result.alternativo && <div><span>Proveito alternativo</span><strong>{formatBRL(result.alternativo.total)}</strong></div>}
       </> : <p>{problems[0]}</p>}
     </div>
     {warnings.map((warning) => <p key={warning} className="laudo-warning"><AlertTriangle size={14} /> {warning}</p>)}

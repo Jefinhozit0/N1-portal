@@ -163,6 +163,14 @@ function cellBelow(lines: Line[], label: RegExp, accept: (value: string) => bool
   return "";
 }
 
+/** "12/11/2024" + 30 → "12/12/2024"; "" if the date can't be read. */
+function somarDias(data: string, dias: number) {
+  const [dia, mes, ano] = data.split("/").map(Number);
+  if (!dia || !mes || !ano) return "";
+  const date = new Date(Date.UTC(ano, mes - 1, dia + dias));
+  return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
+}
+
 /** "469,188.988-41" (OCR) or "058.956.688-10" → "469.188.988-41"; anything that is not 11 digits stays as it came. */
 function cpfFormat(text: string) {
   const digits = text.replace(/\D/g, "");
@@ -238,6 +246,8 @@ function quadroResumo(lines: Line[]) {
     valorSolicitado: amount("Valor Solicitado"),
     valorFinanciado: amount("Valor Total Devido"),
     parcelas: Number(cell("Quantidade de Parcelas", undefined, (value) => /^\d{1,3}\b/.test(value)).match(/^\d{1,3}\b/)?.[0] ?? 0),
+    // "1 - Carência para 1º Vencimento" over "30": days from the issue date to the first payment.
+    carencia: Number(cell("Car[êe]ncia para 1[º°o]? ?Vencimento", undefined, (value) => /^\d{1,3}\b/.test(value)).match(/^\d{1,3}\b/)?.[0] ?? 0),
     valorParcela: amount("Valor das Parcelas"),
     // Anexo I has it too: "D. Data de Emissão" over "12/11/2024 17:36:34".
     dataContrato: (cell(String.raw`Data de Emiss[ãa]o`) || cellBelow(lines, /^[A-Z]\.\s*Data de Emiss[ãa]o/i)).match(/\d{2}\/\d{2}\/\d{4}/)?.[0] ?? dataDoRodape(lines),
@@ -469,6 +479,8 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
   for (const key of ["contratante", "garantia", "dataContrato"] as const) if (quadro[key]) dados[key] = quadro[key];
   for (const key of ["valorSolicitado", "valorFinanciado", "parcelas", "valorParcela", "taxaMensal", "taxaAnual", "iof"] as const) if (quadro[key]) dados[key] = quadro[key];
   for (const key of ["seguros", "registro", "cadastro", "avaliacao"] as const) if (quadro[key] !== null) encargos[key] = zeroIsAbsent(quadro[key]);
+  // Bradesco gives the grace period instead of the date: the accountant counts it from the issue date (12/11/2024 + 30 = 12/12/2024).
+  if (!dados.primeiroVencimento && dados.dataContrato && quadro.carencia > 0) dados.primeiroVencimento = somarDias(dados.dataContrato, quadro.carencia);
 
   const encontrados = camposEncontrados(dados);
   // Stellantis: "CPF/CNPJ do(a) solicitante: 859.107.164-68".
