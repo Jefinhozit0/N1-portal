@@ -14,25 +14,37 @@ import type { Line } from "./laudoContrato";
  */
 
 const SCALE = 4;
+/**
+ * The footer's small print ("12/11/2024 17:36:34 (Horário de Brasília)" on Bradesco's pages) comes out
+ * garbled at SCALE: the bottom strip of each page is read again, enlarged more, as one extra line.
+ */
+const FOOTER_SCALE = 6;
+const FOOTER_SHARE = 0.045;
+/** The footer is the same on every page: a few readings are enough to outvote a garbled one. */
+const FOOTER_PAGES = 3;
 /** Lines come back in the same units as a text PDF (an A4 page is 595 points wide), so the reader's distances still hold. */
 const PAGE_WIDTH = 595;
 const WORKERS = 3;
 const CACHE = path.resolve(process.cwd(), ".cache", "tesseract");
 
-/** The page's picture enlarged SCALE times in gray (bilinear), as a PNG for Tesseract. */
-function enlarge(image: { data: Uint8ClampedArray; width: number; height: number; channels: number }) {
-  const { data, width, height, channels } = image;
+type PageImage = { data: Uint8ClampedArray; width: number; height: number; channels: number };
+
+/** The page's picture, from row fromRow down, enlarged scale times in gray (bilinear), as a PNG for Tesseract. */
+function enlarge(image: PageImage, scale = SCALE, fromRow = 0) {
+  const { data, width, channels } = image;
+  const height = image.height - fromRow;
   const gray = new Float32Array(width * height);
   for (let i = 0; i < gray.length; i++) {
-    gray[i] = channels >= 3 ? 0.299 * data[i * channels] + 0.587 * data[i * channels + 1] + 0.114 * data[i * channels + 2] : data[i * channels];
+    const at = (i + fromRow * width) * channels;
+    gray[i] = channels >= 3 ? 0.299 * data[at] + 0.587 * data[at + 1] + 0.114 * data[at + 2] : data[at];
   }
-  const outWidth = width * SCALE, outHeight = height * SCALE;
+  const outWidth = width * scale, outHeight = height * scale;
   const png = new PNG({ width: outWidth, height: outHeight });
   for (let y = 0; y < outHeight; y++) {
-    const fy = Math.min(Math.max((y + 0.5) / SCALE - 0.5, 0), height - 1);
+    const fy = Math.min(Math.max((y + 0.5) / scale - 0.5, 0), height - 1);
     const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, height - 1), ay = fy - y0;
     for (let x = 0; x < outWidth; x++) {
-      const fx = Math.min(Math.max((x + 0.5) / SCALE - 0.5, 0), width - 1);
+      const fx = Math.min(Math.max((x + 0.5) / scale - 0.5, 0), width - 1);
       const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, width - 1), ax = fx - x0;
       const top = gray[y0 * width + x0] * (1 - ax) + gray[y0 * width + x1] * ax;
       const bottom = gray[y1 * width + x0] * (1 - ax) + gray[y1 * width + x1] * ax;
@@ -62,9 +74,19 @@ export async function ocrPages(pdf: Awaited<ReturnType<typeof getDocumentProxy>>
       const image = images.sort((a, b) => b.width * b.height - a.width * a.height)[0];
       if (!image || image.width < 300) return [];
       const { data } = await scheduler.addJob("recognize", enlarge(image)) as unknown as { data: { lines: OcrLine[] } };
+      const footerRow = Math.floor(image.height * (1 - FOOTER_SHARE));
+      const { data: footer } = pageNumber <= FOOTER_PAGES
+        ? await scheduler.addJob("recognize", enlarge(image, FOOTER_SCALE, footerRow)) as unknown as { data: { lines: OcrLine[] } }
+        : { data: { lines: [] as OcrLine[] } };
       const unit = PAGE_WIDTH / image.width / SCALE;
       const pageHeight = image.height * SCALE;
-      return data.lines
+      const footerUnit = PAGE_WIDTH / image.width / FOOTER_SCALE;
+      // Below every line of the page, so nothing reads it as part of a cell.
+      const footerLines = footer.lines.map((line, index): Line => {
+        const items = line.words.map((word) => ({ x: word.bbox.x0 * footerUnit, y: -1 - index, text: word.text.normalize("NFC").trim() })).filter((item) => item.text);
+        return { page: pageNumber, y: -1 - index, items, text: items.map((item) => item.text).join(" ") };
+      });
+      return [...data.lines
         .map((line): Line => {
           // PDF coordinates grow upwards; the picture's, downwards. The line's height is the middle of its
           // words' bottoms: a speck read beside a cell border can stretch the line's own box down to the next row.
@@ -74,7 +96,7 @@ export async function ocrPages(pdf: Awaited<ReturnType<typeof getDocumentProxy>>
             .map((word) => ({ x: word.bbox.x0 * unit, y, text: word.text.normalize("NFC").trim() }))
             .filter((item) => item.text);
           return { page: pageNumber, y, items, text: items.map((item) => item.text).join(" ") };
-        })
+        }), ...footerLines]
         .filter((line) => line.items.length > 0)
         .sort((a, b) => b.y - a.y);
     }));

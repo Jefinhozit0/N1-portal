@@ -169,6 +169,44 @@ function cpfFormat(text: string) {
   return digits.length === 11 ? `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}` : text;
 }
 
+/**
+ * The vehicle as Bradesco's Anexo I lists it, under "Item(ns) Financiado(s)", in that column, on up to
+ * four lines ("NISSAN" / "MARCH FLEX COM" / "SV 1.6 16V FLEXSTART A/G"), before the insurance ("*seg Prot")
+ * or the "D. Data de Emissão" row. For a scan whose Quadro Resumo lost the Marca/Modelo labels.
+ */
+function anexoVeiculo(lines: Line[]) {
+  const header = lines.find((line) => /Item\(?ns\)?\s*Financiad/i.test(line.text));
+  if (!header) return "";
+  const at = header.items.findIndex((item) => /Financiad/i.test(item.text));
+  const left = header.items[0].x, right = (header.items[at + 1]?.x ?? Infinity) - 4;
+  const parts: string[] = [];
+  for (const line of lines.filter((other) => other.page === header.page && other.y < header.y && header.y - other.y < 90).sort((a, b) => b.y - a.y)) {
+    // Header lines of the other columns ("Financiamento do(s) Bem(ns)") start far to the right.
+    const column = line.items[0].x < left + 60 ? line.items.filter((item) => item.x < right).map((item) => item.text).join(" ") : "";
+    if (/^\*|Data de Emiss|Assinatura|^\(\d\)/i.test(column)) break;
+    if (column) parts.push(column);
+    if (parts.length === 4) break;
+  }
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The date printed in every page's footer of a Bradesco contract: "12/11/2024 17:36:34 (Horário de Brasília)".
+ * OCR garbles it on most pages ("/3///2024"), so the valid date read most often wins, when read at least twice
+ * or by the only page that got it.
+ */
+function dataDoRodape(lines: Line[]) {
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    const match = line.text.match(/(\d{2})\/(\d{2})\/(\d{4})\s*\d{1,2}[:/.]?\d{2}[:/.]?\d{2}\s*\(?Hor[áa]rio/i);
+    if (!match || Number(match[1]) < 1 || Number(match[1]) > 31 || Number(match[2]) < 1 || Number(match[2]) > 12) continue;
+    const date = `${match[1]}/${match[2]}/${match[3]}`;
+    counts.set(date, (counts.get(date) ?? 0) + 1);
+  }
+  const ranked = Array.from(counts).sort((a, b) => b[1] - a[1]);
+  return ranked.length && (ranked[0][1] >= 2 || ranked.length === 1) ? ranked[0][0] : "";
+}
+
 /** What the Quadro Resumo says; only the cells that are there. Its values win over the ones read by label. */
 function quadroResumo(lines: Line[]) {
   // A label ends at a word boundary, not at the end of its item: with OCR the next label follows on the same text.
@@ -182,7 +220,8 @@ function quadroResumo(lines: Line[]) {
   const [taxaMensal, taxaAnual] = percents(cell("Taxa de Juros Efetiva", undefined, (value) => /\d\s*%/.test(value)).replace(/(\d)\.(\d{1,4})(?=\s*%)/g, "$1,$2"));
   const iofBem = amount("Valor Total de IOF do Bem"), iofProdutos = amount("Valor Total de IOF dos Produtos");
   const veiculo = [cell("Marca"), cell("Modelo"), cell("Vers[ãa]o")].filter(Boolean);
-  const ano = [cell("Ano de Fabrica[çc][ãa]o"), cell("Ano do Modelo")].filter(Boolean).join("/");
+  // Only the year: with OCR the cell can run into the next one ("2019 FLEX-GASOLINA").
+  const ano = [cell("Ano de Fabrica[çc][ãa]o"), cell("Ano do Modelo")].map((value) => value.match(/\b(?:19|20)\d{2}\b/)?.[0]).filter(Boolean).join("/");
   const [rua, numero, complemento, bairro, cidade, uf, cep] = ["Endere[çc]o Residencial", "N[úu]mero", "Complemento", "Bairro", "Cidade", "UF", "CEP"].map((name) => cell(name));
   // "Nome" and "CPF" also head the agent's and the supplier's cells: these keep their number.
   const cpf = cell(String.raw`CPF(?:\/MF)?`, String.raw`2[.,]2`);
@@ -191,14 +230,17 @@ function quadroResumo(lines: Line[]) {
     cpf: cpf && cpfFormat(cpf),
     email: cell("E-?mail").match(EMAIL)?.[0].toLowerCase() ?? "",
     endereco: [[rua, numero].filter(Boolean).join(", "), complemento, bairro, [cidade, uf].filter(Boolean).join("/"), cep && `CEP ${cep}`].filter(Boolean).join(" - "),
-    // Only the year is not the vehicle: then it stays blank.
-    garantia: veiculo.length ? [...veiculo, ano].filter(Boolean).join(" ") : "",
+    // Only the year is not the vehicle: then Anexo I's list of financed items, or blank.
+    garantia: veiculo.length ? [...veiculo, ano].filter(Boolean).join(" ") : (() => {
+      const anexo = anexoVeiculo(lines);
+      return anexo && !/\b(?:19|20)\d{2}\b/.test(anexo) ? [anexo, ano].filter(Boolean).join(" ") : anexo;
+    })(),
     valorSolicitado: amount("Valor Solicitado"),
     valorFinanciado: amount("Valor Total Devido"),
     parcelas: Number(cell("Quantidade de Parcelas", undefined, (value) => /^\d{1,3}\b/.test(value)).match(/^\d{1,3}\b/)?.[0] ?? 0),
     valorParcela: amount("Valor das Parcelas"),
     // Anexo I has it too: "D. Data de Emissão" over "12/11/2024 17:36:34".
-    dataContrato: (cell(String.raw`Data de Emiss[ãa]o`) || cellBelow(lines, /^[A-Z]\.\s*Data de Emiss[ãa]o/i)).match(/\d{2}\/\d{2}\/\d{4}/)?.[0] ?? "",
+    dataContrato: (cell(String.raw`Data de Emiss[ãa]o`) || cellBelow(lines, /^[A-Z]\.\s*Data de Emiss[ãa]o/i)).match(/\d{2}\/\d{2}\/\d{4}/)?.[0] ?? dataDoRodape(lines),
     taxaMensal: taxaMensal ?? 0,
     taxaAnual: taxaAnual ?? 0,
     iof: iofBem !== null || iofProdutos !== null ? Math.round(((iofBem ?? 0) + (iofProdutos ?? 0)) * 100) / 100 : null,
