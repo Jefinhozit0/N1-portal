@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avisosLaudo, calcularLaudo, emptyLaudo, impliedRate, parseBRL, problemasLaudo } from "@shared/laudo";
+import { type LaudoDados, avisosLaudo, calcularLaudo, emptyLaudo, impliedRate, parseBRL, problemasLaudo, taxaAnualDe } from "@shared/laudo";
 import { type Line, extrairContrato } from "./laudoContrato";
 import { buildLaudoPdf } from "./laudoPdf";
 
@@ -375,8 +375,8 @@ describe("extrairContrato (Bradesco Financiamentos)", () => {
       contrato: "4247432349", contratante: "JOSE EXEMPLO DE OLIVEIRA", instituicao: "Banco Bradesco Financiamentos S.A.",
       garantia: "FIAT PALIO COM FIRE 1.0 8V A/G. 4P 2016/2016", valorSolicitado: 27000, valorFinanciado: 31593.55,
       parcelas: 60, valorParcela: 1121.02, taxaMensal: 2.87, taxaAnual: 41.17, iof: 1028.71, dataContrato: "08/09/2026",
-      // The contract only gives a 30-day grace period, not the date.
-      primeiroVencimento: "",
+      // The contract only gives a 30-day grace period: counted from the issue date, as the accountant does.
+      primeiroVencimento: "08/10/2026",
     });
     expect(leitura.dados.encargos).toEqual({ seguros: 1347.3, registro: 317.54, cadastro: 1150, avaliacao: 750 });
     expect(leitura).toMatchObject({
@@ -416,40 +416,72 @@ describe("extrairContrato", () => {
 });
 
 describe("calcularLaudo", () => {
-  // Same numbers as the parecer the team made by hand for this contract.
-  const laudo = calcularLaudo(extrairContrato(SIM_CCB).dados);
+  // The Daniel contract (Bradesco Financiamentos) and the parecer the team's accountant made for it.
+  const DANIEL: LaudoDados = {
+    ...emptyLaudo(), contrato: "4200614670", contratante: "DANIEL EXEMPLO", instituicao: "BANCO BRADESCO FINANCIAMENTOS S.A.",
+    valorSolicitado: 35500, valorFinanciado: 39385.1, parcelas: 48, valorParcela: 1307.09, taxaMensal: 2.06, taxaAnual: 27.73, iof: 1121.39,
+    encargos: { seguros: 1771.45, avaliacao: 700, cadastro: null, registro: 292.26 },
+  };
+  const laudo = calcularLaudo(DANIEL);
 
-  it("uses the rate the payment implies, not the rounded one in the contract", () => {
-    expect(laudo.taxaEfetiva).toBeCloseTo(0.0259053, 6);
-    expect(laudo.original.linhas[0]).toMatchObject({ mes: 1 });
-    expect(laudo.original.linhas[0].juros).toBeCloseTo(1447.72, 2);
-    expect(laudo.original.linhas[1].juros).toBeCloseTo(1437.41, 2);
+  it("shows the contract at its written rate when the payment says otherwise", () => {
+    expect(laudo.divergente).toBe(true);
+    expect(laudo.pactuada!.prestacao).toBeCloseTo(1299.75, 2);
+    expect(laudo.pactuada!.totalPago).toBeCloseTo(62388.18, 2);
+    expect(laudo.pactuada!.totalJuros).toBeCloseTo(23003.08, 2);
+    expect(laudo.pactuada!.linhas[0].juros).toBeCloseTo(811.33, 2);
   });
 
-  it("recalculates without the charges", () => {
-    expect(laudo.encargos).toBe(4073.89);
-    expect(laudo.recalculado.valorFinanciado).toBe(51811.15);
-    expect(laudo.recalculado.prestacao).toBeCloseTo(1711, 2);
-    expect(laudo.recalculado.linhas.at(-1)!.prestacao).toBeCloseTo(1711, 2);
-    expect(laudo.recalculado.totalPago).toBeCloseTo(102660.26, 1);
-    expect(laudo.diferencaParcela).toBe(134.54);
-    expect(laudo.diferencaTotal).toBe(8072.4);
+  it("finds the rate the bank really applied", () => {
+    expect(laudo.taxaReal * 100).toBeCloseTo(2.087859, 6);
+    expect(taxaAnualDe(laudo.taxaReal * 100)).toBeCloseTo(28.1413, 4);
+    expect(laudo.original.prestacao).toBe(1307.09);
+    expect(laudo.original.totalJuros).toBeCloseTo(23355.22, 2);
+  });
+
+  it("recalculates at the written rate, keeping the registro", () => {
+    expect(laudo.registroMantido).toBe(true);
+    expect(laudo.encargos).toBe(2471.45);
+    expect(laudo.recalculado.valorFinanciado).toBe(36913.65);
+    expect(laudo.recalculado.prestacao).toBeCloseTo(1218.19, 2);
+    expect(laudo.recalculado.totalPago).toBeCloseTo(58473.26, 2);
+    expect(laudo.recalculado.totalJuros).toBeCloseTo(21559.61, 2);
+  });
+
+  it("gives both proveitos", () => {
+    expect([laudo.diferencaParcela, laudo.diferencaTotal]).toEqual([88.9, 4267.2]);
+    expect(laudo.alternativo).toEqual({ diferencaParcela: 7.34, diferencaTotalParcelas: 352.32, encargosRestituidos: 2471.45, total: 2823.77 });
+  });
+
+  it("takes the registro out too when asked", () => {
+    const semRegistro = calcularLaudo({ ...DANIEL, retirarRegistro: true });
+    expect(semRegistro.registroMantido).toBe(false);
+    expect(semRegistro.recalculado.valorFinanciado).toBe(36621.39);
   });
 
   it("pays the debt off exactly, and the totals add up", () => {
-    for (const tabela of [laudo.original, laudo.recalculado]) {
-      expect(tabela.linhas).toHaveLength(60);
+    for (const tabela of [laudo.original, laudo.pactuada!, laudo.recalculado]) {
+      expect(tabela.linhas).toHaveLength(48);
       expect(tabela.linhas.at(-1)!.saldo).toBe(0);
       expect(tabela.totalAmortizado).toBeCloseTo(tabela.valorFinanciado, 2);
       expect(tabela.totalPago).toBeCloseTo(tabela.totalAmortizado + tabela.totalJuros, 2);
     }
-    expect(laudo.original.totalPago).toBeCloseTo(110732.4, 1);
   });
 
-  it("falls back to the written rate when there is no payment", () => {
+  it("uses one table when the payment matches the written rate", () => {
+    const igual = calcularLaudo({ ...DANIEL, valorParcela: 1299.75 });
+    expect(igual.divergente).toBe(false);
+    expect(igual.pactuada).toBeNull();
+    expect(igual.alternativo).toBeNull();
+  });
+
+  it("falls back to the written rate when there is no payment, and to the payment's without a rate", () => {
     const semParcela = calcularLaudo({ ...extrairContrato(SIM_CCB).dados, valorParcela: 0 });
-    expect(semParcela.taxaEfetiva).toBe(0.0259);
-    expect(semParcela.original.prestacao).toBe(1845.32);
+    expect(semParcela.taxaContrato).toBe(0.0259);
+    expect(semParcela.original.prestacao).toBeCloseTo(1845.32, 2);
+    const semTaxa = calcularLaudo({ ...DANIEL, taxaMensal: 0, taxaAnual: 0 });
+    expect(semTaxa.divergente).toBe(false);
+    expect(semTaxa.taxaContrato * 100).toBeCloseTo(2.087859, 6);
   });
 
   it("reads amounts the way people type them", () => {
