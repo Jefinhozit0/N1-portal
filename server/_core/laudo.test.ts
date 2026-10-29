@@ -271,6 +271,71 @@ describe("extrairContrato (Itaú, Santander consignado, Digimais)", () => {
   });
 });
 
+// Bradesco Financiamentos CCB: the Quadro Resumo (pages 7 to 9, read first) with the label on top of each cell and the value below, then page 1; personal data replaced.
+const BRADESCO_CCB = [
+  { ...line(769, "[29]Cédula de Crédito Bancário – CCB – Pessoa Física [394]Nº 4247432349"), page: 7 },
+  { ...line(675, "[31]Quadro Resumo"), page: 7 },
+  { ...line(590, "[31]LOJA EXEMPLO DE VEICULOS [361]03.321.969/0001-52"), page: 7 },
+  { ...line(536, "[30]Agente Exemplo Dos Santos [361]111.111.111-11"), page: 7 },
+  { ...line(477, "[31]Razão Social [361]CNPJ/MF"), page: 7 },
+  { ...line(463, "[31]Banco Bradesco Financiamentos S.A. [360]07.207.996/0001-50"), page: 7 },
+  { ...line(386, "[30]2.1 - Nome [386]2.2 - CPF/MF"), page: 7 },
+  { ...line(373, "[30]JOSE EXEMPLO DE OLIVEIRA [386]000.000.000-00"), page: 7 },
+  { ...line(299, "[30]2.7 - Endereço Residencial [311]2.8 - Número [390]2.9 - Complemento"), page: 7 },
+  { ...line(285, "[30]RUA [61]EXEMPLO TOKIMATU [311]411"), page: 7 },
+  { ...line(262, "[31]2.10 - Bairro [201]2.11 - Cidade [381]2.12 - UF [453]2.13 - CEP"), page: 7 },
+  { ...line(248, "[31]JARDIM EXEMPLO [201]JABOTICABAL [381]SP [453]14890680"), page: 7 },
+  { ...line(225, "[31]2.14 - Tel. Celular [133]2.15 - Tel. Residencial [289]2.16 - E-mail"), page: 7 },
+  { ...line(211, "[31](16) 99999-0000"), page: 7 },
+  { ...line(187, "[31]2.17 - Nome do Banco [240]2.18 - Agência [383]2.19 - Conta-Corrente"), page: 7 },
+  { ...line(133, "[31]1 - Marca [146]2 - Modelo [307]3 - Versão [459]4 - Ano do Modelo"), page: 7 },
+  { ...line(119, "[31]FIAT [146]PALIO COM [307]FIRE 1.0 8V A/G. 4P [459]2016"), page: 7 },
+  { ...line(96, "[30]5 - Ano de Fabricação [144]6 - Chassi [387]7 - Combustível/Motor"), page: 7 },
+  { ...line(82, "[30]2016 [144]9BD17122ZG7604394 [387]GASOLINA"), page: 7 },
+  { ...line(672, "[48]SPF BÁSICO [213]XXXX [286]XXXX [385]R$ 1.347,30"), page: 8 },
+  { ...line(440, "[29]1 - Valor do Bem [130]2 - Valor da Entrada [287]3 - Valor Solicitado do Bem (1 - 2)"), page: 8 },
+  { ...line(427, "[29]R$ 37.500,00 [130]R$ 10.500,00 [287]R$ 27.000,00"), page: 8 },
+  { ...line(384, "[29]4.1 - Valor de Seguros [288]4.2 - Valor de Registro"), page: 8 },
+  { ...line(371, "[29]R$ 1.347,30 [164]4,26 % [288]R$ 317,54 [452]1,01 %"), page: 8 },
+  { ...line(355, "[29]4.3 - Valor Tarifa de Cadastro [286]4.4 - Valor Tarifa Avaliação do Bem"), page: 8 },
+  { ...line(341, "[29]R$ 1.150,00 [164]3,64 % [288]R$ 750,00 [452]2,37 %"), page: 8 },
+  { ...line(326, "[29]4.5 - Valor Total de IOF do Bem [288]4.6 - Valor Total de IOF dos Produtos Adicionais"), page: 8 },
+  { ...line(311, "[29]R$ 983,70 [164]3,11 % [288]R$ 45,01 [453]0,14 %"), page: 8 },
+  { ...line(297, "[30]5 - Valor Total Devido no Ato da Contratação (3 + 4 + 7)"), page: 8 },
+  { ...line(284, "[30]R$ 31.593,55 [452]100,00 %"), page: 8 },
+  { ...line(195, "[31]1 - Carência para 1º [127]Vencimento [199]2 - Prazo da Operação mês(es) [385]3 - Valor das Parcelas"), page: 8 },
+  { ...line(181, "[31]30 [199]60 [385]R$ 1.121,02"), page: 8 },
+  { ...line(158, "[32]4 - Quantidade de Parcelas [200]5- Valor Total das Parcelas (3 x 4) [360]R$ [385]6 - Praça de Pagamento"), page: 8 },
+  { ...line(144, "[32]60 [200]67.261,20 [386]JABOTICABAL"), page: 8 },
+  { ...line(649, "[30]1 - Taxa de Juros Efetiva [277]2 - Custo Efetivo Total - CET"), page: 9 },
+  { ...line(633, "[60]2,87 % a.m. [181]41,17 % a.a. [300]3,62 % a.m. [446]54,21 % a.a."), page: 9 },
+  { ...line(540, "[29]1 - Números de Vias [157]2 - Local de Emissão [385]3 - Data de Emissão"), page: 9 },
+  { ...line(527, "[29]2 [157]MONTE ALTO [385]08/09/2026"), page: 9 },
+  { ...line(387, "[29]CPF/MF: 000.000.000-00"), page: 9 },
+  { ...line(769, "[29]Cédula de Crédito Bancário – CCB – Pessoa Física [394]Nº 4247432349"), page: 1 },
+  { ...line(715, "[28]Pagarei ao [82]Banco Bradesco Financiamentos S.A. [273], CNPJ 07.207.996/0001-50, doravante denominado [527]Credor [564],"), page: 1 },
+  { ...line(671, "[28]A presente CCB corresponde ao financiamento para aquisição de bem(ns) de consumo, indicado(s) no (Quadro"), page: 1 },
+  { ...line(45, "[28]Quadro Resumo - VI - 1 - Encargos Remuneratórios (juros da operação) [407], sendo a [454]Taxa de Juros Efetiva"), page: 1 },
+];
+
+describe("extrairContrato (Bradesco Financiamentos)", () => {
+  it("reads each value from the cell below its label in the Quadro Resumo", () => {
+    const leitura = extrairContrato(BRADESCO_CCB);
+    expect(leitura.dados).toMatchObject({
+      contrato: "4247432349", contratante: "JOSE EXEMPLO DE OLIVEIRA", instituicao: "Banco Bradesco Financiamentos S.A.",
+      garantia: "FIAT PALIO COM FIRE 1.0 8V A/G. 4P 2016/2016", valorSolicitado: 27000, valorFinanciado: 31593.55,
+      parcelas: 60, valorParcela: 1121.02, taxaMensal: 2.87, taxaAnual: 41.17, iof: 1028.71, dataContrato: "08/09/2026",
+      // The contract only gives a 30-day grace period, not the date.
+      primeiroVencimento: "",
+    });
+    expect(leitura.dados.encargos).toEqual({ seguros: 1347.3, registro: 317.54, cadastro: 1150, avaliacao: 750 });
+    expect(leitura).toMatchObject({
+      cpf: "000.000.000-00", cnpjInstituicao: "07.207.996/0001-50", modalidade: "financiamento", email: "",
+      endereco: "RUA EXEMPLO TOKIMATU, 411 - JARDIM EXEMPLO - JABOTICABAL/SP - CEP 14890680",
+    });
+  });
+});
+
 describe("extrairContrato", () => {
   const { dados } = extrairContrato(SIM_CCB);
 
