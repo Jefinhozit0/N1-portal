@@ -9,19 +9,22 @@ import { canSendFreeText, normalizeBrazilPhone, sendFreeText } from "./whatsapp"
 /**
  * Automatic notices.
  * - Client: app notification (see push.ts), WhatsApp and e-mail when the team replies in the chat,
- *   changes the status or attaches a document, so the client comes back to the portal.
+ *   changes the status, attaches a document or attaches one the client has to sign, so the client
+ *   comes back to the portal.
  * - Team: app notification, e-mail (and WhatsApp, if TEAM_NOTIFY_WHATSAPP is set) when a client writes.
  * Each kind of notice has a minimum interval per client, so a burst of messages or uploads turns
  * into a single notice instead of spam (which would also put the WhatsApp number at risk).
  * Nothing here ever fails the action that triggered it.
  */
 
-export type ClientNoticeKind = "resposta" | "status" | "documento";
+export type ClientNoticeKind = "resposta" | "status" | "documento" | "assinatura";
 
 const CLIENT_INTERVAL_MS: Record<ClientNoticeKind, number> = {
   resposta: 15 * 60_000,
   status: 2 * 60_000,
   documento: 10 * 60_000,
+  // Short, so a procuração and a termo generated a few minutes apart each get their own notice.
+  assinatura: 2 * 60_000,
 };
 const PUSH_INTERVAL_MS = 30_000;
 const TEAM_INTERVAL_MS = 10 * 60_000;
@@ -48,6 +51,17 @@ function clientTexts(kind: ClientNoticeKind, firstName: string, detail: string |
       email: { subject: `Seu processo foi atualizado: ${detail}`, title: `Olá, ${firstName}!`, paragraphs: [`Seu processo na N1 Soluções foi atualizado e agora está como "${detail}".`] },
     };
   }
+  if (kind === "assinatura") {
+    const documento = detail ? `: ${detail}` : "";
+    return {
+      whatsapp: `Olá, ${firstName}! ✍️ A *N1 Soluções* gerou um novo documento para o seu processo${detail ? `: *${detail}*` : ""}.\n\nEle precisa da sua *assinatura*. Baixe no portal, assine e nos envie de volta: ${url}\n\nQualquer dúvida, é só responder esta mensagem.`,
+      email: {
+        subject: `Documento para assinar${documento}`,
+        title: `Olá, ${firstName}!`,
+        paragraphs: [`A N1 Soluções gerou um novo documento para o seu processo${documento}.`, "Ele precisa da sua assinatura. Baixe no portal, assine e nos envie de volta."],
+      },
+    };
+  }
   return {
     whatsapp: `Olá, ${firstName}! 📄 A *N1 Soluções* adicionou um documento ao seu processo${detail ? `: ${detail}` : ""}.\n\nVeja no portal: ${url}`,
     email: { subject: "Novo documento no seu processo", title: `Olá, ${firstName}!`, paragraphs: [`A N1 Soluções adicionou um documento ao seu processo${detail ? `: ${detail}` : ""}.`] },
@@ -61,6 +75,7 @@ function clientTexts(kind: ClientNoticeKind, firstName: string, detail: string |
 export function pushText(kind: ClientNoticeKind, detail?: string): PushMessage {
   if (kind === "resposta") return { title: "Nova mensagem da N1", body: "A equipe respondeu sua mensagem. Toque para ver.", url: "/?aba=conversa", tag: "resposta" };
   if (kind === "status") return { title: "Seu processo foi atualizado", body: detail ? `Situação atual: ${detail}.` : "Veja a situação atual no portal.", url: "/", tag: "status" };
+  if (kind === "assinatura") return { title: "Documento para assinar", body: detail ? `${detail}: baixe no portal, assine e nos envie.` : "Um novo documento precisa da sua assinatura.", url: "/", tag: "assinatura" };
   return { title: "Novo documento no seu processo", body: detail ? `A N1 adicionou: ${detail}.` : "A N1 adicionou um documento ao seu processo.", url: "/", tag: "documento" };
 }
 

@@ -227,7 +227,7 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
     {chosen
       ? <label className="laudo-attach">
           <input type="checkbox" checked={anexar} onChange={(event) => setAnexar(event.target.checked)} />
-          Anexar também aos documentos de {chosen.name} (o cliente vê no portal)
+          Anexar também aos documentos de {chosen.name} (o cliente vê no portal e recebe um aviso)
         </label>
       : clientName.trim() && <p className="laudo-hint">Cliente não encontrado na lista: a notificação é gerada, mas não fica anexada a nenhum cadastro.</p>}
 
