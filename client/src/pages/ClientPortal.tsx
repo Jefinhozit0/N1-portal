@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bell, Bot, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, Headset, LayoutGrid, LockKeyhole, LogOut, MessageCircle, Send, Sparkles, Wallet, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, Eye, EyeOff, FileText, Headset, LayoutGrid, LockKeyhole, LogOut, MessageCircle, Send, Wallet, X, type LucideIcon } from "lucide-react";
 import { caseSummary, formatFileSize } from "@shared/processo";
 
 const formatDay = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replace(" de ", " ").replace(".", "");
@@ -17,7 +17,6 @@ import { N1Logo } from "@/components/N1Logo";
 import { BrandLoader } from "@/components/BrandLoader";
 import { MaintenanceScreen, useMaintenance } from "@/components/MaintenanceScreen";
 import { AppSetupCard } from "@/components/AppSetupCard";
-import { CountUp } from "@/components/CountUp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabase";
 import { isIosSafari, isInstalledApp, useInstallPrompt } from "@/lib/installPrompt";
@@ -306,7 +305,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
               <div><small>Última atualização</small><strong><Clock3 size={16} /> {processo.updated || "—"}</strong></div>
             </div>
             <div className="client-portal-progress">
-              <div><small>Progresso do caso</small><strong><CountUp value={processo.progresso ?? 0} format={(n) => `${Math.round(n)}%`} /></strong></div>
+              <div><small>Progresso do caso</small><strong>{`${Math.round(processo.progresso ?? 0)}%`}</strong></div>
               <div className="progress-bar-container" role="progressbar" aria-valuenow={processo.progresso ?? 0} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso do caso">
                 <div className="progress-bar-fill" style={{ width: `${processo.progresso ?? 0}%` }} />
               </div>
@@ -323,7 +322,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
 
           {documentosQuery.isSuccess && historicoQuery.isSuccess && (
             <section className="client-portal-card client-portal-block">
-              <h2><Sparkles size={17} /> Resumo do seu caso</h2>
+              <h2><ClipboardList size={17} /> Resumo do seu caso</h2>
               <p className="client-portal-summary">{caseSummary({ name: processo.name ?? "", type: processo.type, status: processo.status, progress: processo.progresso ?? 0, documents: documentos, events: historico }, "cliente")}</p>
             </section>
           )}
@@ -368,7 +367,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
               {mensagensQuery.isLoading && <p className="client-portal-empty">Carregando mensagens...</p>}
               {messages.map((message) => message.from === "bot" ? (
                 <div key={message.id} className="client-bubble client-bubble-team client-bubble-bot">
-                  <span className="client-bubble-author"><Bot size={13} /> Assistente N1</span>
+                  <span className="client-bubble-author">Atendimento automático</span>
                   <p>{message.text}</p>
                   <small>{message.time}</small>
                 </div>
@@ -383,7 +382,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
               ))}
               {botTrail.map((entry) => entry.from === "bot" ? (
                 <div key={`local-${entry.id}`} className="client-bubble client-bubble-team client-bubble-bot client-bubble-new">
-                  <span className="client-bubble-author"><Bot size={13} /> Assistente N1</span>
+                  <span className="client-bubble-author">Atendimento automático</span>
                   <p>{entry.text}</p>
                 </div>
               ) : (
@@ -392,7 +391,7 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
               {pendingText && <div className="client-bubble client-bubble-own client-bubble-pending"><p>{pendingText}</p><small>Enviando...</small></div>}
               {botTyping && (
                 <div className="client-bubble client-bubble-team client-bubble-bot client-bubble-new" role="status" aria-label="O assistente está digitando">
-                  <span className="client-bubble-author"><Bot size={13} /> Assistente N1</span>
+                  <span className="client-bubble-author">Atendimento automático</span>
                   <span className="client-typing-dots" aria-hidden="true"><i /><i /><i /></span>
                 </div>
               )}
