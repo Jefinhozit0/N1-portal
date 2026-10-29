@@ -1,11 +1,12 @@
 import { getDocumentProxy } from "unpdf";
+import { ocrPages } from "./contratoOcr";
 import { type Encargos, type LaudoDados, emptyLaudo, mesNumero, parseBRL } from "@shared/laudo";
 import { type Modalidade, modalidadeDoTitulo } from "@shared/notificacao";
 
 /**
  * Reads a bank contract (CCB) PDF and fills what it can of the laudo. Works on the text of the PDF,
- * line by line, looking for the labels banks use; a scanned contract (image only) has no text and
- * comes back empty. Whatever is not found stays blank for the team to type in.
+ * line by line, looking for the labels banks use; a scanned contract (image only) has no text, so its
+ * pages go through OCR first (see contratoOcr.ts). Whatever is not found stays blank for the team to type in.
  */
 
 type Item = { x: number; y: number; text: string };
@@ -23,8 +24,10 @@ const QUADRO_RESUMO_PAGES = 4;
  * after the cadastro and the CCB), which then comes first. The other pages are clauses and the
  * insurance proposal, whose amounts ("Valor cálculo Seguro") would be taken for the contract's.
  * A Quadro Resumo past the first pages comes first with the pages that continue it.
+ * A scan has no text: its pages are read by OCR, and all of them are kept, because scanned pages
+ * often come out of order or with some missing.
  */
-async function readLines(bytes: Uint8Array, firstPages = 3, maxPages = 20): Promise<Line[]> {
+async function readLines(bytes: Uint8Array, firstPages = 3, maxPages = 20): Promise<{ lines: Line[]; ocr: boolean }> {
   const pdf = await getDocumentProxy(bytes);
   const pages: Line[][] = [];
   for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, maxPages); pageNumber++) {
@@ -46,10 +49,15 @@ async function readLines(bytes: Uint8Array, firstPages = 3, maxPages = 20): Prom
     }
     pages.push(pageLines);
   }
+  if (pages.every((page) => page.length === 0)) {
+    const scanned = await ocrPages(pdf, maxPages);
+    const quadro = scanned.find((page) => page.slice(0, 12).some((line) => QUADRO_PADRAO.test(line.text) || QUADRO_RESUMO.test(line.text)));
+    return { lines: (quadro ? [quadro, ...scanned.filter((page) => page !== quadro)] : scanned).flat(), ocr: true };
+  }
   const padrao = pages.findIndex((page) => page.slice(0, 12).some((line) => QUADRO_PADRAO.test(line.text)));
   const resumo = pages.findIndex((page, index) => index >= firstPages && page.slice(0, 12).some((line) => QUADRO_RESUMO.test(line.text)));
   const quadro = padrao >= 0 ? pages.slice(padrao, padrao + 1) : resumo >= 0 ? pages.slice(resumo, resumo + QUADRO_RESUMO_PAGES) : [];
-  return [...quadro, ...pages.filter((page, index) => index < firstPages && !quadro.includes(page))].flat();
+  return { lines: [...quadro, ...pages.filter((page, index) => index < firstPages && !quadro.includes(page))].flat(), ocr: false };
 }
 
 /** Amounts written with R$ on the line, in order; without R$, plain numbers that are not percentages. */
@@ -109,58 +117,93 @@ function textAfter(lines: Line[], label: RegExp, stop?: RegExp) {
   return "";
 }
 
-/** A numbered cell label of the Quadro Resumo: "3 - Valor das Parcelas", "2.6 – Função", "5- Valor Total…". */
-const CELL_LABEL = /^\d+(?:\.\d+)?\s*[-–]/;
+/**
+ * A numbered cell label of the Quadro Resumo: "3 - Valor das Parcelas", "2.6 – Função", "5- Valor Total…".
+ * OCR may read the cell border before it ("|3- Valor das Parcelas"), a comma for the dot ("4,5 - Valor…")
+ * or lose the number, leaving the dash before the label's capital ("- Combustível/Motor").
+ */
+const CELL_LABEL = /^[|[(/!]?(?:\d{1,2}(?:[.,]\d{1,2})?\s*[-–]|[-–]\s*[A-ZÀ-Ú])/;
 
 /**
  * The value of a Quadro Resumo cell (Bradesco Financiamentos): the label on top, the value on the line
  * right below, in the same column, which ends where the next label of the row starts.
  * "1 - Taxa de Juros Efetiva" over "2,87 % a.m. 41,17 % a.a." gives "2,87 % a.m. 41,17 % a.a.".
+ * A text PDF gives the label as one item, OCR as one item per word: the label may start at any item
+ * and run over the next ones.
  */
-function cellBelow(lines: Line[], label: RegExp) {
+function cellBelow(lines: Line[], label: RegExp, accept: (value: string) => boolean = () => true) {
+  const joinedFrom = (items: Item[], index: number) => items.slice(index).map((item) => item.text).join(" ");
   for (const line of lines) {
-    const index = line.items.findIndex((item) => label.test(item.text));
-    if (index < 0) continue;
-    const left = line.items[index].x - 4;
-    const right = (line.items.slice(index + 1).find((item) => CELL_LABEL.test(item.text))?.x ?? Infinity) - 4;
-    // The next row of labels is ~37 points below; the value, ~14.
-    const value = lines
-      .filter((other) => other.page === line.page && other.y < line.y && line.y - other.y < 22)
-      .sort((a, b) => b.y - a.y)
-      .map((other) => other.items.filter((item) => item.x >= left && item.x < right && !CELL_LABEL.test(item.text)).map((item) => item.text).join(" "))
-      .find(Boolean);
-    if (value) return value.replace(/\s+/g, " ").trim();
+    for (let index = 0; index < line.items.length; index++) {
+      const match = joinedFrom(line.items, index).match(label);
+      if (!match) continue;
+      // The items the label covers, then the next label of the row.
+      let covered = 0;
+      for (let length = -1; index + covered < line.items.length && length < match[0].trimEnd().length; covered++) length += 1 + line.items[index + covered].text.length;
+      const after = line.items.slice(index + covered);
+      const next = after.findIndex((_, at) => CELL_LABEL.test(joinedFrom(after, at)));
+      // A label whose number OCR garbled ("o - Número" for "2.8 - Número") starts at that garbled bit.
+      const start = /^[-–]/.test(line.items[index].text) && index > 0 && line.items[index - 1].text.length <= 4 ? index - 1 : index;
+      const left = line.items[start].x - 4;
+      // Same for the next label: "E - Cidade" ends the "Bairro" cell at the "E".
+      const end = next > 0 && /^[-–]/.test(after[next].text) && after[next - 1].text.length <= 4 ? next - 1 : next;
+      const right = (end >= 0 ? after[end].x : Infinity) - 4;
+      // The next row of labels is ~30 points below; the value, ~14.
+      const value = lines
+        .filter((other) => other.page === line.page && other.y < line.y && line.y - other.y < 22)
+        .sort((a, b) => b.y - a.y)
+        .map((other) => other.items.filter((item) => item.x >= left && item.x < right && !CELL_LABEL.test(item.text)).map((item) => item.text).join(" "))
+        .find(Boolean);
+      // OCR can match a label inside a clause ("…Quadro Resumo - IV - 4.5 - Valor Total de IOF do Bem e…"): accept says when the value is the cell's.
+      if (value && accept(value)) return value.replace(/\s+/g, " ").trim();
+    }
   }
   return "";
 }
 
+/** "469,188.988-41" (OCR) or "058.956.688-10" → "469.188.988-41"; anything that is not 11 digits stays as it came. */
+function cpfFormat(text: string) {
+  const digits = text.replace(/\D/g, "");
+  return digits.length === 11 ? `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}` : text;
+}
+
 /** What the Quadro Resumo says; only the cells that are there. Its values win over the ones read by label. */
 function quadroResumo(lines: Line[]) {
-  const cell = (label: string) => cellBelow(lines, new RegExp(`^${label}`, "i"));
-  const amount = (label: string) => money(cell(label))[0] ?? null;
-  const [taxaMensal, taxaAnual] = percents(cell(String.raw`\d+\s*-\s*Taxa de Juros Efetiva`));
-  const iofBem = amount(String.raw`4\.5\s*-\s*Valor Total de IOF`), iofProdutos = amount(String.raw`4\.6\s*-\s*Valor Total de IOF`);
-  const ano = [cell(String.raw`\d+\s*-\s*Ano de Fabrica[çc][ãa]o`), cell(String.raw`\d+\s*-\s*Ano do Modelo`)].filter(Boolean).join("/");
-  const [rua, numero, complemento, bairro, cidade, uf, cep] = ["Endere[çc]o Residencial", "N[úu]mero", "Complemento", "Bairro", "Cidade", "UF", "CEP"]
-    .map((name) => cell(String.raw`2\.\d+\s*-\s*${name}$`));
+  // A label ends at a word boundary, not at the end of its item: with OCR the next label follows on the same text.
+  // The cell's number goes as "any short bit before the dash", since OCR misreads it ("S- Valor Total Devido",
+  // "41.6 - Valor Total de IOF dos Produtos"); the words of the label tell the cells apart. The space after
+  // the dash keeps other banks' "Ano-modelo:" from passing for the "- Modelo" cell.
+  const cell = (label: string, numbered = String.raw`\S{0,5}`, accept?: (value: string) => boolean) =>
+    cellBelow(lines, new RegExp(`^[|[(/!]?${numbered}\\s*[-–]\\s+${label}\\b`, "i"), accept);
+  const amount = (label: string) => money(cell(label, undefined, (value) => money(value).length > 0))[0] ?? null;
+  // Rates never have a thousands dot: OCR's "2.06 % a.m." is 2,06.
+  const [taxaMensal, taxaAnual] = percents(cell("Taxa de Juros Efetiva", undefined, (value) => /\d\s*%/.test(value)).replace(/(\d)\.(\d{1,4})(?=\s*%)/g, "$1,$2"));
+  const iofBem = amount("Valor Total de IOF do Bem"), iofProdutos = amount("Valor Total de IOF dos Produtos");
+  const veiculo = [cell("Marca"), cell("Modelo"), cell("Vers[ãa]o")].filter(Boolean);
+  const ano = [cell("Ano de Fabrica[çc][ãa]o"), cell("Ano do Modelo")].filter(Boolean).join("/");
+  const [rua, numero, complemento, bairro, cidade, uf, cep] = ["Endere[çc]o Residencial", "N[úu]mero", "Complemento", "Bairro", "Cidade", "UF", "CEP"].map((name) => cell(name));
+  // "Nome" and "CPF" also head the agent's and the supplier's cells: these keep their number.
+  const cpf = cell(String.raw`CPF(?:\/MF)?`, String.raw`2[.,]2`);
   return {
-    contratante: cell(String.raw`2\.1\s*-\s*Nome$`),
-    cpf: cell(String.raw`2\.2\s*-\s*CPF`),
-    email: cell(String.raw`2\.\d+\s*-\s*E-?mail`).match(EMAIL)?.[0].toLowerCase() ?? "",
+    contratante: cell("Nome", String.raw`2[.,]1`),
+    cpf: cpf && cpfFormat(cpf),
+    email: cell("E-?mail").match(EMAIL)?.[0].toLowerCase() ?? "",
     endereco: [[rua, numero].filter(Boolean).join(", "), complemento, bairro, [cidade, uf].filter(Boolean).join("/"), cep && `CEP ${cep}`].filter(Boolean).join(" - "),
-    garantia: [cell(String.raw`\d+\s*-\s*Marca`), cell(String.raw`\d+\s*-\s*Modelo`), cell(String.raw`\d+\s*-\s*Vers[ãa]o`), ano].filter(Boolean).join(" "),
-    valorSolicitado: amount(String.raw`\d+\s*-\s*Valor Solicitado`),
-    valorFinanciado: amount(String.raw`\d+\s*-\s*Valor Total Devido`),
-    parcelas: Number(cell(String.raw`\d+\s*-\s*Quantidade de Parcelas`).match(/^\d{1,3}\b/)?.[0] ?? 0),
-    valorParcela: amount(String.raw`\d+\s*-\s*Valor das Parcelas`),
-    dataContrato: cell(String.raw`\d+\s*-\s*Data de Emiss[ãa]o`).match(/\d{2}\/\d{2}\/\d{4}/)?.[0] ?? "",
+    // Only the year is not the vehicle: then it stays blank.
+    garantia: veiculo.length ? [...veiculo, ano].filter(Boolean).join(" ") : "",
+    valorSolicitado: amount("Valor Solicitado"),
+    valorFinanciado: amount("Valor Total Devido"),
+    parcelas: Number(cell("Quantidade de Parcelas", undefined, (value) => /^\d{1,3}\b/.test(value)).match(/^\d{1,3}\b/)?.[0] ?? 0),
+    valorParcela: amount("Valor das Parcelas"),
+    // Anexo I has it too: "D. Data de Emissão" over "12/11/2024 17:36:34".
+    dataContrato: (cell(String.raw`Data de Emiss[ãa]o`) || cellBelow(lines, /^[A-Z]\.\s*Data de Emiss[ãa]o/i)).match(/\d{2}\/\d{2}\/\d{4}/)?.[0] ?? "",
     taxaMensal: taxaMensal ?? 0,
     taxaAnual: taxaAnual ?? 0,
     iof: iofBem !== null || iofProdutos !== null ? Math.round(((iofBem ?? 0) + (iofProdutos ?? 0)) * 100) / 100 : null,
-    seguros: amount(String.raw`4\.\d+\s*-\s*Valor de Seguros`),
-    registro: amount(String.raw`4\.\d+\s*-\s*Valor de Registro`),
-    cadastro: amount(String.raw`4\.\d+\s*-\s*Valor Tarifa de Cadastro`),
-    avaliacao: amount(String.raw`4\.\d+\s*-\s*Valor Tarifa Avalia[çc][ãa]o`),
+    seguros: amount("Valor de Seguros"),
+    registro: amount("Valor de Registro"),
+    cadastro: amount("Valor Tarifa de Cadastro"),
+    avaliacao: amount("Valor Tarifa Avalia[çc][ãa]o"),
   };
 }
 
@@ -243,8 +286,10 @@ function bankLine(lines: Line[]): { text: string; index: number } {
   return { text: "", index: -1 };
 }
 
-export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato> {
-  return extrairContrato(await readLines(bytes));
+/** ocr: the contract was a scan, read from its pictures; the team should check every value. */
+export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato & { ocr: boolean }> {
+  const { lines, ocr } = await readLines(bytes);
+  return { ...extrairContrato(lines), ocr };
 }
 
 export function extrairContrato(lines: Line[]): LeituraContrato {
@@ -282,10 +327,10 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
     .replace(/\s*\bModelo\s*:\s*/i, " ").replace(/\s+/g, " ").trim();
 
   dados.valorSolicitado = amountFor(lines, [/Valor Solicitado/i, /Valor L[íi]quido Liberado/i, /Valor (?:l[íi]quido )?(?:do )?(?:cr[ée]dito|empr[ée]stimo) liberado/i, /Valor liberado/i, /Valor (?:l[íi]quido )?do cr[ée]dito/i]) ?? 0;
-  dados.valorFinanciado = amountFor(lines, [/VALOR TOTAL CONTRATADO/i, /Valor total (?:do )?financiad/i, /Total financiado/i, /Valor (?:do )?financiamento/i, /Valor do Empr[ée]stimo\s*\(financiado\)/i], /sem impostos/i) ?? 0;
+  dados.valorFinanciado = amountFor(lines, [/VALOR TOTAL CONTRATADO/i, /Valor total (?:do )?financiad/i, /Total financiado/i, /Valor (?:do )?financiamento/i, /Valor do Empr[ée]stimo\s*\(financiado\)/i, /Valor Total do Financiamento/i], /sem impostos/i) ?? 0;
   dados.valorParcela = (() => {
-    const line = find(lines, /Valor (?:de cada|da|das) (?:parcela|presta[çc][ãa]o)/i);
-    const values = line ? money(line.text) : [];
+    // The first such line with an amount: Bradesco's Quadro Resumo has the label alone, its Anexo I "8. Valor da Parcela R$ 1.307,09".
+    const values = lines.filter((line) => /Valor (?:de cada|da|das) (?:parcela|presta[çc][ãa]o)/i.test(line.text)).map((line) => money(line.text)).find((found) => found.length) ?? [];
     return values.length ? values[values.length - 1] : 0;
   })();
   dados.parcelas = (() => {
