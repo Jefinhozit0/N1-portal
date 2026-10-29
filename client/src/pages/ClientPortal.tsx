@@ -264,7 +264,6 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
         )}
         {termosQuery.data && !termsAccepted && (
           <section className="client-portal-card client-terms">
-            <span className="eyebrow eyebrow-muted">Antes de continuar</span>
             <h1>{TERMS_TITLE}</h1>
             <p className="client-portal-muted">Leia e aceite para acompanhar seu processo. Versão {TERMS_VERSION}.</p>
             <div className="client-terms-text" tabIndex={0} aria-label="Texto dos termos">
@@ -297,7 +296,6 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
           <div className="client-portal-layout" data-tab={tab}>
           <div className="client-portal-side">
           <section className="client-portal-card client-portal-hero">
-            <span className="eyebrow eyebrow-muted">Acompanhamento do processo</span>
             <h1>Olá, {firstName}</h1>
             <div className="client-portal-status">
               <div><small>Tipo de processo</small><strong>{processo.type || "Em definição"}</strong></div>
