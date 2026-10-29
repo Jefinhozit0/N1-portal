@@ -92,15 +92,17 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
   async function read(input: { documentoId: number } | { conteudo: string }, name: string) {
     setSource(`Lendo ${name}... Se for um contrato escaneado, leva cerca de 1 minuto.`);
     try {
-      const { dados, encontrados, ocr } = await lerContrato.mutateAsync(input);
+      const { dados, encontrados, ocr, ia } = await lerContrato.mutateAsync(input);
       if (encontrados.length === 0) {
         setSource(`Não encontrei texto em ${name} nem lendo as imagens das páginas. Preencha os dados à mão.`);
         return;
       }
       setForm(toForm({ ...dados, contratante: dados.contratante || (chosenClient?.name ?? "").toUpperCase() }));
-      setSource(ocr
-        ? `Dados lidos de ${name}, um contrato escaneado: confira cada valor com o contrato antes de gerar, a leitura de imagem pode trocar algum número.`
-        : `Dados lidos de ${name}. Confira os valores antes de gerar.`);
+      setSource(ia
+        ? `Dados lidos de ${name} pela IA (modelo de contrato novo ou escaneado): confira cada valor com o contrato antes de gerar.`
+        : ocr
+          ? `Dados lidos de ${name}, um contrato escaneado: confira cada valor com o contrato antes de gerar, a leitura de imagem pode trocar algum número.`
+          : `Dados lidos de ${name}. Confira os valores antes de gerar.`);
     } catch (error) {
       setSource("");
       toast.error(error instanceof Error ? error.message : "Não foi possível ler o contrato.");

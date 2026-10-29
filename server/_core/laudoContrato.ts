@@ -1,4 +1,5 @@
 import { getDocumentProxy } from "unpdf";
+import { isContratoIaConfigured, lerContratoComIa } from "./contratoIa";
 import { ocrPages } from "./contratoOcr";
 import { type Encargos, type LaudoDados, emptyLaudo, mesNumero, parseBRL } from "@shared/laudo";
 import { type Modalidade, modalidadeDoTitulo } from "@shared/notificacao";
@@ -24,10 +25,10 @@ const QUADRO_RESUMO_PAGES = 4;
  * after the cadastro and the CCB), which then comes first. The other pages are clauses and the
  * insurance proposal, whose amounts ("Valor cálculo Seguro") would be taken for the contract's.
  * A Quadro Resumo past the first pages comes first with the pages that continue it.
- * A scan has no text: its pages are read by OCR, and all of them are kept, because scanned pages
- * often come out of order or with some missing.
+ * A scan has no text: with useOcr its pages are read by OCR, and all of them are kept, because scanned
+ * pages often come out of order or with some missing; without it, no lines and scanned: true.
  */
-async function readLines(bytes: Uint8Array, firstPages = 3, maxPages = 20): Promise<{ lines: Line[]; ocr: boolean }> {
+async function readLines(bytes: Uint8Array, useOcr: boolean, firstPages = 3, maxPages = 20): Promise<{ lines: Line[]; scanned: boolean }> {
   const pdf = await getDocumentProxy(bytes);
   const pages: Line[][] = [];
   for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, maxPages); pageNumber++) {
@@ -50,14 +51,15 @@ async function readLines(bytes: Uint8Array, firstPages = 3, maxPages = 20): Prom
     pages.push(pageLines);
   }
   if (pages.every((page) => page.length === 0)) {
+    if (!useOcr) return { lines: [], scanned: true };
     const scanned = await ocrPages(pdf, maxPages);
     const quadro = scanned.find((page) => page.slice(0, 12).some((line) => QUADRO_PADRAO.test(line.text) || QUADRO_RESUMO.test(line.text)));
-    return { lines: (quadro ? [quadro, ...scanned.filter((page) => page !== quadro)] : scanned).flat(), ocr: true };
+    return { lines: (quadro ? [quadro, ...scanned.filter((page) => page !== quadro)] : scanned).flat(), scanned: true };
   }
   const padrao = pages.findIndex((page) => page.slice(0, 12).some((line) => QUADRO_PADRAO.test(line.text)));
   const resumo = pages.findIndex((page, index) => index >= firstPages && page.slice(0, 12).some((line) => QUADRO_RESUMO.test(line.text)));
   const quadro = padrao >= 0 ? pages.slice(padrao, padrao + 1) : resumo >= 0 ? pages.slice(resumo, resumo + QUADRO_RESUMO_PAGES) : [];
-  return { lines: [...quadro, ...pages.filter((page, index) => index < firstPages && !quadro.includes(page))].flat(), ocr: false };
+  return { lines: [...quadro, ...pages.filter((page, index) => index < firstPages && !quadro.includes(page))].flat(), scanned: false };
 }
 
 /** Amounts written with R$ on the line, in order; without R$, plain numbers that are not percentages. */
@@ -286,10 +288,44 @@ function bankLine(lines: Line[]): { text: string; index: number } {
   return { text: "", index: -1 };
 }
 
-/** ocr: the contract was a scan, read from its pictures; the team should check every value. */
-export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato & { ocr: boolean }> {
-  const { lines, ocr } = await readLines(bytes);
-  return { ...extrairContrato(lines), ocr };
+/** The laudo fields that were found (the ones the team doesn't have to type). */
+export function camposEncontrados(dados: LaudoDados) {
+  return Object.entries({ ...dados, ...dados.encargos })
+    .filter(([key, value]) => key !== "encargos" && key !== "objeto" && key !== "jurosMora" && value !== "" && value !== 0 && value !== null)
+    .map(([key]) => key);
+}
+
+/** Without these the free reader didn't understand the contract, and the AI reads it instead. */
+const CAMPOS_PRINCIPAIS = ["contrato", "contratante", "valorFinanciado", "parcelas", "valorParcela", "taxaMensal"];
+
+/** The AI's reading, with the blanks it left filled from the free reader's. */
+function juntar(ia: LeituraContrato, regras: LeituraContrato): LeituraContrato {
+  const dados = { ...regras.dados, ...Object.fromEntries(Object.entries(ia.dados).filter(([, value]) => value !== "" && value !== 0)) } as LaudoDados;
+  dados.encargos = Object.fromEntries(Object.entries(ia.dados.encargos).map(([key, value]) => [key, value ?? regras.dados.encargos[key as keyof Encargos]])) as Encargos;
+  return {
+    dados, cpf: ia.cpf || regras.cpf, cnpjInstituicao: ia.cnpjInstituicao || regras.cnpjInstituicao, modalidade: ia.modalidade ?? regras.modalidade,
+    email: ia.email || regras.email, endereco: ia.endereco || regras.endereco, encontrados: camposEncontrados(dados),
+  };
+}
+
+/**
+ * The free reader first: a contract with text whose layout it knows is done in a moment, at no cost.
+ * When it misses the main fields, or the PDF is a scan, Claude reads it (contratoIa.ts) if the API is
+ * set up; without the API (or if it fails) a scan goes through OCR, which is slower and less precise.
+ * ocr / ia say how it was read, so the team knows how much to check.
+ */
+export async function lerContrato(bytes: Uint8Array): Promise<LeituraContrato & { ocr: boolean; ia: boolean }> {
+  const iaLigada = isContratoIaConfigured();
+  // pdf.js may take over the buffer it is given, and the bytes may still go to the AI or the OCR.
+  const { lines, scanned } = await readLines(bytes.slice(), !iaLigada);
+  const regras = extrairContrato(lines);
+  const completa = CAMPOS_PRINCIPAIS.every((campo) => regras.encontrados.includes(campo));
+  if (iaLigada && (scanned || !completa)) {
+    const ia = await lerContratoComIa(bytes);
+    if (ia) return { ...(scanned ? ia : juntar(ia, regras)), ocr: false, ia: true };
+    if (scanned) return { ...extrairContrato((await readLines(bytes.slice(), true)).lines), ocr: true, ia: false };
+  }
+  return { ...regras, ocr: scanned, ia: false };
 }
 
 export function extrairContrato(lines: Line[]): LeituraContrato {
@@ -392,9 +428,7 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
   for (const key of ["valorSolicitado", "valorFinanciado", "parcelas", "valorParcela", "taxaMensal", "taxaAnual", "iof"] as const) if (quadro[key]) dados[key] = quadro[key];
   for (const key of ["seguros", "registro", "cadastro", "avaliacao"] as const) if (quadro[key] !== null) encargos[key] = zeroIsAbsent(quadro[key]);
 
-  const encontrados = Object.entries({ ...dados, ...encargos })
-    .filter(([key, value]) => key !== "encargos" && key !== "objeto" && key !== "jurosMora" && value !== "" && value !== 0 && value !== null)
-    .map(([key]) => key);
+  const encontrados = camposEncontrados(dados);
   // Stellantis: "CPF/CNPJ do(a) solicitante: 859.107.164-68".
   const cpf = quadro.cpf || (lines.map((line) => line.text.match(/CPF(?:\/CNPJ)?(?:\s+do\s*(?:\(a\))?\s+[a-z()]+)?\s*:?\s*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/i)?.[1]).find(Boolean) ?? "");
   // The bank's CNPJ is on its line, or alone on the line right below it (Stellantis).
