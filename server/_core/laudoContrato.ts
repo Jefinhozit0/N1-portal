@@ -14,10 +14,15 @@ export type Line = { page: number; y: number; items: Item[]; text: string };
 /** The title of the standard table banks must fill (Res. CMN 4.881), in capitals: clauses mention it in lowercase. */
 const QUADRO_PADRAO = /OR[ÇC]AMENTO DE OPERA[ÇC][ÃA]O DE CR[ÉE]DITO|CONDI[ÇC][ÕO]ES ESPEC[ÍI]FICAS DE OPERA[ÇC][ÃA]O DE CR[ÉE]DITO/;
 
+/** Bradesco Financiamentos: the data is in a "Quadro Resumo" after six pages of clauses, and runs over the next pages up to Anexo I. */
+const QUADRO_RESUMO = /^Quadro Resumo$/i;
+const QUADRO_RESUMO_PAGES = 4;
+
 /**
  * The first 3 pages, plus the page of the standard table wherever it is (Digimais puts it on page 11,
  * after the cadastro and the CCB), which then comes first. The other pages are clauses and the
  * insurance proposal, whose amounts ("Valor cálculo Seguro") would be taken for the contract's.
+ * A Quadro Resumo past the first pages comes first with the pages that continue it.
  */
 async function readLines(bytes: Uint8Array, firstPages = 3, maxPages = 20): Promise<Line[]> {
   const pdf = await getDocumentProxy(bytes);
@@ -41,10 +46,10 @@ async function readLines(bytes: Uint8Array, firstPages = 3, maxPages = 20): Prom
     }
     pages.push(pageLines);
   }
-  const quadro = pages.findIndex((page) => page.slice(0, 12).some((line) => QUADRO_PADRAO.test(line.text)));
-  const kept = pages.filter((_, index) => index < firstPages || index === quadro);
-  if (quadro > 0) kept.sort((a, b) => (a === pages[quadro] ? -1 : b === pages[quadro] ? 1 : 0));
-  return kept.flat();
+  const padrao = pages.findIndex((page) => page.slice(0, 12).some((line) => QUADRO_PADRAO.test(line.text)));
+  const resumo = pages.findIndex((page, index) => index >= firstPages && page.slice(0, 12).some((line) => QUADRO_RESUMO.test(line.text)));
+  const quadro = padrao >= 0 ? pages.slice(padrao, padrao + 1) : resumo >= 0 ? pages.slice(resumo, resumo + QUADRO_RESUMO_PAGES) : [];
+  return [...quadro, ...pages.filter((page, index) => index < firstPages && !quadro.includes(page))].flat();
 }
 
 /** Amounts written with R$ on the line, in order; without R$, plain numbers that are not percentages. */
@@ -102,6 +107,61 @@ function textAfter(lines: Line[], label: RegExp, stop?: RegExp) {
     if (value) return value;
   }
   return "";
+}
+
+/** A numbered cell label of the Quadro Resumo: "3 - Valor das Parcelas", "2.6 – Função", "5- Valor Total…". */
+const CELL_LABEL = /^\d+(?:\.\d+)?\s*[-–]/;
+
+/**
+ * The value of a Quadro Resumo cell (Bradesco Financiamentos): the label on top, the value on the line
+ * right below, in the same column, which ends where the next label of the row starts.
+ * "1 - Taxa de Juros Efetiva" over "2,87 % a.m. 41,17 % a.a." gives "2,87 % a.m. 41,17 % a.a.".
+ */
+function cellBelow(lines: Line[], label: RegExp) {
+  for (const line of lines) {
+    const index = line.items.findIndex((item) => label.test(item.text));
+    if (index < 0) continue;
+    const left = line.items[index].x - 4;
+    const right = (line.items.slice(index + 1).find((item) => CELL_LABEL.test(item.text))?.x ?? Infinity) - 4;
+    // The next row of labels is ~37 points below; the value, ~14.
+    const value = lines
+      .filter((other) => other.page === line.page && other.y < line.y && line.y - other.y < 22)
+      .sort((a, b) => b.y - a.y)
+      .map((other) => other.items.filter((item) => item.x >= left && item.x < right && !CELL_LABEL.test(item.text)).map((item) => item.text).join(" "))
+      .find(Boolean);
+    if (value) return value.replace(/\s+/g, " ").trim();
+  }
+  return "";
+}
+
+/** What the Quadro Resumo says; only the cells that are there. Its values win over the ones read by label. */
+function quadroResumo(lines: Line[]) {
+  const cell = (label: string) => cellBelow(lines, new RegExp(`^${label}`, "i"));
+  const amount = (label: string) => money(cell(label))[0] ?? null;
+  const [taxaMensal, taxaAnual] = percents(cell(String.raw`\d+\s*-\s*Taxa de Juros Efetiva`));
+  const iofBem = amount(String.raw`4\.5\s*-\s*Valor Total de IOF`), iofProdutos = amount(String.raw`4\.6\s*-\s*Valor Total de IOF`);
+  const ano = [cell(String.raw`\d+\s*-\s*Ano de Fabrica[çc][ãa]o`), cell(String.raw`\d+\s*-\s*Ano do Modelo`)].filter(Boolean).join("/");
+  const [rua, numero, complemento, bairro, cidade, uf, cep] = ["Endere[çc]o Residencial", "N[úu]mero", "Complemento", "Bairro", "Cidade", "UF", "CEP"]
+    .map((name) => cell(String.raw`2\.\d+\s*-\s*${name}$`));
+  return {
+    contratante: cell(String.raw`2\.1\s*-\s*Nome$`),
+    cpf: cell(String.raw`2\.2\s*-\s*CPF`),
+    email: cell(String.raw`2\.\d+\s*-\s*E-?mail`).match(EMAIL)?.[0].toLowerCase() ?? "",
+    endereco: [[rua, numero].filter(Boolean).join(", "), complemento, bairro, [cidade, uf].filter(Boolean).join("/"), cep && `CEP ${cep}`].filter(Boolean).join(" - "),
+    garantia: [cell(String.raw`\d+\s*-\s*Marca`), cell(String.raw`\d+\s*-\s*Modelo`), cell(String.raw`\d+\s*-\s*Vers[ãa]o`), ano].filter(Boolean).join(" "),
+    valorSolicitado: amount(String.raw`\d+\s*-\s*Valor Solicitado`),
+    valorFinanciado: amount(String.raw`\d+\s*-\s*Valor Total Devido`),
+    parcelas: Number(cell(String.raw`\d+\s*-\s*Quantidade de Parcelas`).match(/^\d{1,3}\b/)?.[0] ?? 0),
+    valorParcela: amount(String.raw`\d+\s*-\s*Valor das Parcelas`),
+    dataContrato: cell(String.raw`\d+\s*-\s*Data de Emiss[ãa]o`).match(/\d{2}\/\d{2}\/\d{4}/)?.[0] ?? "",
+    taxaMensal: taxaMensal ?? 0,
+    taxaAnual: taxaAnual ?? 0,
+    iof: iofBem !== null || iofProdutos !== null ? Math.round(((iofBem ?? 0) + (iofProdutos ?? 0)) * 100) / 100 : null,
+    seguros: amount(String.raw`4\.\d+\s*-\s*Valor de Seguros`),
+    registro: amount(String.raw`4\.\d+\s*-\s*Valor de Registro`),
+    cadastro: amount(String.raw`4\.\d+\s*-\s*Valor Tarifa de Cadastro`),
+    avaliacao: amount(String.raw`4\.\d+\s*-\s*Valor Tarifa Avalia[çc][ãa]o`),
+  };
 }
 
 const zeroIsAbsent = (value: number | null) => (value && value > 0 ? value : null);
@@ -191,11 +251,16 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
   const dados = emptyLaudo();
   if (lines.length === 0) return { dados, cpf: "", cnpjInstituicao: "", modalidade: null, email: "", endereco: "", encontrados: [] };
 
-  dados.contrato = lines.map((line) => line.text.match(/(?:OPERA[ÇC][AÃ]O|CONTRATO|C[ÉE]DULA|PROPOSTA|OR[ÇC]AMENTO|CONSIGNADO)\s*(?:N[º°o.]*|n[úu]mero)\s*:?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean) ?? "";
+  dados.contrato = lines.map((line) => line.text.match(/(?:OPERA[ÇC][AÃ]O|CONTRATO|C[ÉE]DULA|PROPOSTA|OR[ÇC]AMENTO|CONSIGNADO)\s*(?:N[º°o.]*|n[úu]mero)\s*:?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean)
+    // Bradesco Financiamentos: "Cédula de Crédito Bancário – CCB – Pessoa Física Nº 4247432349", on top of every page.
+    ?? lines.map((line) => line.text.match(/^C[ée]dula de Cr[ée]dito Banc[áa]rio\b.{0,40}?\bN[º°o]\.?\s*(\d[\d./-]{3,})/i)?.[1]).find(Boolean)
+    ?? "";
   // Itaú: "-ITAU UNIBANCO HOLDING S.A. - CNPJ: …". Consignado: "Instituição Financeira: BANCO SANTANDER (BRASIL) S.A.".
   // Digimais: "Banco Digimais S.A., instituição financeira de direito privado, com sede na …".
   dados.instituicao = bankLine(lines).text
     .replace(/\s*-?\s*CNPJ.*$/i, "")
+    // Bradesco's Quadro Resumo: "Banco Bradesco Financiamentos S.A. 07.207.996/0001-50", the CNPJ in its own column.
+    .replace(/\s+\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}.*$/, "")
     .replace(/^.*?(?:Institui[çc][ãa]o Financeira|Credora?)\s*:\s*/i, "")
     .replace(/(\bS\.?\s?\/?A\.?)\s*,.*$/i, "$1")
     .replace(/^[\s-]+/, "")
@@ -277,16 +342,24 @@ export function extrairContrato(lines: Line[]): LeituraContrato {
   };
   dados.encargos = encargos;
 
+  const quadro = quadroResumo(lines);
+  for (const key of ["contratante", "garantia", "dataContrato"] as const) if (quadro[key]) dados[key] = quadro[key];
+  for (const key of ["valorSolicitado", "valorFinanciado", "parcelas", "valorParcela", "taxaMensal", "taxaAnual", "iof"] as const) if (quadro[key]) dados[key] = quadro[key];
+  for (const key of ["seguros", "registro", "cadastro", "avaliacao"] as const) if (quadro[key] !== null) encargos[key] = zeroIsAbsent(quadro[key]);
+
   const encontrados = Object.entries({ ...dados, ...encargos })
     .filter(([key, value]) => key !== "encargos" && key !== "objeto" && key !== "jurosMora" && value !== "" && value !== 0 && value !== null)
     .map(([key]) => key);
   // Stellantis: "CPF/CNPJ do(a) solicitante: 859.107.164-68".
-  const cpf = lines.map((line) => line.text.match(/CPF(?:\/CNPJ)?(?:\s+do\s*(?:\(a\))?\s+[a-z()]+)?\s*:?\s*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/i)?.[1]).find(Boolean) ?? "";
+  const cpf = quadro.cpf || (lines.map((line) => line.text.match(/CPF(?:\/CNPJ)?(?:\s+do\s*(?:\(a\))?\s+[a-z()]+)?\s*:?\s*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/i)?.[1]).find(Boolean) ?? "");
   // The bank's CNPJ is on its line, or alone on the line right below it (Stellantis).
   const bank = bankLine(lines);
   const cnpjOf = (text?: string) => text?.match(/CNPJ(?:\s+sob)?(?:\s*n[º°o]\.?)?\s*:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i)?.[1];
-  const cnpjInstituicao = cnpjOf(bank.text) ?? (bank.index >= 0 ? cnpjOf(lines[bank.index + 1]?.text) : undefined) ?? "";
+  const cnpjInstituicao = cnpjOf(bank.text) ?? (bank.index >= 0 ? cnpjOf(lines[bank.index + 1]?.text) : undefined)
+    ?? bank.text.match(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/)?.[1] ?? "";
   // The title sits in the first lines of the main page ("CÉDULA DE CRÉDITO BANCÁRIO - CRÉDITO PESSOAL…", "…CRÉDITO DIRETO AO CONSUMIDOR (CDC) – VEÍCULOS").
-  const modalidade = modalidadeDoTitulo(lines.filter((line) => line.page === lines[0].page).slice(0, 8).map((line) => line.text).join(" "));
-  return { dados, cpf, cnpjInstituicao, modalidade, email: clientEmail(lines), endereco: clientAddress(lines, dados.contratante), encontrados };
+  // Bradesco's title says only "Pessoa Física": page 1 says what it is ("corresponde ao financiamento para aquisição de bem(ns)").
+  const titulo = (page: number) => lines.filter((line) => line.page === page).slice(0, 8).map((line) => line.text).join(" ");
+  const modalidade = modalidadeDoTitulo(titulo(lines[0].page)) ?? (lines[0].page !== 1 ? modalidadeDoTitulo(titulo(1)) : null);
+  return { dados, cpf, cnpjInstituicao, modalidade, email: quadro.email || clientEmail(lines), endereco: quadro.endereco || clientAddress(lines, dados.contratante), encontrados };
 }
