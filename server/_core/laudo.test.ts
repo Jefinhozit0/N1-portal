@@ -318,6 +318,43 @@ const BRADESCO_CCB = [
   { ...line(45, "[28]Quadro Resumo - VI - 1 - Encargos Remuneratórios (juros da operação) [407], sendo a [454]Taxa de Juros Efetiva"), page: 1 },
 ];
 
+// The same Quadro Resumo from a scan, as OCR gives it: one item per word, cell numbers misread ("S-", "41.6", "!",
+// "o" for "2.8", "E" for "2.11"), "2.06" with a dot, and a clause on page 1 that repeats a label. Personal data replaced.
+const BRADESCO_OCR = [
+  { ...line(744, "[20]Cédula [64]de [81]Crédito [128]Bancário [185]- [191]CCB [222]- [229]Pessoa [271]Física [394]Nº [420]4200614670"), page: 5 },
+  { ...line(640, "[20]Quadro [61]Resumo"), page: 5 },
+  { ...line(500, "[20]Banco [54]Bradesco [102]Financiamentos [181]S.A. [405]07.207.996/0001-50"), page: 5 },
+  { ...line(455, "[21]2.1 [38]- [43]Nome [447]2.2 [466]- [470]CPF/MF"), page: 5 },
+  { ...line(441, "[20]JOSE [64]EXEMPLO [137]DE [155]SOUZA [447]000,000.000-00"), page: 5 },
+  { ...line(312, "[21]2.7 [40]- [46]Endereço [94]Residencial [323]o [343]- [350]Número [403]-” [424]- [431]Complemento"), page: 5 },
+  { ...line(296, "[20]R [30]EXEMPLO [83]AURELLI [326]97"), page: 5 },
+  { ...line(280, "[21]2.10 [45]- [55]Bairro [207]E [234]- [244]Cidade [398]eo [470]po [502]e"), page: 5 },
+  { ...line(265, "[20]JARDIM [68]EXEMPLO [210]SAO [237]PAULO [400]SP [477]4856-170"), page: 5 },
+  { ...line(409, "[20]Quadro [65]Resumo [111]- [119]IV [136]— [146]4.5—- [180]Valor [214]Total [245]de [262]IOF [287]do [304]Bem [330]e"), page: 1 },
+  { ...line(393, "[20]Total [51]de [66]IOF [90]dos [112]Produtos [161]Adicionais [219]serão [247]calculados"), page: 1 },
+  { ...line(490, "[20]4,5 [38]- [45]Valor [78]Total [107]de [123]IOF [147]do [163]Bem [294]41.6 [315]- [319]Valor [351]Total [381]de [397]IOF [421]dos [442]Produtos [491]Adicionais"), page: 2 },
+  { ...line(475, "[21]R$ [44]1.069,40 [260]71% [295][RS [318]51,99 [535]0,13 [559]%"), page: 2 },
+  { ...line(458, "[20]S- [36]Valor [68]Total [99]Devido [138]no [154]Ato [175]da [190]Contratação"), page: 2 },
+  { ...line(443, "[21]R$ [46]39.385,10 [525]100,00 [561]%"), page: 2 },
+  { ...line(294, "[21]1 [30]- [36]Carência [86]para [114]1º [126]Vencimento [235]- [242]Prazo [274]da [289]Operação [343]mês(es) [395]! [407]- [413]Valor [445]das [466]Parcelas"), page: 2 },
+  { ...line(280, "[19]30 [248]48 [400]R$ [421]1.307,09"), page: 2 },
+  { ...line(150, "[21]1- [36]Taxa [65]de [80]Juros [112]Efetiva [299]2 [309]- [315]Custo [349]Efetivo [388]Total [421]- [425]CET"), page: 2 },
+  { ...line(132, "[58]2.06 [84]% [99]a.m. [207]27,73 [239]% [254]a.a. [293]| [338]2,62 [364]% [379]a.m. [474]36,36 [504]% [519]a.a."), page: 2 },
+];
+
+describe("extrairContrato (Bradesco Financiamentos escaneado, lido por OCR)", () => {
+  it("finds each cell by the words of its label, even with the number misread", () => {
+    const leitura = extrairContrato(BRADESCO_OCR);
+    expect(leitura.dados).toMatchObject({
+      contrato: "4200614670", contratante: "JOSE EXEMPLO DE SOUZA", instituicao: "Banco Bradesco Financiamentos S.A.",
+      valorFinanciado: 39385.1, valorParcela: 1307.09, taxaMensal: 2.06, taxaAnual: 27.73, iof: 1121.39,
+      // Only the year would be no vehicle: blank for the team to type.
+      garantia: "",
+    });
+    expect(leitura).toMatchObject({ cpf: "000.000.000-00", cnpjInstituicao: "07.207.996/0001-50", endereco: "R EXEMPLO AURELLI, 97 - JARDIM EXEMPLO - SAO PAULO SP 4856-170" });
+  });
+});
+
 describe("extrairContrato (Bradesco Financiamentos)", () => {
   it("reads each value from the cell below its label in the Quadro Resumo", () => {
     const leitura = extrairContrato(BRADESCO_CCB);
