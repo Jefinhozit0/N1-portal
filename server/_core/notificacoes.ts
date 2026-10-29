@@ -38,7 +38,19 @@ function claimSlot(key: string, intervalMs: number) {
   return true;
 }
 
-function clientTexts(kind: ClientNoticeKind, firstName: string, detail: string | undefined, url: string) {
+/** How the client signs a document for free with the gov.br account (ITI's Assinador), sent with the "assinatura" notice. */
+export const GOVBR_SIGNATURE_STEPS = [
+  "1. Entre no portal pelo link acima e baixe o documento.",
+  "2. Acesse https://assinador.iti.br e entre com a sua conta gov.br (ela precisa ser nível prata ou ouro).",
+  "3. Toque em \"Escolher arquivo\" e selecione o documento que você baixou.",
+  "4. Coloque a assinatura na linha com o seu nome e toque em \"Assinar\".",
+  "5. Confirme com o código que o gov.br envia para o seu celular.",
+  "6. Baixe o documento assinado.",
+  "7. Envie o arquivo assinado respondendo esta mensagem.",
+];
+const GOVBR_LEVEL_TIP = "Se a sua conta gov.br for nível bronze, dá para subir de nível no app gov.br, pelo reconhecimento facial ou pelo seu banco.";
+
+export function clientTexts(kind: ClientNoticeKind, firstName: string, detail: string | undefined, url: string) {
   if (kind === "resposta") {
     return {
       whatsapp: `Olá, ${firstName}! 💬 A equipe da *N1 Soluções* respondeu sua mensagem no portal.\n\nToque para ver: ${url}`,
@@ -54,11 +66,26 @@ function clientTexts(kind: ClientNoticeKind, firstName: string, detail: string |
   if (kind === "assinatura") {
     const documento = detail ? `: ${detail}` : "";
     return {
-      whatsapp: `Olá, ${firstName}! ✍️ A *N1 Soluções* gerou um novo documento para o seu processo${detail ? `: *${detail}*` : ""}.\n\nEle precisa da sua *assinatura*. Baixe no portal, assine e nos envie de volta: ${url}\n\nQualquer dúvida, é só responder esta mensagem.`,
+      whatsapp: [
+        `Olá, ${firstName}! ✍️ A *N1 Soluções* gerou um novo documento para o seu processo${detail ? `: *${detail}*` : ""}.`,
+        "",
+        `Ele precisa da sua *assinatura*. O documento está no portal: ${url}`,
+        "",
+        "📝 *Como assinar pelo gov.br (é gratuito):*",
+        ...GOVBR_SIGNATURE_STEPS,
+        "",
+        `💡 ${GOVBR_LEVEL_TIP}`,
+        "",
+        "Qualquer dúvida, é só responder esta mensagem.",
+      ].join("\n"),
       email: {
         subject: `Documento para assinar${documento}`,
         title: `Olá, ${firstName}!`,
-        paragraphs: [`A N1 Soluções gerou um novo documento para o seu processo${documento}.`, "Ele precisa da sua assinatura. Baixe no portal, assine e nos envie de volta."],
+        paragraphs: [
+          `A N1 Soluções gerou um novo documento para o seu processo${documento}. Ele precisa da sua assinatura e está no portal (botão abaixo).`,
+          ["Como assinar pelo gov.br (é gratuito):", ...GOVBR_SIGNATURE_STEPS.map((step) => step.replace("respondendo esta mensagem", "respondendo este e-mail"))].join("\n"),
+          GOVBR_LEVEL_TIP,
+        ],
       },
     };
   }
