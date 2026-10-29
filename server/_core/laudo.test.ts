@@ -340,6 +340,20 @@ const BRADESCO_OCR = [
   { ...line(280, "[19]30 [248]48 [400]R$ [421]1.307,09"), page: 2 },
   { ...line(150, "[21]1- [36]Taxa [65]de [80]Juros [112]Efetiva [299]2 [309]- [315]Custo [349]Efetivo [388]Total [421]- [425]CET"), page: 2 },
   { ...line(132, "[58]2.06 [84]% [99]a.m. [207]27,73 [239]% [254]a.a. [293]| [338]2,62 [364]% [379]a.m. [474]36,36 [504]% [519]a.a."), page: 2 },
+  // The Marca/Modelo labels were lost under the watermark; the year cell runs into the fuel one.
+  { ...line(85, "[21]5 [29]- [37]Ano [60]de [75]Fabricação [350]- [357]Combustível/Motor"), page: 5 },
+  { ...line(72, "[21]2019 [341]FLEX-GASOLINA"), page: 5 },
+  // Anexo I lists the vehicle under "Item(ns) Financiado(s)".
+  { ...line(289, "[51]Item(ns) [98]Financiado(s) [205]Taxa [231]de [246]Juros"), page: 4 },
+  { ...line(276, "[276]Bem(ns) [408]Produto(sy"), page: 4 },
+  { ...line(246, "[22]NISSAN"), page: 4 },
+  { ...line(231, "[23]MARCH [70]FLEX [102]COM [222]2.06 [245]% [259]a.m"), page: 4 },
+  { ...line(217, "[22]SV [42]1.6 [60]16V [83]FLEXSTART [153]A/G"), page: 4 },
+  { ...line(191, "[72]*seg [97]Prot [119]4,99% [265]XXXXXXX"), page: 4 },
+  // The footer read again enlarged: right on two pages, garbled on the third.
+  { ...line(-1, "[30]Mod [180]Credor [220](Banoo) [300]12/11/2024 [360]17:36:34 [400](Horário [440]de [460]Prasílio)"), page: 1 },
+  { ...line(-1, "[30]Mod [180]Credor [220](Banoo) [300]1311/2024 [360]17:36:34 [400](Horário [440]de [460]Prasília)"), page: 2 },
+  { ...line(-1, "[30]Mod [180]Credor [220](Banoo) [300]12/11/2024 [360]17:36:34 [400](Horário [440]de [460]Prasílo)"), page: 5 },
 ];
 
 describe("extrairContrato (Bradesco Financiamentos escaneado, lido por OCR)", () => {
@@ -348,8 +362,7 @@ describe("extrairContrato (Bradesco Financiamentos escaneado, lido por OCR)", ()
     expect(leitura.dados).toMatchObject({
       contrato: "4200614670", contratante: "JOSE EXEMPLO DE SOUZA", instituicao: "Banco Bradesco Financiamentos S.A.",
       valorFinanciado: 39385.1, valorParcela: 1307.09, taxaMensal: 2.06, taxaAnual: 27.73, iof: 1121.39,
-      // Only the year would be no vehicle: blank for the team to type.
-      garantia: "",
+      garantia: "NISSAN MARCH FLEX COM SV 1.6 16V FLEXSTART A/G 2019", dataContrato: "12/11/2024",
     });
     expect(leitura).toMatchObject({ cpf: "000.000.000-00", cnpjInstituicao: "07.207.996/0001-50", endereco: "R EXEMPLO AURELLI, 97 - JARDIM EXEMPLO - SAO PAULO SP 4856-170" });
   });
