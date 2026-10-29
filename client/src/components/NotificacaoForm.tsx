@@ -92,7 +92,7 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
     if (!file) return;
     setSource(`Lendo ${file.name}... Se for um contrato escaneado, leva cerca de 1 minuto.`);
     try {
-      const { dados, cpf, cnpjInstituicao, modalidade: lida, encontrados, ocr } = await lerContrato.mutateAsync({ conteudo: file.base64 });
+      const { dados, cpf, cnpjInstituicao, modalidade: lida, encontrados, ocr, ia } = await lerContrato.mutateAsync({ conteudo: file.base64 });
       if (encontrados.length === 0) {
         setSource(`Não encontrei texto em ${file.name} nem lendo as imagens das páginas. Preencha os dados à mão.`);
         return;
@@ -113,9 +113,11 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
           ? { bancoNome: bank.nome, bancoCnpj: bank.cnpj, bancoEndereco: bank.endereco }
           : { bancoNome: dados.instituicao, bancoCnpj: cnpjInstituicao, bancoEndereco: "" }),
       }));
-      const lidos = ocr ? `Dados lidos de ${file.name}, um contrato escaneado: confira cada valor com o contrato, a leitura de imagem pode trocar algum número.` : `Dados lidos de ${file.name}.`;
+      const lidos = ia
+        ? `Dados lidos de ${file.name} pela IA (modelo de contrato novo ou escaneado): confira cada valor com o contrato.`
+        : ocr ? `Dados lidos de ${file.name}, um contrato escaneado: confira cada valor com o contrato, a leitura de imagem pode trocar algum número.` : `Dados lidos de ${file.name}.`;
       setSource(bank || !dados.instituicao
-        ? `${lidos}${ocr ? "" : " Confira os valores antes de gerar."}`
+        ? `${lidos}${ocr || ia ? "" : " Confira os valores antes de gerar."}`
         : `${lidos} Falta o endereço da sede de ${dados.instituicao}: confira no site do banco.`);
     } catch (error) {
       setSource("");

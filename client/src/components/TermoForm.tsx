@@ -44,7 +44,7 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
     if (!file) return;
     setSource(`Lendo ${file.name}... Se for um contrato escaneado, leva cerca de 1 minuto.`);
     try {
-      const { dados, cpf, cnpjInstituicao, modalidade: lida, email, endereco, encontrados, ocr } = await lerContrato.mutateAsync({ conteudo: file.base64 });
+      const { dados, cpf, cnpjInstituicao, modalidade: lida, email, endereco, encontrados, ocr, ia } = await lerContrato.mutateAsync({ conteudo: file.base64 });
       if (encontrados.length === 0) {
         setSource(`Não encontrei texto em ${file.name} nem lendo as imagens das páginas. Preencha os dados à mão.`);
         return;
@@ -59,8 +59,10 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
         banco: bancoConhecido(dados.instituicao, cnpjInstituicao)?.nome ?? (dados.instituicao || current.banco),
       }));
       const faltando = [!email && "e-mail", !endereco && "endereço", endereco && !/\d{5}-?\d{3}/.test(endereco) && "CEP"].filter(Boolean);
-      const lidos = ocr ? `Dados lidos de ${file.name}, um contrato escaneado: confira tudo com o contrato, a leitura de imagem pode trocar algum número.` : `Dados lidos de ${file.name}.`;
-      setSource(`${lidos} ${faltando.length ? `Complete: ${faltando.join(", ")}.` : ocr ? "" : "Confira antes de gerar."}`.trim());
+      const lidos = ia
+        ? `Dados lidos de ${file.name} pela IA (modelo de contrato novo ou escaneado): confira tudo com o contrato.`
+        : ocr ? `Dados lidos de ${file.name}, um contrato escaneado: confira tudo com o contrato, a leitura de imagem pode trocar algum número.` : `Dados lidos de ${file.name}.`;
+      setSource(`${lidos} ${faltando.length ? `Complete: ${faltando.join(", ")}.` : ocr || ia ? "" : "Confira antes de gerar."}`.trim());
     } catch (error) {
       setSource("");
       toast.error(error instanceof Error ? error.message : "Não foi possível ler o contrato.");
