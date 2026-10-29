@@ -13,6 +13,15 @@ describe("pushText", () => {
     expect(pushText("documento", "Contrato.pdf").body).toBe("A N1 adicionou: Contrato.pdf.");
     expect(pushText("documento").body).toBe("A N1 adicionou um documento ao seu processo.");
   });
+
+  it("asks for the signature of a document the client has to sign", () => {
+    expect(pushText("assinatura", "Procuração extrajudicial")).toEqual({
+      title: "Documento para assinar",
+      body: "Procuração extrajudicial: baixe no portal, assine e nos envie.",
+      url: "/",
+      tag: "assinatura",
+    });
+  });
 });
 
 describe("teamPushText", () => {

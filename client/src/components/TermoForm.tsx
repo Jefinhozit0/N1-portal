@@ -149,7 +149,7 @@ export function TermoForm({ clients, onDone }: { clients: ProcuracaoClient[]; on
     {chosen
       ? <label className="laudo-attach">
           <input type="checkbox" checked={anexar} onChange={(event) => setAnexar(event.target.checked)} />
-          Anexar também aos documentos de {chosen.name} (o cliente vê no portal)
+          Anexar também aos documentos de {chosen.name} (o cliente vê no portal e recebe um aviso para assinar)
         </label>
       : clientName.trim() && <p className="laudo-hint">Cliente não encontrado na lista: o termo é gerado, mas não fica anexado a nenhum cadastro.</p>}
 
