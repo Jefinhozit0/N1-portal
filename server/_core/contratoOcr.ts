@@ -8,8 +8,9 @@ import type { Line } from "./laudoContrato";
 /**
  * OCR for a scanned contract (each page is only a picture, so the PDF has no text). Tesseract runs on
  * this machine, free; the Portuguese model is downloaded once into .cache/tesseract.
- * Scans come at ~100 dpi, too little for Tesseract: the picture is enlarged 4 times (in gray, which
- * also fades the bank's light watermark) before reading. Even so a digit can come out wrong, so the
+ * Bank scans come at ~100 dpi, too little for Tesseract: the picture is enlarged (in gray, which also
+ * fades the bank's light watermark) to about BODY_WIDTH pixels wide before reading, up to 4 times; a
+ * photo or a 300 dpi scan is already that wide and is read nearly as it is. Even so a digit can come out wrong, so the
  * team is told to check what was read.
  */
 
@@ -26,10 +27,11 @@ const FOOTER_PAGES = 3;
 const PAGE_WIDTH = 595;
 const WORKERS = 3;
 /**
- * The longest side Tesseract gets: a large scan enlarged 4 or 6 times runs out of memory inside it
- * ("pixdata_malloc fail"), so big pictures are enlarged less.
+ * The width pages are enlarged to (a 100 dpi A4 enlarged 4 times). Enlarging a large picture as much
+ * runs Tesseract out of memory ("pixdata_malloc fail") or makes it crawl for many minutes.
  */
-const MAX_SIDE = 6000;
+const BODY_WIDTH = 3300;
+const FOOTER_WIDTH = 5000;
 const CACHE = path.resolve(process.cwd(), ".cache", "tesseract");
 
 type PageImage = { data: Uint8ClampedArray; width: number; height: number; channels: number };
@@ -81,9 +83,8 @@ export async function ocrPages(pdf: Awaited<ReturnType<typeof getDocumentProxy>>
       // The scan is the page's largest picture; small ones are logos and QR codes.
       const image = images.sort((a, b) => b.width * b.height - a.width * a.height)[0];
       if (!image || image.width < 300) return [];
-      const longest = Math.max(image.width, image.height);
-      const scale = Math.max(1, Math.min(SCALE, MAX_SIDE / longest));
-      const footerScale = Math.max(1, Math.min(FOOTER_SCALE, MAX_SIDE / image.width));
+      const scale = Math.max(1, Math.min(SCALE, BODY_WIDTH / image.width));
+      const footerScale = Math.max(1, Math.min(FOOTER_SCALE, FOOTER_WIDTH / image.width));
       try {
         const { data } = await scheduler.addJob("recognize", enlarge(image, scale)) as unknown as { data: { lines: OcrLine[] } };
         const footerRow = Math.floor(image.height * (1 - FOOTER_SHARE));

@@ -93,7 +93,7 @@ export function LaudoForm({ variant, client, clients = [], documento, onDone, on
   const gerarLaudo = trpc.portal.gerarLaudo.useMutation();
 
   async function read(input: { documentoId: number } | { conteudo: string; nome: string }, name: string) {
-    setSource(`Lendo ${name}... Se for um contrato escaneado, leva cerca de 1 minuto.`);
+    setSource(`Lendo ${name}... Se for um contrato escaneado, leva de 1 a 2 minutos.`);
     try {
       const { dados, encontrados, ocr, ia, conferencia: conferida } = await lerContrato.mutateAsync(input);
       setConferencia(encontrados.length ? conferida : null);

@@ -92,7 +92,7 @@ export function NotificacaoForm({ tipo, clients, onDone }: { tipo: TipoNotificac
   async function readContract() {
     const file = await pickPdf(MAX_DOCUMENT_BYTES, (name) => toast.error(`${name} passa de 10 MB.`));
     if (!file) return;
-    setSource(`Lendo ${file.name}... Se for um contrato escaneado, leva cerca de 1 minuto.`);
+    setSource(`Lendo ${file.name}... Se for um contrato escaneado, leva de 1 a 2 minutos.`);
     try {
       const { dados, cpf, cnpjInstituicao, modalidade: lida, encontrados, ocr, ia, conferencia: conferida } = await lerContrato.mutateAsync({ conteudo: file.base64, nome: file.name });
       setConferencia(encontrados.length ? conferida : null);

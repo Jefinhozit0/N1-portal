@@ -347,7 +347,7 @@ function bankLine(lines: Line[]): { text: string; index: number } {
 /** The laudo fields that were found (the ones the team doesn't have to type). */
 export function camposEncontrados(dados: LaudoDados) {
   return Object.entries({ ...dados, ...dados.encargos })
-    .filter(([key, value]) => key !== "encargos" && key !== "objeto" && key !== "jurosMora" && value !== "" && value !== 0 && value !== null)
+    .filter(([key, value]) => key !== "encargos" && key !== "objeto" && key !== "jurosMora" && key !== "retirarRegistro" && value !== "" && value !== 0 && value !== null)
     .map(([key]) => key);
 }
 
