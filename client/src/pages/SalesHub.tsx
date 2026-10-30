@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useSlidingMarker } from "@/hooks/useSlidingMarker";
 import { StatusPill } from "./Home";
 import { SalesManager } from "./SalesManager";
 import {
@@ -257,8 +258,11 @@ export default function SalesHubPage({ isAdmin, onChargeback }: { userName: stri
     </section>
   );
 
+  // The gold underline glides to the open tab (".tab-marker" in index.css).
+  const [tabsRef, tabMarker] = useSlidingMarker<HTMLDivElement>(".active", [section]);
   const tabs = (
-    <div className="hub-tabs" role="tablist" aria-label="Setores">
+    <div className="hub-tabs" role="tablist" aria-label="Setores" ref={tabsRef}>
+      {tabMarker && <span className="tab-marker" aria-hidden="true" style={tabMarker} />}
       <button type="button" role="tab" aria-selected={section === "comercial"} className={section === "comercial" ? "active" : ""} onClick={() => openSection("comercial")}><Briefcase size={16} /> Comercial</button>
       <button type="button" role="tab" aria-selected={section === "juridico"} className={section === "juridico" ? "active" : ""} onClick={() => openSection("juridico")}><Scale size={16} /> Jurídico</button>
       <button type="button" role="tab" aria-selected={section === "vendas"} className={section === "vendas" ? "active" : ""} onClick={() => openSection("vendas")}><Table2 size={16} /> Vendas</button>
