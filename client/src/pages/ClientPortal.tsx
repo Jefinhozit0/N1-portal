@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { isIosSafari, isInstalledApp, useInstallPrompt } from "@/lib/installPrompt";
 import { trpc } from "@/lib/trpc";
 import { useArrivedIds } from "@/hooks/useArrivedIds";
+import { useSlidingMarker } from "@/hooks/useSlidingMarker";
 import { StatusPill } from "./Home";
 
 /** Shown on the first login with the temporary password sent by e-mail. */
@@ -138,6 +139,8 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
   const greeted = useRef(false);
 
   const processo = processoQuery.data;
+  // On a phone, the tabs' pill glides to the open one (".tab-marker" in index.css); the tabs only exist once there is a process.
+  const [tabsRef, tabMarker] = useSlidingMarker<HTMLDivElement>('[aria-selected="true"]', [tab, Boolean(processo)]);
   const firstName = processo?.name.split(" ")[0] ?? "";
   const messages = mensagensQuery.data ?? [];
   // Team replies that arrive while the page is open slide in; the loaded history and saved copies of
@@ -289,7 +292,8 @@ function ClientPortalContent({ onLogout }: { onLogout: () => void }) {
         )}
         {processo && <>
           <AppSetupCard />
-          <div className="client-portal-tabs" role="tablist" aria-label="Seções do portal">
+          <div className="client-portal-tabs" role="tablist" aria-label="Seções do portal" ref={tabsRef}>
+            {tabMarker && <span className="tab-marker" aria-hidden="true" style={tabMarker} />}
             <button type="button" role="tab" aria-selected={tab === "processo"} onClick={() => setTab("processo")}><ClipboardList size={16} /> Meu processo</button>
             <button type="button" role="tab" aria-selected={tab === "conversa"} onClick={() => setTab("conversa")}><MessageCircle size={16} /> Conversa</button>
           </div>

@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { FormEvent, Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { hubMoney } from "./salesHubData";
 
 // The Sales HUB is only downloaded when someone opens it, so the portal opens faster.
@@ -28,6 +28,7 @@ import { trpc } from "@/lib/trpc";
 import { N1Logo } from "@/components/N1Logo";
 import { BrandLoader } from "@/components/BrandLoader";
 import { PortalReveal } from "@/components/PortalReveal";
+import { useSlidingMarker } from "@/hooks/useSlidingMarker";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useArrivedIds } from "@/hooks/useArrivedIds";
 import { usePushDevice } from "@/hooks/usePushDevice";
@@ -348,20 +349,10 @@ function Sidebar({ view, setView, collapsed, setCollapsed, onLogout, userName, i
   // A client's page belongs to Clientes in the menu.
   const activeId = view === "client-detail" ? "clientes" : view;
   // The highlight is one marker that glides to the active item (".nav-marker" in index.css).
-  const navRef = useRef<HTMLElement>(null);
-  const [marker, setMarker] = useState<{ top: number; height: number } | null>(null);
-  useLayoutEffect(() => {
-    const place = () => {
-      const active = navRef.current?.querySelector<HTMLElement>(".nav-item-active");
-      setMarker(active ? { top: active.offsetTop, height: active.offsetHeight } : null);
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [activeId, collapsed, isAdmin]);
+  const [navRef, marker] = useSlidingMarker<HTMLElement>(".nav-item-active", [activeId, collapsed, isAdmin]);
   return <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
     <div className="sidebar-head"><MenuMark /><button className="icon-button collapse-button" onClick={() => setCollapsed(!collapsed)} aria-label="Recolher menu">{collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button></div>
-    <nav className="main-nav" ref={navRef}>{marker && <span className="nav-marker" aria-hidden="true" style={{ transform: `translateY(${marker.top}px)`, height: marker.height }} />}{items.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${activeId === id ? "nav-item-active" : ""}`} onClick={() => setView(id)}><Icon size={18} /><span>{label}</span>{id === "atendimento" && awaitingCount > 0 && <b className="nav-count">{awaitingCount}</b>}</button>)}</nav>
+    <nav className="main-nav" ref={navRef}>{marker && <span className="nav-marker" aria-hidden="true" style={marker} />}{items.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${activeId === id ? "nav-item-active" : ""}`} onClick={() => setView(id)}><Icon size={18} /><span>{label}</span>{id === "atendimento" && awaitingCount > 0 && <b className="nav-count">{awaitingCount}</b>}</button>)}</nav>
     <div className="sidebar-bottom">
       {!collapsed ? (
         <div className="profile-card">
