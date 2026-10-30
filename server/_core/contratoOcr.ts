@@ -25,6 +25,11 @@ const FOOTER_PAGES = 3;
 /** Lines come back in the same units as a text PDF (an A4 page is 595 points wide), so the reader's distances still hold. */
 const PAGE_WIDTH = 595;
 const WORKERS = 3;
+/**
+ * The longest side Tesseract gets: a large scan enlarged 4 or 6 times runs out of memory inside it
+ * ("pixdata_malloc fail"), so big pictures are enlarged less.
+ */
+const MAX_SIDE = 6000;
 const CACHE = path.resolve(process.cwd(), ".cache", "tesseract");
 
 type PageImage = { data: Uint8ClampedArray; width: number; height: number; channels: number };
@@ -65,7 +70,10 @@ export async function ocrPages(pdf: Awaited<ReturnType<typeof getDocumentProxy>>
   // tesseract.js does not create the folder: without it the model is downloaded again on every reading.
   mkdirSync(CACHE, { recursive: true });
   const scheduler = createScheduler();
-  for (let i = 0; i < Math.min(WORKERS, pageCount); i++) scheduler.addWorker(await createWorker("por", 1, { cachePath: CACHE }));
+  // Without errorHandler a failed reading is thrown inside tesseract.js where nothing can catch it, and
+  // takes the whole server down; with it, the job just fails and its page comes back empty.
+  const errorHandler = (error: unknown) => console.warn("[ocr] Tesseract could not read a page:", error);
+  for (let i = 0; i < Math.min(WORKERS, pageCount); i++) scheduler.addWorker(await createWorker("por", 1, { cachePath: CACHE, errorHandler }));
   try {
     return await Promise.all(Array.from({ length: pageCount }, async (_, index) => {
       const pageNumber = index + 1;
@@ -73,32 +81,40 @@ export async function ocrPages(pdf: Awaited<ReturnType<typeof getDocumentProxy>>
       // The scan is the page's largest picture; small ones are logos and QR codes.
       const image = images.sort((a, b) => b.width * b.height - a.width * a.height)[0];
       if (!image || image.width < 300) return [];
-      const { data } = await scheduler.addJob("recognize", enlarge(image)) as unknown as { data: { lines: OcrLine[] } };
-      const footerRow = Math.floor(image.height * (1 - FOOTER_SHARE));
-      const { data: footer } = pageNumber <= FOOTER_PAGES
-        ? await scheduler.addJob("recognize", enlarge(image, FOOTER_SCALE, footerRow)) as unknown as { data: { lines: OcrLine[] } }
-        : { data: { lines: [] as OcrLine[] } };
-      const unit = PAGE_WIDTH / image.width / SCALE;
-      const pageHeight = image.height * SCALE;
-      const footerUnit = PAGE_WIDTH / image.width / FOOTER_SCALE;
-      // Below every line of the page, so nothing reads it as part of a cell.
-      const footerLines = footer.lines.map((line, index): Line => {
-        const items = line.words.map((word) => ({ x: word.bbox.x0 * footerUnit, y: -1 - index, text: word.text.normalize("NFC").trim() })).filter((item) => item.text);
-        return { page: pageNumber, y: -1 - index, items, text: items.map((item) => item.text).join(" ") };
-      });
-      return [...data.lines
-        .map((line): Line => {
-          // PDF coordinates grow upwards; the picture's, downwards. The line's height is the middle of its
-          // words' bottoms: a speck read beside a cell border can stretch the line's own box down to the next row.
-          const bottoms = line.words.map((word) => word.bbox.y1).sort((a, b) => a - b);
-          const y = (pageHeight - (bottoms[Math.floor(bottoms.length / 2)] ?? line.bbox.y1)) * unit;
-          const items = line.words
-            .map((word) => ({ x: word.bbox.x0 * unit, y, text: word.text.normalize("NFC").trim() }))
-            .filter((item) => item.text);
-          return { page: pageNumber, y, items, text: items.map((item) => item.text).join(" ") };
-        }), ...footerLines]
-        .filter((line) => line.items.length > 0)
-        .sort((a, b) => b.y - a.y);
+      const longest = Math.max(image.width, image.height);
+      const scale = Math.max(1, Math.min(SCALE, MAX_SIDE / longest));
+      const footerScale = Math.max(1, Math.min(FOOTER_SCALE, MAX_SIDE / image.width));
+      try {
+        const { data } = await scheduler.addJob("recognize", enlarge(image, scale)) as unknown as { data: { lines: OcrLine[] } };
+        const footerRow = Math.floor(image.height * (1 - FOOTER_SHARE));
+        const { data: footer } = pageNumber <= FOOTER_PAGES
+          ? await scheduler.addJob("recognize", enlarge(image, footerScale, footerRow)) as unknown as { data: { lines: OcrLine[] } }
+          : { data: { lines: [] as OcrLine[] } };
+        const unit = PAGE_WIDTH / image.width / scale;
+        const pageHeight = image.height * scale;
+        const footerUnit = PAGE_WIDTH / image.width / footerScale;
+        // Below every line of the page, so nothing reads it as part of a cell.
+        const footerLines = footer.lines.map((line, index): Line => {
+          const items = line.words.map((word) => ({ x: word.bbox.x0 * footerUnit, y: -1 - index, text: word.text.normalize("NFC").trim() })).filter((item) => item.text);
+          return { page: pageNumber, y: -1 - index, items, text: items.map((item) => item.text).join(" ") };
+        });
+        return [...data.lines
+          .map((line): Line => {
+            // PDF coordinates grow upwards; the picture's, downwards. The line's height is the middle of its
+            // words' bottoms: a speck read beside a cell border can stretch the line's own box down to the next row.
+            const bottoms = line.words.map((word) => word.bbox.y1).sort((a, b) => a - b);
+            const y = (pageHeight - (bottoms[Math.floor(bottoms.length / 2)] ?? line.bbox.y1)) * unit;
+            const items = line.words
+              .map((word) => ({ x: word.bbox.x0 * unit, y, text: word.text.normalize("NFC").trim() }))
+              .filter((item) => item.text);
+            return { page: pageNumber, y, items, text: items.map((item) => item.text).join(" ") };
+          }), ...footerLines]
+          .filter((line) => line.items.length > 0)
+          .sort((a, b) => b.y - a.y);
+      } catch (error) {
+        console.warn(`[ocr] Page ${pageNumber} could not be read:`, error);
+        return [];
+      }
     }));
   } finally {
     await scheduler.terminate();
