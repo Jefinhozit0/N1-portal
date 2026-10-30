@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
 import { flexiona } from "@shared/genero";
-import { formatCPF } from "@shared/procuracao";
+import { ehCnpj, formatDocumento, tipoDocumento } from "@shared/procuracao";
 import { N1_NOTIFICACAO as N1, type NotificacaoContratoDados, type NotificacaoDados, dataPorExtenso, moeda, reaisPorExtenso } from "@shared/notificacao";
 import { renderPdf, safePdfName } from "./pdf";
 
@@ -65,6 +65,11 @@ const assinaturaCarimbo = (nota: Content): Content => ({
   ],
 });
 
+/** "inscrito(a) no CPF", or for a company "pessoa jurídica de direito privado, inscrita no CNPJ". */
+function qualificacaoCliente(dados: { cpf: string; genero: NotificacaoDados["genero"] }) {
+  return ehCnpj(dados.cpf) ? "pessoa jurídica de direito privado, inscrita no CNPJ" : `${flexiona("inscrito", "inscrita", dados.genero)} no CPF`;
+}
+
 export function notificacaoDefinition(dados: NotificacaoDados): TDocumentDefinitions {
   const nome = dados.nome.trim().toUpperCase();
   const qualificacao = `${dados.bancoNome.trim()}, pessoa jurídica de direito privado, inscrita no CNPJ sob o n° ${dados.bancoCnpj.trim()}, com sede em ${dados.bancoEndereco.trim().replace(/\.$/, "")}.`;
@@ -74,8 +79,8 @@ export function notificacaoDefinition(dados: NotificacaoDados): TDocumentDefinit
     body([
       "A N1 Soluções Financeiras, vem, por meio de procurador qualificado na procuração em anexo, em nome de ",
       { text: nome, bold: true },
-      `, ${flexiona("inscrito", "inscrita", dados.genero)} no CPF nº `,
-      { text: formatCPF(dados.cpf), bold: true },
+      `, ${qualificacaoCliente(dados)} nº `,
+      { text: formatDocumento(dados.cpf), bold: true },
       ", apresentar a presente ",
       { text: "NOTIFICAÇÃO EXTRAJUDICIAL", bold: true },
       ` destinada a obter o contrato de financiamento no valor de ${moeda(dados.valor)} (${reaisPorExtenso(dados.valor)}), a serem pagos em ${dados.parcelas} parcelas de ${moeda(dados.valorParcela)} (${reaisPorExtenso(dados.valorParcela)}).`,
@@ -112,8 +117,8 @@ export function notificacaoContratoDefinition(dados: NotificacaoContratoDados): 
     body([
       "A N1 Soluções Financeiras vem, por meio de procurador qualificado na procuração em anexo, em nome de ",
       { text: nome, bold: true },
-      `, ${flexiona("inscrito", "inscrita", dados.genero)} no `,
-      { text: `CPF nº ${formatCPF(dados.cpf)}`, bold: true },
+      `, ${qualificacaoCliente(dados).replace(/ (CPF|CNPJ)$/, "")} `,
+      { text: `${tipoDocumento(dados.cpf)} nº ${formatDocumento(dados.cpf)}`, bold: true },
       `, manifestar sua irresignação acerca do contrato de ${dados.modalidade} `,
       { text: `Nº ${dados.contrato.trim()}.`, bold: true },
     ]),
