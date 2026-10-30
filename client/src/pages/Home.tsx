@@ -258,9 +258,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   return (
     <main className={`login-page ${entering ? "is-entering" : ""}`} onPointerMove={followPointer}>
       <section className="login-hero">
-        {/* The four pieces of the N|1 mark, cut from the same icon, come together (see "Login: entrance" in index.css) */}
+        {/* The four pieces of the brand mark, cut from the same icon, come together (see "Login: entrance" in index.css) */}
         <div className="login-mark" role="img" aria-label="N1 Soluções">
-          {["n", "bar", "one", "word"].map((piece) => <img key={piece} className={`login-mark-${piece}`} src="/icons/icon-512.png" alt="" />)}
+          {["a", "b", "c", "d"].map((piece) => <img key={piece} className={`login-mark-${piece}`} src="/icons/icon-512.png" alt="" />)}
           <span className="login-mark-shine" />
         </div>
         <div className="login-hero-footer">

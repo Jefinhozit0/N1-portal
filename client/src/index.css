@@ -85,6 +85,33 @@
   --chart-2: #a58b4e;
   --chart-3: var(--green);
   --brand-highlight: #d0b56f;
+  /* The brand's light as an RGB triplet, for glows: rgba(var(--brand-glow-rgb), alpha) */
+  --brand-glow-rgb: 208, 181, 111;
+  /* Text on a --brand-highlight fill (the login button) */
+  --on-highlight: #131312;
+  /* The login's dark surface: fields, labels and faint text on --brand-surface */
+  --login-field: #1f1e1b;
+  --login-label: #c9c4b8;
+  --login-text-soft: #a8a295;
+  --login-faint: #8e887b;
+  --login-placeholder: #6f6a60;
+  /* A light sweep over the mark: warm white */
+  --shine-rgb: 255, 248, 228;
+  /*
+   * Where the pieces of the brand mark sit in /icons/icon-512.png, as inset() cut-outs: (a) slides in
+   * from the left, (b) grows from its middle, (c) slides in from the right, (d) rises below. For N1:
+   * the N, the divider, the 1, and SOLUÇÕES. The shine runs over --mark-shine-area.
+   */
+  --mark-piece-a: inset(26% 45.5% 33% 17%);
+  --mark-piece-b: inset(26% 44.5% 33% 54.5%);
+  --mark-piece-c: inset(26% 23% 33% 55.5%);
+  --mark-piece-d: inset(69% 23% 20.5% 23%);
+  --mark-shine-area: inset(26% 23% 33% 17%);
+  /* The menu's logo: the part of the icon it shows (fractions of the 512px icon) */
+  --menu-crop-x: 0.15;
+  --menu-crop-y: 0.22;
+  --menu-crop-w: 0.65;
+  --menu-crop-h: 0.60;
   /* Dim layer behind modals and the mobile menu */
   --overlay: rgba(19, 19, 18, 0.5);
   /* Raw names some shadcn/ui pieces (toasts) read directly */
@@ -345,7 +372,7 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #8e887b;
+  color: var(--login-faint);
   font-size: 12.5px;
   line-height: 1.5;
 }
@@ -509,35 +536,35 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
 .login-page .login-panel { background: transparent; }
 .login-page .login-panel-inner { width: min(100%, 360px); padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .login-page .login-panel h2 { color: #ffffff; font-size: 28px; }
-.login-page .login-subtitle { color: #a8a295; }
-.login-page .login-form label { color: #c9c4b8; font-size: 13px; }
+.login-page .login-subtitle { color: var(--login-text-soft); }
+.login-page .login-form label { color: var(--login-label); font-size: 13px; }
 .login-page .login-form input {
   height: 48px;
   border: 1px solid transparent;
   color: #ffffff;
-  background: #1f1e1b;
+  background: var(--login-field);
 }
-.login-page .login-form input::placeholder { color: #6f6a60; }
+.login-page .login-form input::placeholder { color: var(--login-placeholder); }
 /* Fields the browser fills with a saved login keep the dark fill instead of the browser's blue */
 .login-page .login-form input:-webkit-autofill,
 .login-page .login-form input:-webkit-autofill:hover,
 .login-page .login-form input:-webkit-autofill:focus {
   -webkit-text-fill-color: #ffffff;
   caret-color: #ffffff;
-  -webkit-box-shadow: 0 0 0 1000px #1f1e1b inset;
+  -webkit-box-shadow: 0 0 0 1000px var(--login-field) inset;
   transition: background-color 9999s ease-out;
 }
-.login-page .login-form input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 1000px #1f1e1b inset, 0 0 0 3px rgba(208, 181, 111, 0.18); }
-.login-page .login-form input:focus { border-color: var(--brand-highlight); box-shadow: 0 0 0 3px rgba(208, 181, 111, 0.18); }
-.login-page .password-toggle { color: #8e887b; }
+.login-page .login-form input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 1000px var(--login-field) inset, 0 0 0 3px rgba(var(--brand-glow-rgb), 0.18); }
+.login-page .login-form input:focus { border-color: var(--brand-highlight); box-shadow: 0 0 0 3px rgba(var(--brand-glow-rgb), 0.18); }
+.login-page .password-toggle { color: var(--login-faint); }
 .login-page .password-toggle:hover { color: #ffffff; background: rgba(255, 255, 255, 0.06); }
-.login-page .login-button { height: 48px; color: #131312; background: var(--brand-highlight); box-shadow: none; }
-.login-page .login-button:hover { background: #dcc488; }
+.login-page .login-button { height: 48px; color: var(--on-highlight); background: var(--brand-highlight); box-shadow: none; }
+.login-page .login-button:hover { background: color-mix(in srgb, var(--brand-highlight) 85%, #ffffff); }
 .login-page .link-button { color: var(--brand-highlight); font-weight: 500; }
-.login-page .link-button:hover { color: #dcc488; }
+.login-page .link-button:hover { color: color-mix(in srgb, var(--brand-highlight) 80%, #ffffff); }
 .login-page .first-access { border: 0; border-left: 2px solid var(--brand-highlight); border-radius: 0; background: none; padding: 2px 0 2px 14px; }
 .login-page .first-access strong { color: #ffffff; }
-.login-page .first-access span { color: #a8a295; }
+.login-page .first-access span { color: var(--login-text-soft); }
 .login-page .form-message { color: #f4b4ab; background: rgba(180, 35, 24, 0.18); }
 .login-page .form-message-success { color: #9fdcbc; background: rgba(21, 115, 71, 0.2); }
 .login-page :focus-visible { outline-color: var(--brand-highlight); }
@@ -564,7 +591,7 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
   position: absolute;
   inset: -20%;
   pointer-events: none;
-  background: radial-gradient(38% 34% at var(--light-x) var(--light-y), rgba(208, 181, 111, 0.13), transparent 70%);
+  background: radial-gradient(38% 34% at var(--light-x) var(--light-y), rgba(var(--brand-glow-rgb), 0.13), transparent 70%);
   animation: login-light-in 1200ms ease-out 100ms backwards, login-breathe 7s ease-in-out 1.4s infinite;
 }
 .login-page::after {
@@ -575,8 +602,8 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
   bottom: 0;
   height: 140px;
   pointer-events: none;
-  background: radial-gradient(50% 100% at 50% 100%, rgba(208, 181, 111, 0.16), transparent 70%);
-  border-bottom: 1px solid rgba(208, 181, 111, 0.35);
+  background: radial-gradient(50% 100% at 50% 100%, rgba(var(--brand-glow-rgb), 0.16), transparent 70%);
+  border-bottom: 1px solid rgba(var(--brand-glow-rgb), 0.35);
   animation: login-light-in 1600ms ease-out 300ms backwards;
 }
 @keyframes login-light-in { from { opacity: 0; } }
@@ -593,11 +620,11 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
   transition: transform 700ms cubic-bezier(.65, 0, .25, 1);
 }
 .login-mark img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-/* Positions in the 512px icon: letters 18–76% wide and 27–66% tall, divider at 54.5–55.5%, SOLUÇÕES 70–78.5% tall */
-.login-mark-n { clip-path: inset(26% 45.5% 33% 17%); animation: login-from-left 750ms cubic-bezier(.2, .7, .2, 1) 380ms backwards; }
-.login-mark-bar { clip-path: inset(26% 44.5% 33% 54.5%); animation: login-grow 600ms cubic-bezier(.3, .6, .2, 1) 150ms backwards; }
-.login-mark-one { clip-path: inset(26% 23% 33% 55.5%); animation: login-from-right 750ms cubic-bezier(.2, .7, .2, 1) 460ms backwards; }
-.login-mark-word { clip-path: inset(69% 23% 20.5% 23%); animation: login-word 700ms cubic-bezier(.2, .7, .2, 1) 900ms backwards; }
+/* Where each piece sits in the icon: --mark-piece-* (brand tokens at the top) */
+.login-mark-a { clip-path: var(--mark-piece-a); animation: login-from-left 750ms cubic-bezier(.2, .7, .2, 1) 380ms backwards; }
+.login-mark-b { clip-path: var(--mark-piece-b); animation: login-grow 600ms cubic-bezier(.3, .6, .2, 1) 150ms backwards; }
+.login-mark-c { clip-path: var(--mark-piece-c); animation: login-from-right 750ms cubic-bezier(.2, .7, .2, 1) 460ms backwards; }
+.login-mark-d { clip-path: var(--mark-piece-d); animation: login-word 700ms cubic-bezier(.2, .7, .2, 1) 900ms backwards; }
 @keyframes login-grow { from { transform: scaleY(0); opacity: 0; } }
 @keyframes login-from-left { from { transform: translateX(-34%); opacity: 0; filter: blur(9px); } 60% { filter: blur(2px); } }
 @keyframes login-from-right { from { transform: translateX(34%); opacity: 0; filter: blur(9px); } 60% { filter: blur(2px); } }
@@ -617,12 +644,12 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(105deg, transparent 42%, rgba(255, 248, 228, 0.85) 50%, transparent 58%) no-repeat;
+    background: linear-gradient(105deg, transparent 42%, rgba(var(--shine-rgb), 0.85) 50%, transparent 58%) no-repeat;
     background-size: 260% 100%;
     background-position: 140% 0;
     mask: url("/icons/icon-512.png") center / 100% 100% no-repeat luminance;
     /* Only over the N|1 pieces, and as color-dodge: gold lights up, the icon's black stays black */
-    clip-path: inset(26% 23% 33% 17%);
+    clip-path: var(--mark-shine-area);
     mix-blend-mode: color-dodge;
     animation: login-shine 9s ease-in-out 1900ms infinite;
   }
@@ -642,7 +669,7 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
 
 /* The button lights up under the pointer */
 .login-page .login-button { transition: background .2s ease, box-shadow .25s ease, transform .15s ease; }
-.login-page .login-button:hover { box-shadow: 0 8px 28px rgba(208, 181, 111, 0.28); }
+.login-page .login-button:hover { box-shadow: 0 8px 28px rgba(var(--brand-glow-rgb), 0.28); }
 .login-page .login-button svg { transition: transform .2s ease; }
 .login-page .login-button:hover svg { transform: translateX(3px); }
 
@@ -653,7 +680,7 @@ a:focus-visible, [tabindex]:focus-visible, tr:focus-visible {
 .login-page.is-entering .login-mark { transform: translateX(var(--to-center)); }
 .login-page.is-entering .login-mark-shine { animation: login-shine 1.6s ease-in-out infinite; }
 /* The light gathers behind the mark, as the post-login curtain has it (".portal-reveal::before") */
-.login-page.is-entering::before { inset: 0; background: radial-gradient(34% 40% at 50% 50%, rgba(208, 181, 111, 0.14), transparent 70%); animation: login-breathe 3s ease-in-out infinite; }
+.login-page.is-entering::before { inset: 0; background: radial-gradient(34% 40% at 50% 50%, rgba(var(--brand-glow-rgb), 0.14), transparent 70%); animation: login-breathe 3s ease-in-out infinite; }
 
 /* Phones: no left column; the small mark and the form rise in */
 @media (max-width: 1050px) {
@@ -690,7 +717,7 @@ html:not(.n1-ready) .login-page *, html:not(.n1-ready) .login-page::before, html
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(34% 40% at 50% 50%, rgba(208, 181, 111, 0.14), transparent 70%);
+  background: radial-gradient(34% 40% at 50% 50%, rgba(var(--brand-glow-rgb), 0.14), transparent 70%);
   animation: login-breathe 3s ease-in-out infinite;
 }
 /* top: the login column has 48px above and 42px below, so its mark sits 3px under the middle */
@@ -3282,7 +3309,7 @@ tbody tr.empty-row:hover { background: transparent; }
 .brand-loader-bar {
   position: absolute; top: calc(50% + min(260px, 62vw) * .36); left: 50%;
   width: min(120px, 30vw); height: 2px; overflow: hidden; border-radius: 2px;
-  background: rgba(201, 173, 102, .16); transform: translateX(-50%);
+  background: rgba(var(--brand-glow-rgb), .16); transform: translateX(-50%);
   animation: n1-fade 400ms ease-out 400ms backwards;
 }
 .brand-loader-bar i { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--brand-highlight); opacity: .7; animation: brand-loader-run 1.1s ease-in-out infinite; }
@@ -3464,7 +3491,7 @@ tbody tr.empty-row:hover { background: transparent; }
   --glass-blur: blur(24px) saturate(180%);
   --glass-glow-color: 255, 255, 255;
   --glass-glow-strength: 0.5;
-  --backdrop-a: rgba(208, 181, 111, 0.55);
+  --backdrop-a: rgba(var(--brand-glow-rgb), 0.55);
   --backdrop-b: rgba(226, 178, 120, 0.42);
   --backdrop-c: rgba(165, 139, 78, 0.34);
   --backdrop-d: rgba(122, 99, 40, 0.22);
@@ -3480,9 +3507,9 @@ tbody tr.empty-row:hover { background: transparent; }
   --glass-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
   --glass-glow-color: 255, 236, 196;
   --glass-glow-strength: 0.16;
-  --backdrop-a: rgba(208, 181, 111, 0.24);
+  --backdrop-a: rgba(var(--brand-glow-rgb), 0.24);
   --backdrop-b: rgba(160, 110, 55, 0.24);
-  --backdrop-c: rgba(208, 181, 111, 0.12);
+  --backdrop-c: rgba(var(--brand-glow-rgb), 0.12);
   --backdrop-d: rgba(90, 70, 30, 0.3);
 }
 
@@ -3555,14 +3582,23 @@ tbody tr.empty-row:hover { background: transparent; }
 }
 
 /*
- * The menu's logo (MenuMark in Home.tsx): the 512px icon cut to its letters, x 15–80% and y 22–82%,
- * so N|1 and SOLUÇÕES fill the box. "lighten" drops the icon's black on the dark glass.
+ * The menu's logo (MenuMark in Home.tsx): the 512px icon cut to --menu-crop-* (brand tokens at the
+ * top), so the letters fill the box. "lighten" drops the icon's black on the dark glass.
  */
 .sidebar-head { padding: 0 14px 0 20px; }
-.menu-mark { position: relative; display: block; flex: none; width: 54px; height: 50px; overflow: hidden; mix-blend-mode: lighten; }
-.menu-mark img { position: absolute; width: 83px; height: 83px; left: -12.5px; top: -18.3px; max-width: none; }
-.sidebar-collapsed .menu-mark { width: 38px; height: 35px; }
-.sidebar-collapsed .menu-mark img { width: 58px; height: 58px; left: -8.7px; top: -12.8px; }
+.menu-mark {
+  --mark-h: 50px;
+  --icon-size: calc(var(--mark-h) / var(--menu-crop-h));
+  position: relative;
+  display: block;
+  flex: none;
+  width: calc(var(--icon-size) * var(--menu-crop-w));
+  height: var(--mark-h);
+  overflow: hidden;
+  mix-blend-mode: lighten;
+}
+.menu-mark img { position: absolute; width: var(--icon-size); height: var(--icon-size); left: calc(var(--icon-size) * var(--menu-crop-x) * -1); top: calc(var(--icon-size) * var(--menu-crop-y) * -1); max-width: none; }
+.sidebar-collapsed .menu-mark { --mark-h: 35px; }
 
 /* The menu floats: a dark glass slab with rounded corners, a step away from the edges */
 .app-shell > .sidebar {
